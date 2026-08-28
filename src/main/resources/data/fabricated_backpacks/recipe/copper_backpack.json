@@ -1,0 +1,18 @@
+{
+  "type": "fabricated_backpacks:backpack_upgrade",
+  "category": "equipment",
+  "pattern": [
+    "MMM",
+    "MUM",
+    "MMM"
+  ],
+  "key": {
+    "M": "minecraft:copper_ingot",
+    "U": "fabricated_backpacks:backpack"
+  },
+  "result": {
+    "id": "fabricated_backpacks:copper_backpack",
+    "count": 1
+  },
+  "source": "fabricated_backpacks:backpack"
+}

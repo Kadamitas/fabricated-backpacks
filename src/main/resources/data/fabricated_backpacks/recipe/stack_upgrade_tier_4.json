@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "MMM",
+    "MUM",
+    "MMM"
+  ],
+  "key": {
+    "M": "minecraft:netherite_ingot",
+    "U": "fabricated_backpacks:stack_upgrade_tier_3"
+  },
+  "result": {
+    "id": "fabricated_backpacks:stack_upgrade_tier_4",
+    "count": 1
+  }
+}

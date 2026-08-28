@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "fabricated_backpacks:item/compacting_upgrade"
+  }
+}

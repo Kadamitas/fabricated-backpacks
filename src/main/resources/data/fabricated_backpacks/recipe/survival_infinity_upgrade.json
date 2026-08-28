@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " M ",
+    "TUT",
+    " S "
+  ],
+  "key": {
+    "M": "minecraft:nether_star",
+    "T": "minecraft:netherite_ingot",
+    "U": "fabricated_backpacks:upgrade_base",
+    "S": "minecraft:diamond_block"
+  },
+  "result": {
+    "id": "fabricated_backpacks:survival_infinity_upgrade",
+    "count": 1
+  }
+}

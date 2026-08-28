@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "fabricated_backpacks:stack_upgrade_starter_tier",
+    "fabricated_backpacks:stack_upgrade_starter_tier_to_tier_2_conversion"
+  ],
+  "result": {
+    "id": "fabricated_backpacks:stack_upgrade_tier_2",
+    "count": 1
+  }
+}

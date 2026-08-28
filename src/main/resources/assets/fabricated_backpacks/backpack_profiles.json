@@ -1,0 +1,3637 @@
+{
+  "schema": 1,
+  "coordinate_system": "block units; +Y up; backpack front -Z; straps +Z",
+  "body_color": 12154947,
+  "trim_color": 5258038,
+  "atlas_size": [
+    64,
+    64
+  ],
+  "worn_uv_origin": [
+    0,
+    0
+  ],
+  "material_textures": {
+    "body": "fabricated_backpacks:entity/backpack/body",
+    "trim": "fabricated_backpacks:entity/backpack/trim",
+    "lining": "fabricated_backpacks:entity/backpack/lining",
+    "pocket": "fabricated_backpacks:entity/backpack/pocket"
+  },
+  "material_tints": {
+    "body": 0,
+    "trim": 1,
+    "lining": 0,
+    "pocket": 0,
+    "fittings": -1
+  },
+  "source_to_player_body": {
+    "note": "Suggested unscaled player-body local cuboids: native_from=offset-source_to; native_to=offset-source_from. Native +Y is down and +Z is behind the wearer. Verify armor clearance and pose in game.",
+    "axis_sign": [
+      -1,
+      -1,
+      -1
+    ],
+    "offset": [
+      8,
+      13.75,
+      15.375
+    ]
+  },
+  "wear_transform": {
+    "translation_pixels": [
+      0,
+      1,
+      1
+    ],
+    "scale": [
+      0.72,
+      0.72,
+      0.55
+    ],
+    "armor_clearance_pixels": 1
+  },
+  "flap_hinge": {
+    "origin": [
+      8,
+      11.25,
+      11.75
+    ],
+    "axis": "x",
+    "closed_angle": 0,
+    "open_angle": 45,
+    "duration_ticks": 8
+  },
+  "tiers": [
+    {
+      "id": "backpack",
+      "material": "leather",
+      "closed_model": "fabricated_backpacks:block/backpack_closed",
+      "open_model": "fabricated_backpacks:block/backpack_open",
+      "body_model": "fabricated_backpacks:block/backpack_body",
+      "flap_parts": [
+        "flap_top",
+        "flap_lip",
+        "flap_tab_left",
+        "buckle_left_top",
+        "buckle_left_bottom",
+        "buckle_left_left",
+        "buckle_left_right",
+        "flap_tab_right",
+        "buckle_right_top",
+        "buckle_right_bottom",
+        "buckle_right_left",
+        "buckle_right_right"
+      ],
+      "fittings_texture": "fabricated_backpacks:entity/backpack/leather_fittings",
+      "parts": [
+        {
+          "name": "body_floor",
+          "from": [
+            3,
+            0.5,
+            5
+          ],
+          "to": [
+            13,
+            2,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_left",
+          "from": [
+            3,
+            2,
+            5
+          ],
+          "to": [
+            4,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_right",
+          "from": [
+            12,
+            2,
+            5
+          ],
+          "to": [
+            13,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_back",
+          "from": [
+            4,
+            2,
+            11
+          ],
+          "to": [
+            12,
+            11,
+            12
+          ],
+          "texture": "lining"
+        },
+        {
+          "name": "body_front",
+          "from": [
+            4,
+            2,
+            5
+          ],
+          "to": [
+            12,
+            10.5,
+            6
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "base_welt_front",
+          "from": [
+            2.875,
+            0.5,
+            4.875
+          ],
+          "to": [
+            13.125,
+            1.25,
+            5.375
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_back",
+          "from": [
+            2.875,
+            0.5,
+            11.625
+          ],
+          "to": [
+            13.125,
+            1.25,
+            12.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_left",
+          "from": [
+            2.875,
+            0.5,
+            5.375
+          ],
+          "to": [
+            3.375,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_right",
+          "from": [
+            12.625,
+            0.5,
+            5.375
+          ],
+          "to": [
+            13.125,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "front_pocket",
+          "from": [
+            4,
+            2.125,
+            2.75
+          ],
+          "to": [
+            12,
+            6.625,
+            5.125
+          ],
+          "texture": "pocket"
+        },
+        {
+          "name": "pocket_flap",
+          "from": [
+            3.75,
+            6.625,
+            2.5
+          ],
+          "to": [
+            12.25,
+            7.375,
+            5.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "pocket_latch",
+          "from": [
+            7.375,
+            5.75,
+            2.375
+          ],
+          "to": [
+            8.625,
+            7.375,
+            2.75
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_left_upper",
+          "from": [
+            4,
+            9.5,
+            11.875
+          ],
+          "to": [
+            5.5,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_long",
+          "from": [
+            4,
+            3.5,
+            12.375
+          ],
+          "to": [
+            5.5,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_lower",
+          "from": [
+            4,
+            2,
+            11.875
+          ],
+          "to": [
+            5.5,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_adjuster",
+          "from": [
+            3.875,
+            3.5,
+            12.875
+          ],
+          "to": [
+            5.625,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_right_upper",
+          "from": [
+            10.5,
+            9.5,
+            11.875
+          ],
+          "to": [
+            12.0,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_long",
+          "from": [
+            10.5,
+            3.5,
+            12.375
+          ],
+          "to": [
+            12.0,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_lower",
+          "from": [
+            10.5,
+            2,
+            11.875
+          ],
+          "to": [
+            12.0,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_adjuster",
+          "from": [
+            10.375,
+            3.5,
+            12.875
+          ],
+          "to": [
+            12.125,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "handle_left",
+          "from": [
+            6,
+            11,
+            10.5
+          ],
+          "to": [
+            6.75,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_right",
+          "from": [
+            9.25,
+            11,
+            10.5
+          ],
+          "to": [
+            10,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_top",
+          "from": [
+            6.75,
+            12.75,
+            10.5
+          ],
+          "to": [
+            9.25,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_top",
+          "from": [
+            2.75,
+            10.75,
+            4.5
+          ],
+          "to": [
+            13.25,
+            12.125,
+            12.25
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "flap_lip",
+          "from": [
+            3,
+            9.125,
+            4.25
+          ],
+          "to": [
+            13,
+            10.75,
+            5.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_tab_left",
+          "from": [
+            5,
+            8.25,
+            4
+          ],
+          "to": [
+            6.5,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_left_top",
+          "from": [
+            4.875,
+            9.75,
+            3.75
+          ],
+          "to": [
+            6.625,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_bottom",
+          "from": [
+            4.875,
+            8.625,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_left",
+          "from": [
+            4.875,
+            9,
+            3.75
+          ],
+          "to": [
+            5.25,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_right",
+          "from": [
+            6.25,
+            9,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "flap_tab_right",
+          "from": [
+            9.5,
+            8.25,
+            4
+          ],
+          "to": [
+            11.0,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_right_top",
+          "from": [
+            9.375,
+            9.75,
+            3.75
+          ],
+          "to": [
+            11.125,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_bottom",
+          "from": [
+            9.375,
+            8.625,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_left",
+          "from": [
+            9.375,
+            9,
+            3.75
+          ],
+          "to": [
+            9.75,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_right",
+          "from": [
+            10.75,
+            9,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        }
+      ]
+    },
+    {
+      "id": "copper_backpack",
+      "material": "copper",
+      "closed_model": "fabricated_backpacks:block/copper_backpack_closed",
+      "open_model": "fabricated_backpacks:block/copper_backpack_open",
+      "body_model": "fabricated_backpacks:block/copper_backpack_body",
+      "flap_parts": [
+        "flap_top",
+        "flap_lip",
+        "flap_tab_left",
+        "buckle_left_top",
+        "buckle_left_bottom",
+        "buckle_left_left",
+        "buckle_left_right",
+        "flap_tab_right",
+        "buckle_right_top",
+        "buckle_right_bottom",
+        "buckle_right_left",
+        "buckle_right_right"
+      ],
+      "fittings_texture": "fabricated_backpacks:entity/backpack/copper_fittings",
+      "parts": [
+        {
+          "name": "body_floor",
+          "from": [
+            3,
+            0.5,
+            5
+          ],
+          "to": [
+            13,
+            2,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_left",
+          "from": [
+            3,
+            2,
+            5
+          ],
+          "to": [
+            4,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_right",
+          "from": [
+            12,
+            2,
+            5
+          ],
+          "to": [
+            13,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_back",
+          "from": [
+            4,
+            2,
+            11
+          ],
+          "to": [
+            12,
+            11,
+            12
+          ],
+          "texture": "lining"
+        },
+        {
+          "name": "body_front",
+          "from": [
+            4,
+            2,
+            5
+          ],
+          "to": [
+            12,
+            10.5,
+            6
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "base_welt_front",
+          "from": [
+            2.875,
+            0.5,
+            4.875
+          ],
+          "to": [
+            13.125,
+            1.25,
+            5.375
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_back",
+          "from": [
+            2.875,
+            0.5,
+            11.625
+          ],
+          "to": [
+            13.125,
+            1.25,
+            12.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_left",
+          "from": [
+            2.875,
+            0.5,
+            5.375
+          ],
+          "to": [
+            3.375,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_right",
+          "from": [
+            12.625,
+            0.5,
+            5.375
+          ],
+          "to": [
+            13.125,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "front_pocket",
+          "from": [
+            4,
+            2.125,
+            2.75
+          ],
+          "to": [
+            12,
+            6.625,
+            5.125
+          ],
+          "texture": "pocket"
+        },
+        {
+          "name": "pocket_flap",
+          "from": [
+            3.75,
+            6.625,
+            2.5
+          ],
+          "to": [
+            12.25,
+            7.375,
+            5.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "pocket_latch",
+          "from": [
+            7.375,
+            5.75,
+            2.375
+          ],
+          "to": [
+            8.625,
+            7.375,
+            2.75
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_left_upper",
+          "from": [
+            4,
+            9.5,
+            11.875
+          ],
+          "to": [
+            5.5,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_long",
+          "from": [
+            4,
+            3.5,
+            12.375
+          ],
+          "to": [
+            5.5,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_lower",
+          "from": [
+            4,
+            2,
+            11.875
+          ],
+          "to": [
+            5.5,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_adjuster",
+          "from": [
+            3.875,
+            3.5,
+            12.875
+          ],
+          "to": [
+            5.625,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_right_upper",
+          "from": [
+            10.5,
+            9.5,
+            11.875
+          ],
+          "to": [
+            12.0,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_long",
+          "from": [
+            10.5,
+            3.5,
+            12.375
+          ],
+          "to": [
+            12.0,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_lower",
+          "from": [
+            10.5,
+            2,
+            11.875
+          ],
+          "to": [
+            12.0,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_adjuster",
+          "from": [
+            10.375,
+            3.5,
+            12.875
+          ],
+          "to": [
+            12.125,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "handle_left",
+          "from": [
+            6,
+            11,
+            10.5
+          ],
+          "to": [
+            6.75,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_right",
+          "from": [
+            9.25,
+            11,
+            10.5
+          ],
+          "to": [
+            10,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_top",
+          "from": [
+            6.75,
+            12.75,
+            10.5
+          ],
+          "to": [
+            9.25,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_top",
+          "from": [
+            2.75,
+            10.75,
+            4.5
+          ],
+          "to": [
+            13.25,
+            12.125,
+            12.25
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "flap_lip",
+          "from": [
+            3,
+            9.125,
+            4.25
+          ],
+          "to": [
+            13,
+            10.75,
+            5.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_tab_left",
+          "from": [
+            5,
+            8.25,
+            4
+          ],
+          "to": [
+            6.5,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_left_top",
+          "from": [
+            4.875,
+            9.75,
+            3.75
+          ],
+          "to": [
+            6.625,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_bottom",
+          "from": [
+            4.875,
+            8.625,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_left",
+          "from": [
+            4.875,
+            9,
+            3.75
+          ],
+          "to": [
+            5.25,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_right",
+          "from": [
+            6.25,
+            9,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "flap_tab_right",
+          "from": [
+            9.5,
+            8.25,
+            4
+          ],
+          "to": [
+            11.0,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_right_top",
+          "from": [
+            9.375,
+            9.75,
+            3.75
+          ],
+          "to": [
+            11.125,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_bottom",
+          "from": [
+            9.375,
+            8.625,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_left",
+          "from": [
+            9.375,
+            9,
+            3.75
+          ],
+          "to": [
+            9.75,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_right",
+          "from": [
+            10.75,
+            9,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_front",
+          "from": [
+            3,
+            1.25,
+            4.75
+          ],
+          "to": [
+            4,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_back",
+          "from": [
+            3,
+            1.25,
+            11.75
+          ],
+          "to": [
+            4,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_front",
+          "from": [
+            12,
+            1.25,
+            4.75
+          ],
+          "to": [
+            13,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_back",
+          "from": [
+            12,
+            1.25,
+            11.75
+          ],
+          "to": [
+            13,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        }
+      ]
+    },
+    {
+      "id": "iron_backpack",
+      "material": "iron",
+      "closed_model": "fabricated_backpacks:block/iron_backpack_closed",
+      "open_model": "fabricated_backpacks:block/iron_backpack_open",
+      "body_model": "fabricated_backpacks:block/iron_backpack_body",
+      "flap_parts": [
+        "flap_top",
+        "flap_lip",
+        "flap_tab_left",
+        "buckle_left_top",
+        "buckle_left_bottom",
+        "buckle_left_left",
+        "buckle_left_right",
+        "flap_tab_right",
+        "buckle_right_top",
+        "buckle_right_bottom",
+        "buckle_right_left",
+        "buckle_right_right"
+      ],
+      "fittings_texture": "fabricated_backpacks:entity/backpack/iron_fittings",
+      "parts": [
+        {
+          "name": "body_floor",
+          "from": [
+            3,
+            0.5,
+            5
+          ],
+          "to": [
+            13,
+            2,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_left",
+          "from": [
+            3,
+            2,
+            5
+          ],
+          "to": [
+            4,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_right",
+          "from": [
+            12,
+            2,
+            5
+          ],
+          "to": [
+            13,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_back",
+          "from": [
+            4,
+            2,
+            11
+          ],
+          "to": [
+            12,
+            11,
+            12
+          ],
+          "texture": "lining"
+        },
+        {
+          "name": "body_front",
+          "from": [
+            4,
+            2,
+            5
+          ],
+          "to": [
+            12,
+            10.5,
+            6
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "base_welt_front",
+          "from": [
+            2.875,
+            0.5,
+            4.875
+          ],
+          "to": [
+            13.125,
+            1.25,
+            5.375
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_back",
+          "from": [
+            2.875,
+            0.5,
+            11.625
+          ],
+          "to": [
+            13.125,
+            1.25,
+            12.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_left",
+          "from": [
+            2.875,
+            0.5,
+            5.375
+          ],
+          "to": [
+            3.375,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_right",
+          "from": [
+            12.625,
+            0.5,
+            5.375
+          ],
+          "to": [
+            13.125,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "front_pocket",
+          "from": [
+            4,
+            2.125,
+            2.75
+          ],
+          "to": [
+            12,
+            6.625,
+            5.125
+          ],
+          "texture": "pocket"
+        },
+        {
+          "name": "pocket_flap",
+          "from": [
+            3.75,
+            6.625,
+            2.5
+          ],
+          "to": [
+            12.25,
+            7.375,
+            5.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "pocket_latch",
+          "from": [
+            7.375,
+            5.75,
+            2.375
+          ],
+          "to": [
+            8.625,
+            7.375,
+            2.75
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_left_upper",
+          "from": [
+            4,
+            9.5,
+            11.875
+          ],
+          "to": [
+            5.5,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_long",
+          "from": [
+            4,
+            3.5,
+            12.375
+          ],
+          "to": [
+            5.5,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_lower",
+          "from": [
+            4,
+            2,
+            11.875
+          ],
+          "to": [
+            5.5,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_adjuster",
+          "from": [
+            3.875,
+            3.5,
+            12.875
+          ],
+          "to": [
+            5.625,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_right_upper",
+          "from": [
+            10.5,
+            9.5,
+            11.875
+          ],
+          "to": [
+            12.0,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_long",
+          "from": [
+            10.5,
+            3.5,
+            12.375
+          ],
+          "to": [
+            12.0,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_lower",
+          "from": [
+            10.5,
+            2,
+            11.875
+          ],
+          "to": [
+            12.0,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_adjuster",
+          "from": [
+            10.375,
+            3.5,
+            12.875
+          ],
+          "to": [
+            12.125,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "handle_left",
+          "from": [
+            6,
+            11,
+            10.5
+          ],
+          "to": [
+            6.75,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_right",
+          "from": [
+            9.25,
+            11,
+            10.5
+          ],
+          "to": [
+            10,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_top",
+          "from": [
+            6.75,
+            12.75,
+            10.5
+          ],
+          "to": [
+            9.25,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_top",
+          "from": [
+            2.75,
+            10.75,
+            4.5
+          ],
+          "to": [
+            13.25,
+            12.125,
+            12.25
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "flap_lip",
+          "from": [
+            3,
+            9.125,
+            4.25
+          ],
+          "to": [
+            13,
+            10.75,
+            5.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_tab_left",
+          "from": [
+            5,
+            8.25,
+            4
+          ],
+          "to": [
+            6.5,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_left_top",
+          "from": [
+            4.875,
+            9.75,
+            3.75
+          ],
+          "to": [
+            6.625,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_bottom",
+          "from": [
+            4.875,
+            8.625,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_left",
+          "from": [
+            4.875,
+            9,
+            3.75
+          ],
+          "to": [
+            5.25,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_right",
+          "from": [
+            6.25,
+            9,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "flap_tab_right",
+          "from": [
+            9.5,
+            8.25,
+            4
+          ],
+          "to": [
+            11.0,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_right_top",
+          "from": [
+            9.375,
+            9.75,
+            3.75
+          ],
+          "to": [
+            11.125,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_bottom",
+          "from": [
+            9.375,
+            8.625,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_left",
+          "from": [
+            9.375,
+            9,
+            3.75
+          ],
+          "to": [
+            9.75,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_right",
+          "from": [
+            10.75,
+            9,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_front",
+          "from": [
+            3,
+            1.25,
+            4.75
+          ],
+          "to": [
+            4,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_back",
+          "from": [
+            3,
+            1.25,
+            11.75
+          ],
+          "to": [
+            4,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_front",
+          "from": [
+            12,
+            1.25,
+            4.75
+          ],
+          "to": [
+            13,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_back",
+          "from": [
+            12,
+            1.25,
+            11.75
+          ],
+          "to": [
+            13,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_clip_left",
+          "from": [
+            2.75,
+            6.125,
+            7.125
+          ],
+          "to": [
+            3.25,
+            8.125,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_clip_right",
+          "from": [
+            12.75,
+            6.125,
+            7.125
+          ],
+          "to": [
+            13.25,
+            8.125,
+            9.125
+          ],
+          "texture": "fittings"
+        }
+      ]
+    },
+    {
+      "id": "gold_backpack",
+      "material": "gold",
+      "closed_model": "fabricated_backpacks:block/gold_backpack_closed",
+      "open_model": "fabricated_backpacks:block/gold_backpack_open",
+      "body_model": "fabricated_backpacks:block/gold_backpack_body",
+      "flap_parts": [
+        "flap_top",
+        "flap_lip",
+        "flap_tab_left",
+        "buckle_left_top",
+        "buckle_left_bottom",
+        "buckle_left_left",
+        "buckle_left_right",
+        "flap_tab_right",
+        "buckle_right_top",
+        "buckle_right_bottom",
+        "buckle_right_left",
+        "buckle_right_right"
+      ],
+      "fittings_texture": "fabricated_backpacks:entity/backpack/gold_fittings",
+      "parts": [
+        {
+          "name": "body_floor",
+          "from": [
+            3,
+            0.5,
+            5
+          ],
+          "to": [
+            13,
+            2,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_left",
+          "from": [
+            3,
+            2,
+            5
+          ],
+          "to": [
+            4,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_right",
+          "from": [
+            12,
+            2,
+            5
+          ],
+          "to": [
+            13,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_back",
+          "from": [
+            4,
+            2,
+            11
+          ],
+          "to": [
+            12,
+            11,
+            12
+          ],
+          "texture": "lining"
+        },
+        {
+          "name": "body_front",
+          "from": [
+            4,
+            2,
+            5
+          ],
+          "to": [
+            12,
+            10.5,
+            6
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "base_welt_front",
+          "from": [
+            2.875,
+            0.5,
+            4.875
+          ],
+          "to": [
+            13.125,
+            1.25,
+            5.375
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_back",
+          "from": [
+            2.875,
+            0.5,
+            11.625
+          ],
+          "to": [
+            13.125,
+            1.25,
+            12.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_left",
+          "from": [
+            2.875,
+            0.5,
+            5.375
+          ],
+          "to": [
+            3.375,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_right",
+          "from": [
+            12.625,
+            0.5,
+            5.375
+          ],
+          "to": [
+            13.125,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "front_pocket",
+          "from": [
+            4,
+            2.125,
+            2.75
+          ],
+          "to": [
+            12,
+            6.625,
+            5.125
+          ],
+          "texture": "pocket"
+        },
+        {
+          "name": "pocket_flap",
+          "from": [
+            3.75,
+            6.625,
+            2.5
+          ],
+          "to": [
+            12.25,
+            7.375,
+            5.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "pocket_latch",
+          "from": [
+            7.375,
+            5.75,
+            2.375
+          ],
+          "to": [
+            8.625,
+            7.375,
+            2.75
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_left_upper",
+          "from": [
+            4,
+            9.5,
+            11.875
+          ],
+          "to": [
+            5.5,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_long",
+          "from": [
+            4,
+            3.5,
+            12.375
+          ],
+          "to": [
+            5.5,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_lower",
+          "from": [
+            4,
+            2,
+            11.875
+          ],
+          "to": [
+            5.5,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_adjuster",
+          "from": [
+            3.875,
+            3.5,
+            12.875
+          ],
+          "to": [
+            5.625,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_right_upper",
+          "from": [
+            10.5,
+            9.5,
+            11.875
+          ],
+          "to": [
+            12.0,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_long",
+          "from": [
+            10.5,
+            3.5,
+            12.375
+          ],
+          "to": [
+            12.0,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_lower",
+          "from": [
+            10.5,
+            2,
+            11.875
+          ],
+          "to": [
+            12.0,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_adjuster",
+          "from": [
+            10.375,
+            3.5,
+            12.875
+          ],
+          "to": [
+            12.125,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "handle_left",
+          "from": [
+            6,
+            11,
+            10.5
+          ],
+          "to": [
+            6.75,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_right",
+          "from": [
+            9.25,
+            11,
+            10.5
+          ],
+          "to": [
+            10,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_top",
+          "from": [
+            6.75,
+            12.75,
+            10.5
+          ],
+          "to": [
+            9.25,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_top",
+          "from": [
+            2.75,
+            10.75,
+            4.5
+          ],
+          "to": [
+            13.25,
+            12.125,
+            12.25
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "flap_lip",
+          "from": [
+            3,
+            9.125,
+            4.25
+          ],
+          "to": [
+            13,
+            10.75,
+            5.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_tab_left",
+          "from": [
+            5,
+            8.25,
+            4
+          ],
+          "to": [
+            6.5,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_left_top",
+          "from": [
+            4.875,
+            9.75,
+            3.75
+          ],
+          "to": [
+            6.625,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_bottom",
+          "from": [
+            4.875,
+            8.625,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_left",
+          "from": [
+            4.875,
+            9,
+            3.75
+          ],
+          "to": [
+            5.25,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_right",
+          "from": [
+            6.25,
+            9,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "flap_tab_right",
+          "from": [
+            9.5,
+            8.25,
+            4
+          ],
+          "to": [
+            11.0,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_right_top",
+          "from": [
+            9.375,
+            9.75,
+            3.75
+          ],
+          "to": [
+            11.125,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_bottom",
+          "from": [
+            9.375,
+            8.625,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_left",
+          "from": [
+            9.375,
+            9,
+            3.75
+          ],
+          "to": [
+            9.75,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_right",
+          "from": [
+            10.75,
+            9,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_front",
+          "from": [
+            3,
+            1.25,
+            4.75
+          ],
+          "to": [
+            4,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_back",
+          "from": [
+            3,
+            1.25,
+            11.75
+          ],
+          "to": [
+            4,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_front",
+          "from": [
+            12,
+            1.25,
+            4.75
+          ],
+          "to": [
+            13,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_back",
+          "from": [
+            12,
+            1.25,
+            11.75
+          ],
+          "to": [
+            13,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_clip_left",
+          "from": [
+            2.75,
+            6.125,
+            7.125
+          ],
+          "to": [
+            3.25,
+            8.125,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_clip_right",
+          "from": [
+            12.75,
+            6.125,
+            7.125
+          ],
+          "to": [
+            13.25,
+            8.125,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "gold_pocket_edge",
+          "from": [
+            4,
+            2.125,
+            2.5
+          ],
+          "to": [
+            12,
+            2.625,
+            2.875
+          ],
+          "texture": "fittings"
+        }
+      ]
+    },
+    {
+      "id": "diamond_backpack",
+      "material": "diamond",
+      "closed_model": "fabricated_backpacks:block/diamond_backpack_closed",
+      "open_model": "fabricated_backpacks:block/diamond_backpack_open",
+      "body_model": "fabricated_backpacks:block/diamond_backpack_body",
+      "flap_parts": [
+        "flap_top",
+        "flap_lip",
+        "flap_tab_left",
+        "buckle_left_top",
+        "buckle_left_bottom",
+        "buckle_left_left",
+        "buckle_left_right",
+        "flap_tab_right",
+        "buckle_right_top",
+        "buckle_right_bottom",
+        "buckle_right_left",
+        "buckle_right_right"
+      ],
+      "fittings_texture": "fabricated_backpacks:entity/backpack/diamond_fittings",
+      "parts": [
+        {
+          "name": "body_floor",
+          "from": [
+            3,
+            0.5,
+            5
+          ],
+          "to": [
+            13,
+            2,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_left",
+          "from": [
+            3,
+            2,
+            5
+          ],
+          "to": [
+            4,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_right",
+          "from": [
+            12,
+            2,
+            5
+          ],
+          "to": [
+            13,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_back",
+          "from": [
+            4,
+            2,
+            11
+          ],
+          "to": [
+            12,
+            11,
+            12
+          ],
+          "texture": "lining"
+        },
+        {
+          "name": "body_front",
+          "from": [
+            4,
+            2,
+            5
+          ],
+          "to": [
+            12,
+            10.5,
+            6
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "base_welt_front",
+          "from": [
+            2.875,
+            0.5,
+            4.875
+          ],
+          "to": [
+            13.125,
+            1.25,
+            5.375
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_back",
+          "from": [
+            2.875,
+            0.5,
+            11.625
+          ],
+          "to": [
+            13.125,
+            1.25,
+            12.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_left",
+          "from": [
+            2.875,
+            0.5,
+            5.375
+          ],
+          "to": [
+            3.375,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_right",
+          "from": [
+            12.625,
+            0.5,
+            5.375
+          ],
+          "to": [
+            13.125,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "front_pocket",
+          "from": [
+            4,
+            2.125,
+            2.75
+          ],
+          "to": [
+            12,
+            6.625,
+            5.125
+          ],
+          "texture": "pocket"
+        },
+        {
+          "name": "pocket_flap",
+          "from": [
+            3.75,
+            6.625,
+            2.5
+          ],
+          "to": [
+            12.25,
+            7.375,
+            5.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "pocket_latch",
+          "from": [
+            7.375,
+            5.75,
+            2.375
+          ],
+          "to": [
+            8.625,
+            7.375,
+            2.75
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_left_upper",
+          "from": [
+            4,
+            9.5,
+            11.875
+          ],
+          "to": [
+            5.5,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_long",
+          "from": [
+            4,
+            3.5,
+            12.375
+          ],
+          "to": [
+            5.5,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_lower",
+          "from": [
+            4,
+            2,
+            11.875
+          ],
+          "to": [
+            5.5,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_adjuster",
+          "from": [
+            3.875,
+            3.5,
+            12.875
+          ],
+          "to": [
+            5.625,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_right_upper",
+          "from": [
+            10.5,
+            9.5,
+            11.875
+          ],
+          "to": [
+            12.0,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_long",
+          "from": [
+            10.5,
+            3.5,
+            12.375
+          ],
+          "to": [
+            12.0,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_lower",
+          "from": [
+            10.5,
+            2,
+            11.875
+          ],
+          "to": [
+            12.0,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_adjuster",
+          "from": [
+            10.375,
+            3.5,
+            12.875
+          ],
+          "to": [
+            12.125,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "handle_left",
+          "from": [
+            6,
+            11,
+            10.5
+          ],
+          "to": [
+            6.75,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_right",
+          "from": [
+            9.25,
+            11,
+            10.5
+          ],
+          "to": [
+            10,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_top",
+          "from": [
+            6.75,
+            12.75,
+            10.5
+          ],
+          "to": [
+            9.25,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_top",
+          "from": [
+            2.75,
+            10.75,
+            4.5
+          ],
+          "to": [
+            13.25,
+            12.125,
+            12.25
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "flap_lip",
+          "from": [
+            3,
+            9.125,
+            4.25
+          ],
+          "to": [
+            13,
+            10.75,
+            5.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_tab_left",
+          "from": [
+            5,
+            8.25,
+            4
+          ],
+          "to": [
+            6.5,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_left_top",
+          "from": [
+            4.875,
+            9.75,
+            3.75
+          ],
+          "to": [
+            6.625,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_bottom",
+          "from": [
+            4.875,
+            8.625,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_left",
+          "from": [
+            4.875,
+            9,
+            3.75
+          ],
+          "to": [
+            5.25,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_right",
+          "from": [
+            6.25,
+            9,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "flap_tab_right",
+          "from": [
+            9.5,
+            8.25,
+            4
+          ],
+          "to": [
+            11.0,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_right_top",
+          "from": [
+            9.375,
+            9.75,
+            3.75
+          ],
+          "to": [
+            11.125,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_bottom",
+          "from": [
+            9.375,
+            8.625,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_left",
+          "from": [
+            9.375,
+            9,
+            3.75
+          ],
+          "to": [
+            9.75,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_right",
+          "from": [
+            10.75,
+            9,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_front",
+          "from": [
+            3,
+            1.25,
+            4.75
+          ],
+          "to": [
+            4,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_back",
+          "from": [
+            3,
+            1.25,
+            11.75
+          ],
+          "to": [
+            4,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_front",
+          "from": [
+            12,
+            1.25,
+            4.75
+          ],
+          "to": [
+            13,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_back",
+          "from": [
+            12,
+            1.25,
+            11.75
+          ],
+          "to": [
+            13,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_clip_left",
+          "from": [
+            2.75,
+            6.125,
+            7.125
+          ],
+          "to": [
+            3.25,
+            8.125,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_clip_right",
+          "from": [
+            12.75,
+            6.125,
+            7.125
+          ],
+          "to": [
+            13.25,
+            8.125,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "diamond_pocket_seal",
+          "from": [
+            7.375,
+            3.75,
+            2.25
+          ],
+          "to": [
+            8.625,
+            5,
+            2.75
+          ],
+          "texture": "fittings",
+          "rotation": {
+            "origin": [
+              8,
+              4.375,
+              2.5
+            ],
+            "axis": "z",
+            "angle": 45,
+            "rescale": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "netherite_backpack",
+      "material": "netherite",
+      "closed_model": "fabricated_backpacks:block/netherite_backpack_closed",
+      "open_model": "fabricated_backpacks:block/netherite_backpack_open",
+      "body_model": "fabricated_backpacks:block/netherite_backpack_body",
+      "flap_parts": [
+        "flap_top",
+        "flap_lip",
+        "flap_tab_left",
+        "buckle_left_top",
+        "buckle_left_bottom",
+        "buckle_left_left",
+        "buckle_left_right",
+        "flap_tab_right",
+        "buckle_right_top",
+        "buckle_right_bottom",
+        "buckle_right_left",
+        "buckle_right_right",
+        "netherite_flap_guard"
+      ],
+      "fittings_texture": "fabricated_backpacks:entity/backpack/netherite_fittings",
+      "parts": [
+        {
+          "name": "body_floor",
+          "from": [
+            3,
+            0.5,
+            5
+          ],
+          "to": [
+            13,
+            2,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_left",
+          "from": [
+            3,
+            2,
+            5
+          ],
+          "to": [
+            4,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_right",
+          "from": [
+            12,
+            2,
+            5
+          ],
+          "to": [
+            13,
+            11,
+            12
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "body_back",
+          "from": [
+            4,
+            2,
+            11
+          ],
+          "to": [
+            12,
+            11,
+            12
+          ],
+          "texture": "lining"
+        },
+        {
+          "name": "body_front",
+          "from": [
+            4,
+            2,
+            5
+          ],
+          "to": [
+            12,
+            10.5,
+            6
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "base_welt_front",
+          "from": [
+            2.875,
+            0.5,
+            4.875
+          ],
+          "to": [
+            13.125,
+            1.25,
+            5.375
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_back",
+          "from": [
+            2.875,
+            0.5,
+            11.625
+          ],
+          "to": [
+            13.125,
+            1.25,
+            12.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_left",
+          "from": [
+            2.875,
+            0.5,
+            5.375
+          ],
+          "to": [
+            3.375,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "base_welt_right",
+          "from": [
+            12.625,
+            0.5,
+            5.375
+          ],
+          "to": [
+            13.125,
+            1.25,
+            11.625
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "front_pocket",
+          "from": [
+            4,
+            2.125,
+            2.75
+          ],
+          "to": [
+            12,
+            6.625,
+            5.125
+          ],
+          "texture": "pocket"
+        },
+        {
+          "name": "pocket_flap",
+          "from": [
+            3.75,
+            6.625,
+            2.5
+          ],
+          "to": [
+            12.25,
+            7.375,
+            5.125
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "pocket_latch",
+          "from": [
+            7.375,
+            5.75,
+            2.375
+          ],
+          "to": [
+            8.625,
+            7.375,
+            2.75
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_left_upper",
+          "from": [
+            4,
+            9.5,
+            11.875
+          ],
+          "to": [
+            5.5,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_long",
+          "from": [
+            4,
+            3.5,
+            12.375
+          ],
+          "to": [
+            5.5,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_lower",
+          "from": [
+            4,
+            2,
+            11.875
+          ],
+          "to": [
+            5.5,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_left_adjuster",
+          "from": [
+            3.875,
+            3.5,
+            12.875
+          ],
+          "to": [
+            5.625,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "strap_right_upper",
+          "from": [
+            10.5,
+            9.5,
+            11.875
+          ],
+          "to": [
+            12.0,
+            11,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_long",
+          "from": [
+            10.5,
+            3.5,
+            12.375
+          ],
+          "to": [
+            12.0,
+            9.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_lower",
+          "from": [
+            10.5,
+            2,
+            11.875
+          ],
+          "to": [
+            12.0,
+            3.5,
+            13
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "strap_right_adjuster",
+          "from": [
+            10.375,
+            3.5,
+            12.875
+          ],
+          "to": [
+            12.125,
+            4.375,
+            13.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "handle_left",
+          "from": [
+            6,
+            11,
+            10.5
+          ],
+          "to": [
+            6.75,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_right",
+          "from": [
+            9.25,
+            11,
+            10.5
+          ],
+          "to": [
+            10,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "handle_top",
+          "from": [
+            6.75,
+            12.75,
+            10.5
+          ],
+          "to": [
+            9.25,
+            13.5,
+            11.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_top",
+          "from": [
+            2.75,
+            10.75,
+            4.5
+          ],
+          "to": [
+            13.25,
+            12.125,
+            12.25
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "flap_lip",
+          "from": [
+            3,
+            9.125,
+            4.25
+          ],
+          "to": [
+            13,
+            10.75,
+            5.25
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "flap_tab_left",
+          "from": [
+            5,
+            8.25,
+            4
+          ],
+          "to": [
+            6.5,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_left_top",
+          "from": [
+            4.875,
+            9.75,
+            3.75
+          ],
+          "to": [
+            6.625,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_bottom",
+          "from": [
+            4.875,
+            8.625,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_left",
+          "from": [
+            4.875,
+            9,
+            3.75
+          ],
+          "to": [
+            5.25,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_left_right",
+          "from": [
+            6.25,
+            9,
+            3.75
+          ],
+          "to": [
+            6.625,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "flap_tab_right",
+          "from": [
+            9.5,
+            8.25,
+            4
+          ],
+          "to": [
+            11.0,
+            11.375,
+            4.5
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "buckle_right_top",
+          "from": [
+            9.375,
+            9.75,
+            3.75
+          ],
+          "to": [
+            11.125,
+            10.125,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_bottom",
+          "from": [
+            9.375,
+            8.625,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_left",
+          "from": [
+            9.375,
+            9,
+            3.75
+          ],
+          "to": [
+            9.75,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "buckle_right_right",
+          "from": [
+            10.75,
+            9,
+            3.75
+          ],
+          "to": [
+            11.125,
+            9.75,
+            4.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_front",
+          "from": [
+            3,
+            1.25,
+            4.75
+          ],
+          "to": [
+            4,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_left_back",
+          "from": [
+            3,
+            1.25,
+            11.75
+          ],
+          "to": [
+            4,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_front",
+          "from": [
+            12,
+            1.25,
+            4.75
+          ],
+          "to": [
+            13,
+            3,
+            5.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "corner_right_back",
+          "from": [
+            12,
+            1.25,
+            11.75
+          ],
+          "to": [
+            13,
+            3,
+            12.25
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_clip_left",
+          "from": [
+            2.75,
+            6.125,
+            7.125
+          ],
+          "to": [
+            3.25,
+            8.125,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_clip_right",
+          "from": [
+            12.75,
+            6.125,
+            7.125
+          ],
+          "to": [
+            13.25,
+            8.125,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "netherite_pocket_guard",
+          "from": [
+            4,
+            2.125,
+            2.375
+          ],
+          "to": [
+            12,
+            2.875,
+            2.875
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "netherite_flap_guard",
+          "from": [
+            3,
+            11.75,
+            4.375
+          ],
+          "to": [
+            13,
+            12.25,
+            5.375
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "netherite_side_guard_left",
+          "from": [
+            2.75,
+            2,
+            7.875
+          ],
+          "to": [
+            3.25,
+            5.5,
+            8.625
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "netherite_side_guard_right",
+          "from": [
+            12.75,
+            2,
+            7.875
+          ],
+          "to": [
+            13.25,
+            5.5,
+            8.625
+          ],
+          "texture": "fittings"
+        }
+      ]
+    }
+  ]
+}

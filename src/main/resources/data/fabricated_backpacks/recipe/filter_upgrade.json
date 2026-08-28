@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " M ",
+    "TUT",
+    " S "
+  ],
+  "key": {
+    "M": "minecraft:paper",
+    "T": "minecraft:iron_ingot",
+    "U": "fabricated_backpacks:upgrade_base",
+    "S": "minecraft:string"
+  },
+  "result": {
+    "id": "fabricated_backpacks:filter_upgrade",
+    "count": 1
+  }
+}

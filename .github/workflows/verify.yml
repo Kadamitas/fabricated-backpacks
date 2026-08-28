@@ -1,0 +1,77 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-server-and-artifact:
+    name: Java 25 unit, server, assets and artifact checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Java 25
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Check deterministic assets and evidence-checker rejection rules
+        run: |
+          python tools/generate_assets.py --check
+          python tools/test_verify_evidence.py
+      - name: Start a fresh verification record
+        run: python tools/verify_evidence.py begin
+      - name: Execute unit and real server tests and build the production JAR
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain --no-build-cache --rerun-tasks test runGameTest jar
+      - name: Audit assets against the exact resolved Minecraft client
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import subprocess
+          import sys
+          gradle_home = Path(os.environ.get('GRADLE_USER_HOME', Path.home() / '.gradle'))
+          jar = gradle_home / 'caches/fabric-loom/26.2/minecraft-client.jar'
+          if not jar.is_file():
+              raise SystemExit(f'Missing Loom original target client JAR: {jar}')
+          subprocess.run([sys.executable, 'tools/test_assets.py', '--minecraft-jar', str(jar)], check=True)
+          PY
+      - name: Require exact discovery, fresh passing reports and a clean production JAR
+        run: python tools/verify_evidence.py check
+      - name: Upload diagnostics and automated evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verification-java25-${{ github.run_id }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            build/libs/*.jar
+            build/reports/tests/
+            build/test-results/test/
+            build/gametest-results.xml
+            build/verification/start.json
+            build/verification/automated.json
+
+# This workflow does not produce a manual or release receipt. Full rendered-client,
+# separate-JVM restart, real two-client audio and installed-JAR manual checks remain
+# mandatory inputs to `verify_evidence.py check --release` before releaseBundle.

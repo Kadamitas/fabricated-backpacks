@@ -1,0 +1,6 @@
+{
+  "sound_event": "minecraft:music_disc.blocks",
+  "description": "Short test song",
+  "length_in_seconds": 0.05,
+  "comparator_output": 1
+}

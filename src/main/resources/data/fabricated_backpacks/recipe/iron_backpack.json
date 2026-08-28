@@ -1,0 +1,18 @@
+{
+  "type": "fabricated_backpacks:backpack_upgrade",
+  "category": "equipment",
+  "pattern": [
+    "MMM",
+    "MUM",
+    "MMM"
+  ],
+  "key": {
+    "M": "minecraft:iron_ingot",
+    "U": "fabricated_backpacks:backpack"
+  },
+  "result": {
+    "id": "fabricated_backpacks:iron_backpack",
+    "count": 1
+  },
+  "source": "fabricated_backpacks:backpack"
+}

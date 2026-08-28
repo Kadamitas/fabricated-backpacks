@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " M ",
+    "TUT",
+    " S "
+  ],
+  "key": {
+    "M": "minecraft:lava_bucket",
+    "T": "minecraft:obsidian",
+    "U": "fabricated_backpacks:upgrade_base",
+    "S": "minecraft:redstone"
+  },
+  "result": {
+    "id": "fabricated_backpacks:void_upgrade",
+    "count": 1
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " M ",
+    "TUT",
+    " S "
+  ],
+  "key": {
+    "M": "minecraft:barrel",
+    "T": "minecraft:copper_ingot",
+    "U": "fabricated_backpacks:upgrade_base",
+    "S": "minecraft:redstone"
+  },
+  "result": {
+    "id": "fabricated_backpacks:restock_upgrade",
+    "count": 1
+  }
+}

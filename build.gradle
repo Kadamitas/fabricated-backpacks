@@ -1,0 +1,132 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version '1.17.20'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = 'com.kadamitas'
+base { archivesName = 'fabricated-backpacks' }
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.fabricmc.net/' }
+}
+
+configurations {
+    productionMods {
+        canBeConsumed = false
+        transitive = false
+    }
+}
+
+loom {
+    splitEnvironmentSourceSets()
+    mods {
+        fabricated_backpacks {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'fabricated_backpacks_tests'
+        enableGameTests = true
+        enableClientGameTests = true
+        eula = true
+        // Multiplayer preparation must never clear another running client's directory.
+        clearRunDirectory = !providers.gradleProperty('multiplayerRunId').isPresent()
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+    productionMods "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+    implementation include('teamreborn:energy:5.0.0')
+    testImplementation "net.fabricmc:fabric-loader-junit:${loader_version}"
+    testImplementation platform('org.junit:junit-bom:6.1.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.platform:junit-platform-launcher'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = 'UTF-8'
+    options.compilerArgs.addAll(['-Xlint:unchecked', '-Xlint:deprecation'])
+}
+
+tasks.named('processResources') {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    systemProperty 'fabricated.backpacks.unitEvidence', layout.buildDirectory.file('test-results/test/unit-execution.json').get().asFile.absolutePath
+    testLogging { events 'failed', 'skipped' }
+}
+
+tasks.named('runGameTest') {
+    systemProperty 'fabric-api.gametest.report-file', layout.buildDirectory.file('gametest-results.xml').get().asFile.absolutePath
+}
+
+tasks.named('runClientGameTest') {
+    systemProperty 'fabricated.backpacks.clientScenario', providers.gradleProperty('clientScenario').getOrElse('full')
+    systemProperty 'fabricated.backpacks.evidenceRoot', layout.projectDirectory.dir('.codex-local/client-evidence').asFile.absolutePath
+}
+
+apply from: 'tools/multiplayer.gradle'
+
+tasks.register('runProductionClient', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    group = 'verification'
+    description = 'Open an isolated real Minecraft instance using the built release JAR, without the test mod.'
+    mods.from(tasks.named('jar').flatMap { it.archiveFile }, configurations.productionMods)
+    runDir = layout.projectDirectory.dir('.codex-local/manual-client')
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+    useXVFB = false
+    jvmArgs.add('-Xmx3G')
+    programArgs.addAll('--username', 'BackpackQA', '--width', '1280', '--height', '800')
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+tasks.withType(Jar).configureEach {
+    from('LICENSE') { into 'META-INF'; rename { 'LICENSE-fabricated-backpacks.txt' } }
+}
+
+tasks.register('verifyReleaseEvidence', Exec) {
+    group = 'verification'
+    description = 'Require fresh build, server, real-client and manual evidence before bundling a release.'
+    dependsOn tasks.named('build')
+    commandLine 'python', 'tools/verify_evidence.py', 'check', '--release'
+}
+
+tasks.register('releaseBundle') {
+    group = 'build'
+    description = 'Collect verified release jars and checksums.'
+    dependsOn tasks.named('verifyReleaseEvidence')
+    doLast {
+        def destination = layout.projectDirectory.dir("release/${project.version}").asFile.toPath()
+        java.nio.file.Files.createDirectories(destination)
+        ['jar', 'sourcesJar'].each { taskName ->
+            def artifact = tasks.named(taskName).get().archiveFile.get().asFile.toPath()
+            def target = destination.resolve(artifact.fileName)
+            java.nio.file.Files.copy(artifact, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            def digest = java.security.MessageDigest.getInstance('SHA-256').digest(java.nio.file.Files.readAllBytes(target))
+            def checksum = java.util.HexFormat.of().formatHex(digest)
+            java.nio.file.Files.writeString(destination.resolve("${artifact.fileName}.sha256"), "${checksum}  ${artifact.fileName}\n")
+        }
+    }
+}

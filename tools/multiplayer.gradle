@@ -1,0 +1,154 @@
+import groovy.json.JsonOutput
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.StandardOpenOption
+import java.security.MessageDigest
+
+// Prepare both launch descriptions in one build; PowerShell starts them after Gradle exits.
+def requestedId = providers.gradleProperty('multiplayerRunId').orNull
+def prepareClients = tasks.register('prepareMultiplayerClients') {
+    group = 'verification'
+    description = 'Export two exact, separate real-client commands without starting either JVM.'
+    outputs.upToDateWhen { false }
+}
+if (requestedId == null) {
+    prepareClients.configure {
+        doLast { throw new GradleException('Use tools/run-multiplayer.ps1, or supply -PmultiplayerRunId=<fresh canonical UUID>.') }
+    }
+} else {
+    String runId
+    try { runId = UUID.fromString(requestedId).toString() }
+    catch (IllegalArgumentException invalid) { throw new GradleException('multiplayerRunId must be a canonical UUID.', invalid) }
+    if (runId != requestedId) throw new GradleException('multiplayerRunId must use canonical lowercase UUID spelling.')
+    def evidenceRoot = layout.projectDirectory.dir('.codex-local/client-evidence').asFile.toPath().toAbsolutePath().normalize()
+    def launchRoot = evidenceRoot.resolve("multiplayer-launch-${runId}")
+    def evidence = evidenceRoot.resolve("multiplayer-${runId}")
+    def configurations = [:]
+    ['host': 'BackpackHost', 'guest': 'BackpackGuest'].each { role, username ->
+        String configName = 'multiplayer' + role.capitalize()
+        def run = loom.runConfigs.create(configName) {
+            inherit(loom.runConfigs.getByName('clientGameTest'))
+            getRunDirectory().set(launchRoot.resolve(role).toFile())
+            getGenerateRunConfig().set(false)
+            getSystemProperties().put('fabricated.backpacks.clientScenario', "multiplayer_${role}")
+            getSystemProperties().put('fabricated.backpacks.multiplayerRunId', runId)
+            getSystemProperties().put('fabricated.backpacks.evidenceRoot', evidenceRoot.toString())
+            getSystemProperties().put('java.net.preferIPv4Stack', 'true')
+            getJvmArguments().add(role == 'host' ? '-Xmx3G' : '-Xmx2G')
+            List<String> original = new ArrayList<>(getProgramArguments().get())
+            List<String> arguments = []
+            for (int index = 0; index < original.size(); index++) {
+                if (original[index] == '--username') {
+                    if (++index >= original.size()) throw new GradleException('Inherited --username has no value.')
+                } else arguments.add(original[index])
+            }
+            arguments.addAll(['--username', username])
+            getProgramArguments().set(arguments)
+        }
+        configurations[role] = run
+    }
+    prepareClients.configure {
+        dependsOn tasks.named('gametestClasses'), tasks.named('configureClientLaunch')
+        doLast {
+            for (def directory = evidenceRoot; directory != null; directory = directory.parent) {
+                if (Files.isSymbolicLink(directory)) throw new GradleException('Evidence paths must not traverse symbolic links.')
+            }
+            if (Files.exists(launchRoot, LinkOption.NOFOLLOW_LINKS) || Files.exists(evidence, LinkOption.NOFOLLOW_LINKS))
+                throw new GradleException('This multiplayer run ID already exists; choose a fresh UUID.')
+            Files.createDirectories(evidenceRoot)
+            Files.createDirectory(launchRoot)
+            def writeNew = { path, String value -> Files.writeString(path, value, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW) }
+            def json = { value -> JsonOutput.prettyPrint(JsonOutput.toJson(value)) + '\n' }
+            def digest = { path ->
+                def hash = MessageDigest.getInstance('SHA-256')
+                path.toFile().withInputStream { stream ->
+                    byte[] buffer = new byte[65536]
+                    int count
+                    while ((count = stream.read(buffer)) >= 0) if (count > 0) hash.update(buffer, 0, count)
+                }
+                HexFormat.of().formatHex(hash.digest())
+            }
+            def quoteArgument = { String value ->
+                if (value.indexOf(0) >= 0 || value.contains('\n') || value.contains('\r')) throw new GradleException('A Java argument contains an unsupported control character.')
+                '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+            }
+            def encodeDliPath = { String value ->
+                StringBuilder encoded = new StringBuilder()
+                for (int index = 0; index < value.length(); index++) {
+                    char current = value.charAt(index)
+                    if (current == (char) 32 || current == (char) 64 && index > 0 && value.charAt(index - 1) == (char) 64)
+                        encoded.append(String.format('@@%04x', (int) current))
+                    else encoded.append(current)
+                }
+                encoded.toString()
+            }
+            def commands = [:]
+            Set<File> classpathFiles = new LinkedHashSet<>()
+            configurations.each { role, run ->
+                def task = tasks.named('runMultiplayer' + role.capitalize()).get()
+                // Use Loom's resolved runtime classpath and JavaExec JVM argument providers.
+                // Its generated classpath @file is flattened: Java does not expand nested @files.
+                List<String> jvm = []
+                task.getAllJvmArgs().each { String argument ->
+                    if (argument.startsWith('@')) {
+                        def source = java.nio.file.Path.of(argument.substring(1))
+                        if (!Files.readString(source).startsWith('-classpath\n'))
+                            throw new GradleException('Unexpected nested argument file: ' + source)
+                    } else jvm.add(argument)
+                }
+                jvm.addAll(['-classpath', task.classpath.asPath])
+                classpathFiles.addAll(task.classpath.files)
+                int dli = jvm.findIndexOf { it.startsWith('-Dfabric.dli.config=') }
+                if (dli < 0) throw new GradleException('Loom did not provide a dev-launch configuration.')
+                String encodedPath = jvm[dli].substring('-Dfabric.dli.config='.length())
+                String decodedPath = encodedPath.replaceAll(/@@([0-9a-fA-F]{4})/) { whole, hex -> Character.toString((char) Integer.parseInt(hex, 16)) }
+                def dliCopy = launchRoot.resolve(role + '-dev-launch.cfg')
+                Files.copy(java.nio.file.Path.of(decodedPath), dliCopy)
+                jvm[dli] = '-Dfabric.dli.config=' + encodeDliPath(dliCopy.toString())
+                List<String> program = new ArrayList<>(task.args ?: [])
+                task.argumentProviders.each { provider -> provider.asArguments().each { program.add(it.toString()) } }
+                if (program.count('--username') != 1) throw new GradleException('Every client must have exactly one explicit username.')
+                List<String> arguments = jvm + [task.mainClass.get()] + program
+                def argsFile = launchRoot.resolve(role + '.args')
+                def probeFile = launchRoot.resolve(role + '-probe.args')
+                writeNew(argsFile, arguments.collect(quoteArgument).join('\n') + '\n')
+                writeNew(probeFile, (jvm + ['-version']).collect(quoteArgument).join('\n') + '\n')
+                def directory = launchRoot.resolve(role)
+                Files.createDirectory(directory)
+                // configureTests.eula=true is already an explicit project-level EULA acceptance.
+                writeNew(directory.resolve('eula.txt'), '# Synthetic acceptance server; project configureTests accepts the EULA.\neula=true\n')
+                commands[role] = [java: task.javaLauncher.get().executablePath.asFile.absolutePath,
+                        directory: directory.toString(), argument_file: argsFile.toString(), argument_sha256: digest(argsFile),
+                        probe_file: probeFile.toString(), probe_sha256: digest(probeFile),
+                        configuration_file: dliCopy.toString(), configuration_sha256: digest(dliCopy),
+                        java_arguments: arguments, environment: run.environmentVars.get(),
+                        username: program[program.indexOf('--username') + 1],
+                        stdout: launchRoot.resolve(role + '-stdout.log').toString(), stderr: launchRoot.resolve(role + '-stderr.log').toString()]
+            }
+            List<Map> inputs = []
+            classpathFiles.add(project.file('src/gametest/resources'))
+            classpathFiles.each { file ->
+                if (file.isDirectory()) {
+                    Files.walk(file.toPath()).withCloseable { paths ->
+                        def members = paths.filter { Files.isRegularFile(it) }.sorted().toList()
+                        inputs.add([path: file.absolutePath, directory: true,
+                                    files: members.collect { it.toAbsolutePath().toString() }])
+                        members.each { path ->
+                            inputs.add([path: path.toAbsolutePath().toString(), sha256: digest(path)])
+                        }
+                    }
+                } else if (file.isFile()) inputs.add([path: file.absolutePath, sha256: digest(file.toPath())])
+                else if (file.name.endsWith('.jar')) throw new GradleException('Missing runtime library: ' + file)
+                else inputs.add([path: file.absolutePath, missing: true])
+            }
+            writeNew(launchRoot.resolve('classpath-inputs.json'), json(inputs))
+            def manifest = [schema: 2, run_id: runId, prepared_at: java.time.Instant.now().toString(),
+                    project: project.projectDir.absolutePath, mod_version: project.version.toString(),
+                    minecraft_version: project.minecraft_version, evidence: evidence.toString(), commands: commands]
+            writeNew(launchRoot.resolve('launch.json'), json(manifest))
+            logger.lifecycle('MULTIPLAYER_PREPARED {}', launchRoot.resolve('launch.json'))
+            logger.lifecycle('No Minecraft JVM has started. Launch with tools/run-multiplayer.ps1 -RunId {} -SkipPrepare', runId)
+        }
+    }
+}

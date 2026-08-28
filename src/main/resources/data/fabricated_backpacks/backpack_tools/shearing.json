@@ -1,0 +1,13 @@
+{
+  "items": [
+    "minecraft:shears"
+  ],
+  "entities": [
+    "minecraft:sheep",
+    "minecraft:mooshroom",
+    "minecraft:snow_golem"
+  ],
+  "priority": 100,
+  "manual_only": true,
+  "require_correct_tool": false
+}

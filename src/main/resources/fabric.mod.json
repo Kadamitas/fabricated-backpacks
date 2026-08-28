@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "fabricated_backpacks",
+  "version": "${version}",
+  "name": "Fabricated Backpacks",
+  "description": "Configurable backpacks, modular upgrades, native equipment, and recipe browsing.",
+  "authors": ["Kadamitas"],
+  "contact": {
+    "sources": "https://github.com/Kadamitas/fabricated-backpacks",
+    "issues": "https://github.com/Kadamitas/fabricated-backpacks/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/fabricated_backpacks/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.kadamitas.fabricatedbackpacks.FabricatedBackpacks"],
+    "client": ["com.kadamitas.fabricatedbackpacks.client.FabricatedBackpacksClient"]
+  },
+  "mixins": ["fabricated_backpacks.mixins.json", {"config":"fabricated_backpacks.client.mixins.json","environment":"client"}],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.2",
+    "java": ">=25",
+    "fabric-api": ">=0.158.0+26.2",
+    "team_reborn_energy": ">=5.0.0"
+  }
+}

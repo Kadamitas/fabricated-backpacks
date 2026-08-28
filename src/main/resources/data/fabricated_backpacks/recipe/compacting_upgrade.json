@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " M ",
+    "TUT",
+    " S "
+  ],
+  "key": {
+    "M": "minecraft:piston",
+    "T": "minecraft:iron_ingot",
+    "U": "fabricated_backpacks:upgrade_base",
+    "S": "minecraft:redstone"
+  },
+  "result": {
+    "id": "fabricated_backpacks:compacting_upgrade",
+    "count": 1
+  }
+}

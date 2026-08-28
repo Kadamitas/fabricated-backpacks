@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "backpack": {
+    "id": "fabricated_backpacks:backpack",
+    "count": 1,
+    "components": {
+      "fabricated_backpacks:contents": {
+        "size": 27,
+        "entries": [
+          {"slot": 2, "item": {"id": "minecraft:diamond"}, "count": 43}
+        ]
+      }
+    }
+  }
+}

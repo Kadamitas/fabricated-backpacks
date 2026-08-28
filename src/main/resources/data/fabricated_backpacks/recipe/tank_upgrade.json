@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " M ",
+    "TUT",
+    " S "
+  ],
+  "key": {
+    "M": "minecraft:bucket",
+    "T": "minecraft:copper_ingot",
+    "U": "fabricated_backpacks:upgrade_base",
+    "S": "minecraft:glass"
+  },
+  "result": {
+    "id": "fabricated_backpacks:tank_upgrade",
+    "count": 1
+  }
+}

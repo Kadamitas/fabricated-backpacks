@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " S ",
+    "SUS",
+    " C "
+  ],
+  "key": {
+    "S": "minecraft:string",
+    "U": "fabricated_backpacks:upgrade_base",
+    "C": "minecraft:iron_chain"
+  },
+  "result": {
+    "id": "fabricated_backpacks:stack_downgrade_tier_1",
+    "count": 1
+  }
+}

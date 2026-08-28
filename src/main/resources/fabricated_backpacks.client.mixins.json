@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "com.kadamitas.fabricatedbackpacks.client.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["AvatarBackpackStateMixin", "ContainerScreenAccess", "SlotPositionAccess"],
+  "injectors": {"defaultRequire": 1}
+}

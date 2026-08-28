@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " M ",
+    "TUT",
+    " S "
+  ],
+  "key": {
+    "M": "minecraft:brewing_stand",
+    "T": "minecraft:gold_ingot",
+    "U": "fabricated_backpacks:upgrade_base",
+    "S": "minecraft:glass_bottle"
+  },
+  "result": {
+    "id": "fabricated_backpacks:alchemy_upgrade",
+    "count": 1
+  }
+}

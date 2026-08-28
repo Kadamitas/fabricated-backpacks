@@ -1,0 +1,44 @@
+{
+  "variants": {
+    "facing=north,open=false": {
+      "model": "fabricated_backpacks:block/iron_backpack_body",
+      "y": 0,
+      "uvlock": false
+    },
+    "facing=north,open=true": {
+      "model": "fabricated_backpacks:block/iron_backpack_body",
+      "y": 0,
+      "uvlock": false
+    },
+    "facing=east,open=false": {
+      "model": "fabricated_backpacks:block/iron_backpack_body",
+      "y": 90,
+      "uvlock": false
+    },
+    "facing=east,open=true": {
+      "model": "fabricated_backpacks:block/iron_backpack_body",
+      "y": 90,
+      "uvlock": false
+    },
+    "facing=south,open=false": {
+      "model": "fabricated_backpacks:block/iron_backpack_body",
+      "y": 180,
+      "uvlock": false
+    },
+    "facing=south,open=true": {
+      "model": "fabricated_backpacks:block/iron_backpack_body",
+      "y": 180,
+      "uvlock": false
+    },
+    "facing=west,open=false": {
+      "model": "fabricated_backpacks:block/iron_backpack_body",
+      "y": 270,
+      "uvlock": false
+    },
+    "facing=west,open=true": {
+      "model": "fabricated_backpacks:block/iron_backpack_body",
+      "y": 270,
+      "uvlock": false
+    }
+  }
+}

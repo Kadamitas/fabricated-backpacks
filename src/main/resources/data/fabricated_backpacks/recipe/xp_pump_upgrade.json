@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " M ",
+    "TUT",
+    " S "
+  ],
+  "key": {
+    "M": "minecraft:experience_bottle",
+    "T": "minecraft:gold_ingot",
+    "U": "fabricated_backpacks:upgrade_base",
+    "S": "minecraft:lapis_lazuli"
+  },
+  "result": {
+    "id": "fabricated_backpacks:xp_pump_upgrade",
+    "count": 1
+  }
+}

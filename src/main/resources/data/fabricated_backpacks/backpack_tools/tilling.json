@@ -1,0 +1,15 @@
+{
+  "items": [
+    "#minecraft:hoes"
+  ],
+  "blocks": [
+    "minecraft:dirt",
+    "minecraft:grass_block",
+    "minecraft:dirt_path",
+    "minecraft:coarse_dirt",
+    "minecraft:rooted_dirt"
+  ],
+  "priority": 10,
+  "manual_only": true,
+  "require_correct_tool": false
+}

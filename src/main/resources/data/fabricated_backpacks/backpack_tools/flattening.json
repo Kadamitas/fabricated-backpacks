@@ -1,0 +1,16 @@
+{
+  "items": [
+    "#minecraft:shovels"
+  ],
+  "blocks": [
+    "minecraft:grass_block",
+    "minecraft:dirt",
+    "minecraft:coarse_dirt",
+    "minecraft:podzol",
+    "minecraft:mycelium",
+    "minecraft:rooted_dirt"
+  ],
+  "priority": 10,
+  "manual_only": true,
+  "require_correct_tool": false
+}

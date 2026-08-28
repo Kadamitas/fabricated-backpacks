@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "SCS",
+    "IPI",
+    "SCS"
+  ],
+  "key": {
+    "S": "minecraft:string",
+    "C": "minecraft:copper_ingot",
+    "I": "minecraft:iron_nugget",
+    "P": "minecraft:paper"
+  },
+  "result": {
+    "id": "fabricated_backpacks:upgrade_base",
+    "count": 1
+  }
+}

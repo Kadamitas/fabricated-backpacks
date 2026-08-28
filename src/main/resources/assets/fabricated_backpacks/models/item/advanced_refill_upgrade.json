@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "fabricated_backpacks:item/advanced_refill_upgrade"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "type": "fabricated_backpacks:backpack_smithing",
+  "template": "minecraft:netherite_upgrade_smithing_template",
+  "base": "fabricated_backpacks:diamond_backpack",
+  "addition": "minecraft:netherite_ingot",
+  "result": {
+    "id": "fabricated_backpacks:netherite_backpack",
+    "count": 1
+  }
+}

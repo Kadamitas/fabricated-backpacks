@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "fabricated_backpacks:backpack",
+    "fabricated_backpacks:copper_backpack",
+    "fabricated_backpacks:iron_backpack",
+    "fabricated_backpacks:gold_backpack",
+    "fabricated_backpacks:diamond_backpack",
+    "fabricated_backpacks:netherite_backpack"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "fabricated_backpacks_tests",
+  "version": "1.0.0",
+  "name": "Fabricated Backpacks Tests",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.kadamitas.fabricatedbackpacks.gametest.BackpackGameTests"],
+    "fabric-gametest": ["com.kadamitas.fabricatedbackpacks.gametest.BackpackGameTests"],
+    "fabric-client-gametest": ["com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests"]
+  },
+  "mixins": ["fabricated_backpacks_tests.mixins.json"],
+  "depends": { "fabricated_backpacks": "*" }
+}
