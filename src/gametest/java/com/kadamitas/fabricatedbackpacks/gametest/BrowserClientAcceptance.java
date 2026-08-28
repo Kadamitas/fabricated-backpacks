@@ -8,12 +8,23 @@ import com.kadamitas.fabricatedbackpacks.menu.WorkstationMenus;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.narration.NarratedElementType;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.gui.narration.NarrationThunk;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.renderer.state.gui.GuiRenderState;
+import net.minecraft.client.renderer.state.gui.GuiTextRenderState;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.lwjgl.glfw.GLFW;
+
+import java.util.ArrayList;
 
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests.*;
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackTestSupport.*;
@@ -44,8 +55,17 @@ final class BrowserClientAcceptance {
         clickButton(context, "Open station");
         context.waitForScreen(CraftingScreen.class);
         int originalMenu = context.computeOnClient(client -> client.player.containerMenu.containerId);
-        context.getInput().pressKey(GLFW.GLFW_KEY_O);
-        waitBrowser(context);
+        int originalScale = context.computeOnClient(client -> client.options.guiScale().get());
+        try {
+            context.runOnClient(client -> { client.options.guiScale().set(3); client.resizeGui(); });
+            context.getInput().pressKey(GLFW.GLFW_KEY_O);
+            waitBrowser(context);
+            context.waitTicks(3);
+            checkEmptySearch(context);
+            context.takeScreenshot("browser-empty-search-gui-three");
+        } finally {
+            context.runOnClient(client -> { client.options.guiScale().set(originalScale); client.resizeGui(); });
+        }
         searchBrowser(context, "@minecraft \"crafting table\"");
         context.waitTicks(40);
         clickButton(context, "Crafting Table");
@@ -219,6 +239,48 @@ final class BrowserClientAcceptance {
         context.takeScreenshot("browser-cooking-maximum-inputs");
         context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
+    }
+
+    private static void checkEmptySearch(ClientGameTestContext context) {
+        context.runOnClient(client -> {
+            check(client.getWindow().getGuiScale() == 3, "The empty browser is checked at actual GUI scale three");
+            var search = client.gui.screen().children().stream().filter(EditBox.class::isInstance)
+                    .map(EditBox.class::cast).findFirst().orElseThrow();
+            check(search.getValue().isEmpty() && !search.isFocused(), "The newly opened browser displays its empty search hint");
+            var help = Component.translatable("browser.fabricated_backpacks.search_hint");
+            check(client.font.width(help) > search.getInnerWidth(), "The real syntax help exercises search hint overflow");
+
+            // Observe the actual widget's extracted text, using the loaded game font.
+            var state = new GuiRenderState();
+            search.extractWidgetRenderState(new GuiGraphicsExtractor(client, state, -1, -1), -1, -1, 0);
+            var rendered = new ArrayList<GuiTextRenderState>();
+            state.forEachText(rendered::add);
+            check(rendered.size() == 1, "The empty search draws one visible hint instead of hiding it");
+            var bounds = rendered.getFirst().bounds();
+            check(bounds != null && bounds.left() >= search.getX() + 4
+                            && bounds.right() <= search.getX() + 4 + search.getInnerWidth(),
+                    "The rendered hint, including its shadow, stays inside the input instead of overlapping the recipe title: " + bounds);
+
+            var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) search)
+                    .fabricatedBackpacksTests$tooltip().get();
+            check(tooltip != null, "The search provides its complete syntax help as a tooltip");
+            String tooltipText = tooltip.toCharSequence(client).stream().map(BrowserClientAcceptance::plain)
+                    .collect(java.util.stream.Collectors.joining());
+            check(tooltipText.replaceAll("\\s", "").equals(help.getString().replaceAll("\\s", "")),
+                    "Search tooltip retains the full quoted-phrase and exclusion syntax");
+            StringBuilder narration = new StringBuilder();
+            search.updateWidgetNarration(new NarrationElementOutput() {
+                @Override public void add(NarratedElementType type, NarrationThunk<?> value) { value.getText(narration::append); }
+                @Override public NarrationElementOutput nest() { return this; }
+            });
+            check(narration.toString().contains(help.getString()), "The native edit-box narration retains the complete syntax help");
+        });
+    }
+
+    private static String plain(FormattedCharSequence sequence) {
+        StringBuilder text = new StringBuilder();
+        sequence.accept((index, style, codePoint) -> { text.appendCodePoint(codePoint); return true; });
+        return text.toString();
     }
 
     private static void selectCategory(ClientGameTestContext context, String desired) {

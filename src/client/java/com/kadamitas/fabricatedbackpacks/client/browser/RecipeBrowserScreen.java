@@ -84,9 +84,17 @@ final class RecipeBrowserScreen extends Screen {
         backButton.setTooltip(Tooltip.create(text("history_back")));
         forwardButton.setTooltip(Tooltip.create(text("history_forward")));
         button(text("close"), width - 49, 8, 41, this::onClose);
-        search = addRenderableWidget(new EditBox(font, 8, 37, leftWidth, 18, text("search")));
+        Component searchHelp = text("search_hint");
+        search = addRenderableWidget(new EditBox(font, 8, 37, leftWidth, 18, searchHelp));
         search.setMaxLength(BrowserQuery.MAX_LENGTH);
-        search.setHint(text("search_hint"));
+        // EditBox clips its value, but draws hints without a width limit.
+        int hintWidth = Math.max(0, search.getInnerWidth() - 1);
+        String hint = searchHelp.getString();
+        if (font.width(hint) > hintWidth) {
+            hint = font.plainSubstrByWidth(hint, Math.max(0, hintWidth - font.width("..."))) + "...";
+        }
+        search.setHint(Component.literal(hint));
+        search.setTooltip(Tooltip.create(searchHelp));
         search.setValue(query);
         search.setResponder(value -> { query = value; itemPage = 0; refreshItems(); });
         button(text("bookmarks"), 8, 59, leftWidth - 48, () -> { onlyBookmarks = !onlyBookmarks; itemPage = 0; refreshItems(); });
