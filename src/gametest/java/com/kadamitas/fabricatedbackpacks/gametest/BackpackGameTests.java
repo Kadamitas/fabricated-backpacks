@@ -131,6 +131,9 @@ public final class BackpackGameTests implements ModInitializer {
     @GameTest(structure = STRUCTURE) public void bulkSettingsPreservePhysicalContents(GameTestHelper helper) { MenuGameTests.bulkSettingsPreservePhysicalContents(helper); }
     @GameTest(structure = STRUCTURE) public void bulkTransfersPreserveOwnerAndHotbar(GameTestHelper helper) { MenuGameTests.bulkTransfersPreserveOwnerAndHotbar(helper); }
     @GameTest(structure = STRUCTURE) public void shortcutTransfersOnlyFirstBackpack(GameTestHelper helper) { MenuGameTests.shortcutTransfersOnlyFirstBackpack(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void adaptiveRowsPreserveAuthority(GameTestHelper helper) { MenuGameTests.adaptiveRowsPreserveAuthority(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void adaptiveRowsRespectFilteredRanks(GameTestHelper helper) { MenuGameTests.adaptiveRowsRespectFilteredRanks(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void retainedUpgradeSelectionDoesNotOverlapRows(GameTestHelper helper) { MenuGameTests.retainedUpgradeSelectionDoesNotOverlapRows(helper); }
 
     @GameTest(structure = STRUCTURE, maxTicks = 100) public void configuredGeometryAndShrink(GameTestHelper helper) { ConfigGameTests.configuredGeometryAndShrink(helper); }
     @GameTest(structure = STRUCTURE, maxTicks = 100) public void geometryReflowAndComponents(GameTestHelper helper) { ConfigGameTests.geometryReflowAndComponents(helper); }

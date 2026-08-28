@@ -402,9 +402,21 @@ def backpack_elements(tier: Tier, opened: bool):
     add("base_welt_back", (2.875, .5, 11.625), (13.125, 1.25, 12.125), "trim", 1)
     add("base_welt_left", (2.875, .5, 5.375), (3.375, 1.25, 11.625), "trim", 1)
     add("base_welt_right", (12.625, .5, 5.375), (13.125, 1.25, 11.625), "trim", 1)
-    add("front_pocket", (4, 2.125, 2.75), (12, 6.625, 5.125), overrides={"north": ("pocket", 0)})
-    add("pocket_flap", (3.75, 6.625, 2.5), (12.25, 7.375, 5.125), "trim", 1)
-    add("pocket_latch", (7.375, 5.75, 2.375), (8.625, 7.375, 2.75), "fittings", None)
+    add("front_pocket", (4, 2.125, 2), (12, 6.625, 5.125), overrides={"north": ("pocket", 0)})
+    add("pocket_flap", (3.75, 6.625, 1.75), (12.25, 7.375, 5.125), "trim", 1)
+    add("pocket_latch", (7.375, 5.75, 1.625), (8.625, 7.375, 2), "fittings", None)
+    # Attached lower side pouches give the pack a readable rear/side silhouette.
+    # Their caps stay below the moving lid; mirroring preserves torso centering.
+    for side in ("left", "right"):
+        for name, start, end, texture, tint in (
+                ("body", (1, 2.125, 5.75), (3.25, 6.625, 10.75), "body", 0),
+                ("cap", (.875, 6.625, 5.5), (3.25, 7.25, 11), "trim", 1),
+                ("strap", (.875, 3.125, 7.625), (1.125, 7, 8.875), "trim", 1),
+                ("clasp", (.75, 4.875, 7.375), (1, 5.625, 9.125), "fittings", None),
+                ("welt", (.875, 2.125, 5.625), (3.25, 2.625, 10.875), "trim", 1)):
+            if side == "right":
+                start, end = (16 - end[0], *start[1:]), (16 - start[0], *end[1:])
+            add(f"side_pocket_{side}_{name}", start, end, texture, tint)
     # Shoulder straps form a real gap against the rear shell.
     for side, x in (("left", 4), ("right", 10.5)):
         add(f"strap_{side}_upper", (x, 9.5, 11.875), (x + 1.5, 11, 13), "trim", 1)
@@ -435,15 +447,15 @@ def backpack_elements(tier: Tier, opened: bool):
         add("side_clip_left", (2.75, 6.125, 7.125), (3.25, 8.125, 9.125), "fittings", None)
         add("side_clip_right", (12.75, 6.125, 7.125), (13.25, 8.125, 9.125), "fittings", None)
     if tier.material == "gold":
-        add("gold_pocket_edge", (4, 2.125, 2.5), (12, 2.625, 2.875), "fittings", None)
+        add("gold_pocket_edge", (4, 2.125, 1.75), (12, 2.625, 2.125), "fittings", None)
     if tier.material == "diamond":
-        add("diamond_pocket_seal", (7.375, 3.75, 2.25), (8.625, 5, 2.75), "fittings", None,
-            rotation={"origin": [8, 4.375, 2.5], "axis": "z", "angle": 45, "rescale": False})
+        add("diamond_pocket_seal", (7.375, 3.75, 1.5), (8.625, 5, 2), "fittings", None,
+            rotation={"origin": [8, 4.375, 1.75], "axis": "z", "angle": 45, "rescale": False})
     if tier.material == "netherite":
-        add("netherite_pocket_guard", (4, 2.125, 2.375), (12, 2.875, 2.875), "fittings", None)
+        add("netherite_pocket_guard", (4, 2.125, 1.625), (12, 2.875, 2.125), "fittings", None)
         add("netherite_flap_guard", (3, 11.75, 4.375), (13, 12.25, 5.375), "fittings", None, rotation=hinge)
-        add("netherite_side_guard_left", (2.75, 2, 7.875), (3.25, 5.5, 8.625), "fittings", None)
-        add("netherite_side_guard_right", (12.75, 2, 7.875), (13.25, 5.5, 8.625), "fittings", None)
+        add("netherite_side_guard_left", (.75, 2, 7.875), (1.25, 4.375, 8.625), "fittings", None)
+        add("netherite_side_guard_right", (14.75, 2, 7.875), (15.25, 4.375, 8.625), "fittings", None)
     return parts
 
 
@@ -733,7 +745,7 @@ def generate():
             "note": "Suggested unscaled player-body local cuboids: native_from=offset-source_to; native_to=offset-source_from. Native +Y is down and +Z is behind the wearer. Verify armor clearance and pose in game.",
             "axis_sign": [-1, -1, -1], "offset": [8, 13.75, 15.375],
         },
-        "wear_transform": {"translation_pixels": [0, 1, 1], "scale": [.72, .72, .55], "armor_clearance_pixels": 1},
+        "wear_transform": {"translation_pixels": [0, 0, .70], "scale": [.90, 1.00, .70], "armor_clearance_pixels": 1},
         "flap_hinge": {"origin": [8, 11.25, 11.75], "axis": "x", "closed_angle": 0, "open_angle": 45, "duration_ticks": 8},
         "tiers": [{"id": tier.item, "material": tier.material,
                    "closed_model": f"{MOD}:block/{tier.item}_closed", "open_model": f"{MOD}:block/{tier.item}_open",

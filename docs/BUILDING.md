@@ -88,6 +88,12 @@ JVM: it verifies that archived world, equipment, stored items and bookmarks.
 Loom clears the normal test run directory before a new client run, so preserve
 failure logs and screenshots before retrying.
 
+For a focused worn-model iteration, use
+`.\gradlew.bat runClientGameTest -PclientScenario=appearance`. It creates a fresh
+world and records actual rear, armor, dye, and crouch views. This focused run
+does not produce a full-client passing receipt and cannot replace the complete
+client or multiplayer scenarios.
+
 The PowerShell multiplayer launcher prepares both launch commands in one
 Gradle invocation, then starts two separate Minecraft JVMs with different
 usernames and run directories. It requires both processes to finish

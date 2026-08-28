@@ -9,6 +9,10 @@ The feature list describes the current implementation, not a claim that every
 interaction or multiplayer scenario has passed acceptance testing. Release
 evidence belongs in [Verification](docs/VERIFICATION.md).
 
+The working branch also contains an **unreleased interface and worn-model
+revision**. Its screenshots and test status are tracked separately in the
+[UI revision record](docs/UI_REVISION.md); the existing alpha download is unchanged.
+
 ## What is included
 
 - Six backpack tiers, from leather to netherite, with persistent contents,

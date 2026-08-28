@@ -19,6 +19,7 @@ import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
 import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.CameraType;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.multiplayer.ServerData;
@@ -36,6 +37,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -47,6 +49,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,6 +59,7 @@ import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests.clickButton;
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests.clickPlayerSlot;
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests.clickSlot;
+import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests.selectUpgrade;
 
 /** Two distinct Minecraft JVMs and a real TCP server; files coordinate actions but never simulate game packets. */
 public final class MultiplayerClientAcceptance {
@@ -94,7 +98,7 @@ public final class MultiplayerClientAcceptance {
                     verifyTcp(context);
                     context.getInput().pressKey(GLFW.GLFW_KEY_B);
                     context.waitForScreen(BackpackScreen.class);
-                    clickButton(context, "1");
+                    selectUpgrade(context, 0);
                     context.waitFor(client -> ((BackpackScreen)client.gui.screen()).getMenu().selectedSlot() == 0);
                     context.waitFor(client -> client.gui.screen().children().stream().anyMatch(widget -> widget instanceof AbstractWidget button && button.getMessage().getString().equals("Play")));
                     clickButton(context, "Play");
@@ -235,6 +239,7 @@ public final class MultiplayerClientAcceptance {
             var moving = audio.onlyActive(WORN_TRACK);
             context.getInput().lookAt(new BlockPos(0, 81, 0));
             files.screenshot(context, "guest-late-audio");
+            List<BackpackClientGameTests.WornFrame> wornFrames = captureRemoteWorn(context, hostId, files);
 
             openSharedByMouse(context, hostId);
             clickPlayerSlot(context, 9);
@@ -290,6 +295,8 @@ public final class MultiplayerClientAcceptance {
             report.addProperty("channels", audio.channels());
             report.addProperty("checks", "real TCP client; distinct JVM/profile; actual shared menu and 19-item mouse insert; server-observed revoked reopen denial; pre-existing music delivered to late listener; moving/range/reentry channels; isolated stop");
             report.addProperty("equipment_privacy", "remote EQUIPPED is empty and sanitized VISUAL is present at late join, shared-menu use and entity range re-entry; full contents arrive only through the authorized shared menu");
+            report.addProperty("worn_appearance", "Real connected host rendered from rear and side after normal guest walking input; empty hands, expected dyes and no chest armor; guest returns before shared-menu interaction. Geometry still requires visual review.");
+            report.add("worn_frames", JSON.toJsonTree(wornFrames));
             files.write("guest-pass", report);
             files.await(context, "host-pass", Duration.ofMinutes(1));
             context.runOnClient(client -> {
@@ -417,6 +424,76 @@ public final class MultiplayerClientAcceptance {
             check(!visual.isEmpty() && !visual.has(BagComponents.IDENTITY) && !visual.has(BagComponents.CONTENTS)
                     && !visual.has(BagComponents.UPGRADES) && !visual.has(BagComponents.SETTINGS), "Public appearance includes no private identity, storage, upgrades or settings");
         });
+    }
+
+    private static List<BackpackClientGameTests.WornFrame> captureRemoteWorn(ClientGameTestContext context, UUID host, Session files) throws IOException {
+        // The host is already waiting at the existing guest-inserted barrier. No new phase, teleport,
+        // player, camera entity or render state is introduced; only the real guest walks around it.
+        Vec3 previous = context.computeOnClient(client -> client.player.position());
+        float[] look = context.computeOnClient(client -> new float[]{client.player.getYRot(), client.player.getXRot()});
+        CameraType camera = context.computeOnClient(client -> client.options.getCameraType());
+        boolean hudHidden = context.computeOnClient(client -> client.gui.hud.isHidden());
+        var frames = new ArrayList<BackpackClientGameTests.WornFrame>();
+        try (var probe = new BackpackClientGameTests.WornFrameProbe(context, host)) {
+            context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
+            BackpackClientGameTests.hideCaptureHud(context, true);
+            for (boolean rear : new boolean[]{true, false}) {
+                Vec3 target = context.computeOnClient(client -> {
+                    var remote = client.level.getPlayerByUUID(host);
+                    double yaw = Math.toRadians(remote.yBodyRot);
+                    return remote.position().add(rear ? 3.2 * Math.sin(yaw) : 3.2 * Math.cos(yaw), 0,
+                            rear ? -3.2 * Math.cos(yaw) : 3.2 * Math.sin(yaw));
+                });
+                walkCaptureTo(context, target.x, target.z);
+                float[] facing = context.computeOnClient(client -> {
+                    Vec3 direction = client.level.getPlayerByUUID(host).position().add(0, 1.0, 0).subtract(client.player.getEyePosition());
+                    return new float[]{(float) Math.toDegrees(Math.atan2(-direction.x, direction.z)),
+                            (float) -Math.toDegrees(Math.atan2(direction.y, Math.sqrt(direction.x * direction.x + direction.z * direction.z)))};
+                });
+                context.getInput().lookAt(facing[0], facing[1]);
+                context.waitTicks(4);
+                verifyEquipmentPrivacy(context, host);
+                check(context.computeOnClient(client -> client.gui.screen() == null && client.gui.hud.isHidden()
+                        && client.player.getMainHandItem().isEmpty() && client.player.getOffhandItem().isEmpty()
+                        && client.level.getPlayerByUUID(host).getMainHandItem().isEmpty()
+                        && client.level.getPlayerByUUID(host).getOffhandItem().isEmpty()),
+                        "The connected player capture uses empty hands and native F1 HUD/toast hiding");
+                long before = probe.sequence();
+                files.screenshot(context, "guest-worn-dyed-" + (rear ? "rear" : "side"));
+                var frame = probe.after(before);
+                frame.require(false, 0x467b87, 0xe0bb64, false);
+                check(rear ? frame.cameraFacingDot() < -.85 : Math.abs(frame.cameraFacingDot()) < .35,
+                        "The actual remote-player frame must be captured from the requested " + (rear ? "rear" : "side") + ": " + frame);
+                frames.add(frame);
+            }
+        } finally {
+            try { walkCaptureTo(context, previous.x, previous.z); }
+            finally {
+                context.getInput().releaseKey(GLFW.GLFW_KEY_W);
+                context.getInput().lookAt(look[0], look[1]);
+                context.runOnClient(client -> client.options.setCameraType(camera));
+                BackpackClientGameTests.hideCaptureHud(context, hudHidden);
+            }
+        }
+        return List.copyOf(frames);
+    }
+
+    private static void walkCaptureTo(ClientGameTestContext context, double x, double z) {
+        double[] offset = context.computeOnClient(client -> new double[]{x - client.player.getX(), z - client.player.getZ()});
+        if (offset[0] * offset[0] + offset[1] * offset[1] < .04) return;
+        context.getInput().lookAt((float) Math.toDegrees(Math.atan2(-offset[0], offset[1])), 0F);
+        context.getInput().holdKey(GLFW.GLFW_KEY_W);
+        try {
+            context.waitFor(client -> {
+                double dx = x - client.player.getX(), dz = z - client.player.getZ();
+                return dx * dx + dz * dz < .16;
+            }, 120);
+        } finally { context.getInput().releaseKey(GLFW.GLFW_KEY_W); }
+        context.waitTicks(4);
+        check(context.computeOnClient(client -> {
+            double dx = x - client.player.getX(), dz = z - client.player.getZ();
+            return dx * dx + dz * dz < .36;
+        }), "Normal walking reaches the bounded camera position and releases movement before the capture");
     }
     @SuppressWarnings("unchecked")
     private static int boundPort(MinecraftServer server) throws ReflectiveOperationException {

@@ -31,6 +31,11 @@ public final class BackpackSettingsScreen extends Screen {
         left = (width - 360) / 2;
         top = Math.max(4, (height - 244) / 2);
         toggles.clear();
+        button("Edit slots", 118, 5, 70, () -> {
+            minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 2);
+            onClose();
+        }).setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Cycle memory slots, no-sort slots, and normal interaction")));
+        button("Equipment", 194, 5, 76, () -> ClientPlayNetworking.send(new MenuAction(-1, "equipment", 0, 0, "")));
         button("Slot tools", 274, 5, 74, () -> minecraft.gui.setScreen(new StorageToolsScreen(this, menu)));
         name = field("Backpack name", 12, 26, 258, menu.bag().stack().getHoverName().getString(), 50);
         button("Rename", 274, 26, 74, () -> send("rename", 0, name.getValue()));

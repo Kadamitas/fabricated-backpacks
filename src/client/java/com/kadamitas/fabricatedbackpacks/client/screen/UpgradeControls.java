@@ -8,6 +8,23 @@ import java.util.List;
 
 final class UpgradeControls {
     private UpgradeControls() {}
+    static String title(UpgradeKind kind) {
+        return switch (kind) {
+            case SMELTING -> "Smelt";
+            case AUTO_SMELTING -> "Auto-smelt";
+            case SMOKING -> "Smoke";
+            case AUTO_SMOKING -> "Auto-smoke";
+            case BLASTING -> "Blast";
+            case AUTO_BLASTING -> "Auto-blast";
+            default -> switch (kind.family()) {
+                case "tool_swapper" -> "Tool swap";
+                case "mob_catcher" -> "Mob catcher";
+                case "xp_pump" -> "XP pump";
+                case "stack" -> "Stack size";
+                default -> Character.toUpperCase(kind.family().charAt(0)) + kind.family().substring(1);
+            };
+        };
+    }
     static List<String> actions(BagInventory bag, InstalledUpgrade upgrade) {
         UpgradeKind kind = upgrade.kind();
         List<String> actions = new ArrayList<>();

@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Compact leather and amber backpack frames, gray inventory cells, physical
+  upgrade slots on the left, and item-icon tabs on the right. Main-screen
+  controls use icons with complete hover help and accessible labels.
+- Storage rows adapt to the viewport; narrow windows reflow upgrade panels
+  into fewer columns with paging. Search expands from its icon or Ctrl+F.
+- Match the reference body proportions and attached upgrade panels, join the
+  Inventory bar to the storage frame, and slim resource gauges to 16 pixels.
+  Remove dark heading shadows and separate sorting from sort-order selection.
+- Fuller original worn models with two side pouches, deeper front pockets,
+  torso-to-hip coverage, armor clearance, and matching placed interaction shapes.
+- Preserve drag ownership across layout changes, reserve the native click
+  packet's changed-slot budget, synchronize selected tabs before their contents,
+  and expose retained upgrade inventories installed after a menu opens.
+
+This revision is not the published 0.5.0-alpha artifact. See the separate
+[UI revision record](docs/UI_REVISION.md) for its verification status.
+
 ## 0.5.0-alpha
 
 Initial development build for Minecraft 26.2 on Fabric. This entry describes

@@ -4,11 +4,14 @@ import com.kadamitas.fabricatedbackpacks.block.BackpackBlock;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackScreen;
 import com.kadamitas.fabricatedbackpacks.client.screen.EquipmentScreen;
+import com.kadamitas.fabricatedbackpacks.client.render.BackpackRendering;
+import com.kadamitas.fabricatedbackpacks.client.render.BackpackVisualState;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.menu.WorkstationMenus;
+import com.kadamitas.fabricatedbackpacks.item.BackpackDisplay;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
@@ -17,9 +20,18 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave;
+import net.fabricmc.fabric.api.client.rendering.v1.FabricRenderState;
+import net.fabricmc.fabric.api.client.rendering.v1.RenderStateDataKey;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.minecraft.client.CameraType;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -31,12 +43,14 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /** A real rendered client, a newly created world, actual mouse/key input, and save/reopen checks. */
 public final class BackpackClientGameTests implements FabricClientGameTest {
@@ -48,6 +62,15 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         context.runOnClient(client -> { client.options.guiScale().set(2); client.resizeGui(); });
         switch (System.getProperty("fabricated.backpacks.clientScenario", "full")) {
             case "restart" -> { ClientAcceptanceFiles.restart(context); return; }
+            case "appearance" -> {
+                try (var world = context.worldBuilder().create()) {
+                    setup(world);
+                    world.getConnection().waitForChunksRender();
+                    wornAppearance(context, world);
+                }
+                System.out.println("FABRICATED_BACKPACKS_WORN_APPEARANCE_PASS");
+                return;
+            }
             case "multiplayer_host" -> { MultiplayerClientAcceptance.host(context); return; }
             case "multiplayer_guest" -> { MultiplayerClientAcceptance.guest(context); return; }
             case "full" -> ClientAcceptanceFiles.beginFull();
@@ -72,6 +95,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             check(world.getServer().computeOnServer(server -> bag(world).getItem(0).getCount()) == 200_000, "Enlarged count must survive server/client menu synchronization");
             transferStorageWithMouse(context, world);
             fillTwelveRecordSlots(context, world);
+            ConfiguredClientAcceptance.referenceLayout(context, world);
             operateJukebox(context, world);
             transferWaterWithMouse(context, world);
             clickButton(context, "Items");
@@ -82,7 +106,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             clickButton(context, "Close");
             context.waitForScreen(BackpackScreen.class);
 
-            clickButton(context, "2");
+            selectUpgrade(context, 1);
             context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 1);
             context.waitTicks(2);
             clickButton(context, "Open station");
@@ -113,6 +137,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             context.getInput().pressKey(GLFW.GLFW_KEY_F5);
             context.getInput().pressKey(GLFW.GLFW_KEY_F5);
             context.waitTicks(2);
+            wornAppearance(context, world);
             BrowserClientAcceptance.run(context, world);
             ConfiguredClientAcceptance.run(context, world);
             StorageClientAcceptance.run(context, world);
@@ -201,8 +226,229 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         check(world.getServer().computeOnServer(server -> player(world).getInventory().getItem(21).getCount()) == 19, "Mouse transfer and return must conserve all19 emeralds");
     }
 
+    private void wornAppearance(ClientGameTestContext context, TestSingleplayerContext world) {
+        check(context.computeOnClient(client -> client.gui.screen() == null && client.getCameraEntity() == client.player
+                && client.player.containerMenu.getCarried().isEmpty()), "Worn captures start from the real local player and a clear cursor");
+        var camera = context.computeOnClient(client -> client.options.getCameraType());
+        boolean hudHidden = context.computeOnClient(client -> client.gui.hud.isHidden());
+        var before = world.getServer().computeOnServer(server -> {
+            var wearer = player(world);
+            return new WornFixture(BackpackEquipment.get(wearer).copy(), wearer.getItemBySlot(EquipmentSlot.CHEST).copy(),
+                    wearer.getItemBySlot(EquipmentSlot.OFFHAND).copy(), wearer.getInventory().getItem(8).copy(),
+                    wearer.getInventory().getSelectedSlot(), wearer.position(), wearer.getYRot(), wearer.getXRot());
+        });
+        var captures = new ArrayList<WornCapture>();
+        boolean passed = false;
+        try {
+            world.getServer().runOnServer(server -> {
+                var wearer = player(world);
+                var pack = BackpackTestSupport.bag(BackpackTier.GOLD);
+                pack.setItem(0, new ItemStack(Items.DIAMOND, 17));
+                pack.updateSettings(settings -> settings.putInt("display_slot", 0));
+                BackpackEquipment.set(wearer, pack.stack());
+                wearer.getInventory().setItem(8, ItemStack.EMPTY);
+                wearer.getInventory().setSelectedSlot(8);
+                wearer.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+                wearer.setDeltaMovement(Vec3.ZERO);
+                wearer.inventoryMenu.broadcastChanges();
+            });
+            world.getConnection().waitForClientboundPackets();
+            context.getInput().pressKey(GLFW.GLFW_KEY_9);
+            context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
+            context.getInput().lookAt(0F, 10F);
+            hideCaptureHud(context, true);
+            context.waitTicks(12);
+            UUID wearer = context.computeOnClient(client -> client.player.getUUID());
+            try (var probe = new WornFrameProbe(context, wearer)) {
+                for (int variant = 0; variant < 3; variant++) {
+                    boolean armored = variant > 0;
+                    boolean dyed = variant == 2;
+                    int body = dyed ? 0xb8292f : BackpackVisualState.DEFAULT_BODY_COLOR;
+                    int trim = dyed ? 0xc9985f : BackpackVisualState.DEFAULT_TRIM_COLOR;
+                    world.getServer().runOnServer(server -> {
+                        var actor = player(world);
+                        actor.setItemSlot(EquipmentSlot.CHEST, armored ? new ItemStack(Items.DIAMOND_CHESTPLATE) : ItemStack.EMPTY);
+                        var pack = BackpackEquipment.inventory(actor).orElseThrow();
+                        if (dyed) pack.dye(body, trim);
+                        check(BackpackEquipment.setFromInventory(actor, pack), "The real equipped fixture publishes its canonical appearance");
+                        actor.inventoryMenu.broadcastChanges();
+                    });
+                    world.getConnection().waitForClientboundPackets();
+                    context.waitFor(client -> wornAppearanceMatches(client.player, armored, body, trim)
+                            && client.player.getMainHandItem().isEmpty() && client.player.getOffhandItem().isEmpty());
+                    context.waitTicks(3);
+                    String name = "worn-rear-" + (dyed ? "dyed" : "default") + (armored ? "-armor" : "-no-armor");
+                    captureWorn(context, probe, captures, name, armored, body, trim, false);
+                }
+                context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+                try {
+                    context.waitFor(client -> client.player.isCrouching());
+                    context.waitTicks(4);
+                    captureWorn(context, probe, captures, "worn-rear-dyed-armor-crouching", true, 0xb8292f, 0xc9985f, true);
+                } finally { context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT); }
+            }
+            check(world.getServer().computeOnServer(server -> {
+                var pack = BackpackEquipment.inventory(player(world)).orElseThrow();
+                return pack.getItem(0).is(Items.DIAMOND) && pack.getItem(0).getCount() == 17;
+            }), "Worn rendering, dye, armor and crouch changes preserve the real display item's full stored count");
+            evidence.add("Worn appearance: real local player rear views with empty hands, default/dual-dyed leather, with/without diamond chest armor, and native crouch; native extracted avatar snapshots completed through END_MAIN and selected-item display. Fit and clipping still require visual review.");
+            passed = true;
+        } finally {
+            context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+            world.getServer().runOnServer(server -> {
+                var wearer = player(world);
+                BackpackEquipment.set(wearer, before.backpack());
+                wearer.setItemSlot(EquipmentSlot.CHEST, before.chest());
+                wearer.setItemSlot(EquipmentSlot.OFFHAND, before.offhand());
+                wearer.getInventory().setItem(8, before.hotbar());
+                wearer.getInventory().setSelectedSlot(before.selected());
+                wearer.teleportTo(before.position().x, before.position().y, before.position().z);
+                wearer.setDeltaMovement(Vec3.ZERO);
+                wearer.inventoryMenu.broadcastChanges();
+            });
+            world.getConnection().waitForClientboundPackets();
+            context.getInput().pressKey(GLFW.GLFW_KEY_1 + before.selected());
+            context.getInput().lookAt(before.yaw(), before.pitch());
+            context.runOnClient(client -> client.options.setCameraType(camera));
+            hideCaptureHud(context, hudHidden);
+            check(world.getServer().computeOnServer(server -> ItemStack.matches(BackpackEquipment.get(player(world)), before.backpack())
+                    && ItemStack.matches(player(world).getItemBySlot(EquipmentSlot.CHEST), before.chest())
+                    && ItemStack.matches(player(world).getItemBySlot(EquipmentSlot.OFFHAND), before.offhand())
+                    && ItemStack.matches(player(world).getInventory().getItem(8), before.hotbar())),
+                    "Worn appearance fixtures restore equipment, chest armor and both hand slots");
+            var report = new com.google.gson.JsonObject();
+            report.addProperty("state_assertions_passed", passed);
+            report.addProperty("visual_review_required", true);
+            report.addProperty("pid", ProcessHandle.current().pid());
+            report.addProperty("fixture", "Server-provided equipment and chest armor; real local player, normal third-person option, F1 and crouch input. No renderer state is assigned.");
+            report.add("captures", new com.google.gson.Gson().toJsonTree(captures));
+            try {
+                Files.createDirectories(ClientAcceptanceFiles.ROOT);
+                Files.writeString(ClientAcceptanceFiles.ROOT.resolve("worn-appearance.json"), new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(report));
+            } catch (java.io.IOException failure) { throw new AssertionError("Could not write worn appearance evidence", failure); }
+        }
+    }
+
+    private void captureWorn(ClientGameTestContext context, WornFrameProbe probe, List<WornCapture> captures, String name,
+                             boolean armored, int body, int trim, boolean crouching) {
+        long before = probe.sequence();
+        Path image = context.takeScreenshot(name);
+        WornFrame frame = probe.after(before);
+        frame.require(armored, body, trim, crouching);
+        check(frame.cameraFacingDot() < -.9, "The captured real camera is behind the rendered torso: " + frame);
+        check(context.computeOnClient(client -> client.gui.hud.isHidden() && client.player.getMainHandItem().isEmpty()
+                && client.player.getOffhandItem().isEmpty()), "Worn captures hide HUD/toasts through F1 and keep both hands empty");
+        captures.add(new WornCapture(name, image.toAbsolutePath().toString(), frame));
+        evidence.add("Screenshot: " + image);
+    }
+
+    static void hideCaptureHud(ClientGameTestContext context, boolean hidden) {
+        if (context.computeOnClient(client -> client.gui.hud.isHidden()) != hidden) context.getInput().pressKey(GLFW.GLFW_KEY_F1);
+        context.waitFor(client -> client.gui.hud.isHidden() == hidden);
+    }
+
+    private static boolean wornAppearanceMatches(net.minecraft.world.entity.player.Player player, boolean armored, int body, int trim) {
+        ItemStack visual = BackpackEquipment.visual(player);
+        return BackpackRegistry.tier(visual).orElse(null) == BackpackTier.GOLD
+                && (BackpackVisualState.color(visual, 0) & 0xffffff) == body
+                && (BackpackVisualState.color(visual, 1) & 0xffffff) == trim
+                && (armored ? player.getItemBySlot(EquipmentSlot.CHEST).is(Items.DIAMOND_CHESTPLATE) : player.getItemBySlot(EquipmentSlot.CHEST).isEmpty())
+                && BackpackDisplay.from(visual).filter(display -> display.icon().is(Items.DIAMOND) && display.icon().getCount() == 1).isPresent();
+    }
+
+    private record WornFixture(ItemStack backpack, ItemStack chest, ItemStack offhand, ItemStack hotbar, int selected,
+                               Vec3 position, float yaw, float pitch) {}
+    private record WornCapture(String name, String path, WornFrame frame) {}
+
+    /** Read-only observation of completed native world frames; never creates or submits a renderer state. */
+    static final class WornFrameProbe implements AutoCloseable {
+        private static volatile WornFrameProbe active;
+        private static boolean registered;
+        private final ClientGameTestContext context;
+        private final int entityId;
+        private final RenderStateDataKey<BackpackVisualState> key;
+        private volatile WornFrame latest;
+        private volatile PendingFrame pending;
+        private volatile long extractedFrames;
+        private volatile long completedFrames;
+        private volatile int lastEntityCount;
+        private record PendingFrame(LevelRenderState state, WornFrame frame) {}
+
+        @SuppressWarnings("unchecked")
+        WornFrameProbe(ClientGameTestContext context, UUID playerId) {
+            this.context = context;
+            entityId = context.computeOnClient(client -> client.level.getPlayerByUUID(playerId).getId());
+            try {
+                // Read the production key by identity; do not expose it or replace the captured value.
+                var field = BackpackRendering.class.getDeclaredField("WORN");
+                field.setAccessible(true);
+                key = (RenderStateDataKey<BackpackVisualState>) field.get(null);
+            } catch (ReflectiveOperationException failure) { throw new AssertionError("Cannot observe the production worn snapshot", failure); }
+            context.runOnClient(client -> {
+                check(active == null, "Worn render observations must not overlap");
+                if (!registered) {
+                    LevelExtractionEvents.END_EXTRACTION.register(frame -> { var observer = active; if (observer != null) observer.observeExtraction(frame); });
+                    LevelRenderEvents.END_MAIN.register(frame -> { var observer = active; if (observer != null) observer.completeFrame(frame); });
+                    registered = true;
+                }
+                active = this;
+            });
+        }
+        private void observeExtraction(LevelExtractionContext context) {
+            // 26.2 submitFeatures clears entityRenderStates before any main-pass render event.
+            // Copy only observed values here; publish nothing until this same native frame finishes.
+            pending = null;
+            long sequence = ++extractedFrames;
+            var state = context.levelState();
+            lastEntityCount = state.entityRenderStates.size();
+            for (var entity : state.entityRenderStates) if (entity instanceof AvatarRenderState avatar && avatar.id == entityId) {
+                var visual = ((FabricRenderState) avatar).getDataOrDefault(key, BackpackVisualState.EMPTY);
+                Vec3 camera = state.cameraRenderState.pos;
+                double dx = camera.x - avatar.x, dz = camera.z - avatar.z;
+                double distance = Math.sqrt(dx * dx + dz * dz);
+                double yaw = Math.toRadians(avatar.bodyRot);
+                double facing = distance == 0 ? Double.NaN : (dx * -Math.sin(yaw) + dz * Math.cos(yaw)) / distance;
+                pending = new PendingFrame(state, new WornFrame(sequence, state.gameTime, entityId,
+                        visual.present(), visual.tier().id(), visual.bodyColor() & 0xffffff, visual.trimColor() & 0xffffff,
+                        avatar.chestEquipment.isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(avatar.chestEquipment.getItem()).toString(),
+                        avatar.isCrouching, avatar.isSpectator, avatar.isInvisible, facing, avatar.bodyRot,
+                        avatar.x, avatar.y, avatar.z, camera.x, camera.y, camera.z));
+                break;
+            }
+        }
+        private void completeFrame(LevelRenderContext context) {
+            completedFrames++;
+            PendingFrame candidate = pending;
+            pending = null;
+            if (candidate != null && candidate.state() == context.levelState()
+                    && candidate.frame().gameTime() == context.levelState().gameTime) latest = candidate.frame();
+        }
+        long sequence() { WornFrame frame = latest; return frame == null ? 0 : frame.sequence(); }
+        WornFrame after(long before) {
+            WornFrame frame = latest;
+            check(frame != null && frame.sequence() > before, "The screenshot must complete a fresh native frame of the actual player " + entityId
+                    + "; before=" + before + ", latest=" + frame + ", extractions=" + extractedFrames
+                    + ", completedMainPasses=" + completedFrames + ", lastEntityCount=" + lastEntityCount);
+            return frame;
+        }
+        @Override public void close() { context.runOnClient(client -> { if (active == this) active = null; }); }
+    }
+
+    record WornFrame(long sequence, long gameTime, int entityId, boolean backpackPresent, String tier, int body, int trim,
+                     String chest, boolean crouching, boolean spectator, boolean invisible, double cameraFacingDot,
+                     float bodyYaw, double x, double y, double z, double cameraX, double cameraY, double cameraZ) {
+        void require(boolean armored, int expectedBody, int expectedTrim, boolean expectedCrouch) {
+            check(backpackPresent && tier.equals(BackpackTier.GOLD.id()) && body == expectedBody && trim == expectedTrim
+                            && chest.equals(armored ? "minecraft:diamond_chestplate" : "") && crouching == expectedCrouch
+                            && !spectator && !invisible && Double.isFinite(cameraFacingDot),
+                    "The completed native avatar frame must carry the expected backpack, armor and pose: " + this
+                            + "; expected tier=" + BackpackTier.GOLD.id() + ", body=" + expectedBody + ", trim=" + expectedTrim
+                            + ", chest=" + (armored ? "minecraft:diamond_chestplate" : "") + ", crouching=" + expectedCrouch);
+        }
+    }
+
     private void fillTwelveRecordSlots(ClientGameTestContext context, TestSingleplayerContext world) {
-        clickButton(context, "1");
+        selectUpgrade(context, 0);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 0);
         context.waitTicks(2);
         for (int record = 0; record < 12; record++) {
@@ -255,12 +501,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
 
     private void transferWaterWithMouse(ClientGameTestContext context, TestSingleplayerContext world) {
         clickPlayerSlot(context, 24);
-        var position = context.computeOnClient(client -> {
-            var screen = (BackpackScreen) client.gui.screen();
-            return new double[]{(screen.width - screen.getMenu().imageWidth()) / 2.0 + 8 + 8 * 18 + 16,
-                    (screen.height - screen.getMenu().imageHeight()) / 2.0 + 75};
-        });
-        clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        clickResource(context, 2);
         world.getServer().waitFor(server -> ResourceRuntime.tankStoredMb(bag(world), 2) == 1000);
         check(world.getServer().computeOnServer(server -> player(world).containerMenu.getCarried().is(Items.BUCKET)), "Tank cursor transfer must return exactly the empty bucket");
         world.getConnection().waitForClientboundPackets();
@@ -275,8 +516,16 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
     }
 
     static void searchBrowser(ClientGameTestContext context, String query) {
+        if (context.computeOnClient(client -> client.gui.screen() instanceof BackpackScreen
+                && client.gui.screen().children().stream().filter(EditBox.class::isInstance)
+                .map(EditBox.class::cast).noneMatch(box -> box.visible && box.active))) {
+            clickButton(context, "Search");
+        }
+        context.waitFor(client -> client.gui.screen().children().stream().filter(EditBox.class::isInstance)
+                .map(EditBox.class::cast).anyMatch(box -> box.visible && box.active));
         double[] position = context.computeOnClient(client -> client.gui.screen().children().stream().filter(EditBox.class::isInstance)
-                .map(EditBox.class::cast).map(box -> new double[]{box.getX() + 8, box.getY() + 8}).findFirst().orElseThrow());
+                .map(EditBox.class::cast).filter(box -> box.visible && box.active)
+                .map(box -> new double[]{box.getX() + 8, box.getY() + 8}).findFirst().orElseThrow());
         clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
         context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_CONTROL);
         context.getInput().pressKey(GLFW.GLFW_KEY_A);
@@ -287,6 +536,44 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         check(context.computeOnClient(client -> client.gui.screen().children().stream().filter(EditBox.class::isInstance)
                 .map(EditBox.class::cast).findFirst().orElseThrow().getValue()).equals(query),
                 "Actual Ctrl+A / replacement input must leave the exact requested text: " + query);
+    }
+
+    static void selectUpgrade(ClientGameTestContext context, int upgradeSlot) {
+        check(upgradeSlot >= 0, "An upgrade tab needs a nonnegative physical slot");
+        context.waitFor(client -> client.gui.screen() instanceof BackpackScreen screen
+                && screen.getMenu().bag().installedUpgrades().stream().anyMatch(upgrade -> upgrade.slot() == upgradeSlot));
+        String label = context.computeOnClient(client -> {
+            var screen = (BackpackScreen) client.gui.screen();
+            var upgrade = screen.getMenu().bag().installedUpgrades().stream()
+                    .filter(installed -> installed.slot() == upgradeSlot).findFirst().orElseThrow();
+            return "Upgrade " + (upgradeSlot + 1) + ": " + upgrade.stack().getHoverName().getString();
+        });
+        clickButton(context, label);
+        context.waitFor(client -> client.gui.screen() instanceof BackpackScreen screen
+                && screen.getMenu().selectedSlot() == upgradeSlot);
+        context.waitTicks(2);
+    }
+
+    static void clickGhost(ClientGameTestContext context, int physicalGhostIndex) {
+        clickBackpackRegion(context, screen -> screen.ghostBounds(physicalGhostIndex)
+                .orElseThrow(() -> new AssertionError("Ghost filter " + physicalGhostIndex + " is not visible")));
+    }
+
+    static void clickResource(ClientGameTestContext context, int upgradeSlot) {
+        clickBackpackRegion(context, screen -> screen.resourceBounds(upgradeSlot)
+                .orElseThrow(() -> new AssertionError("Resource upgrade " + upgradeSlot + " has no visible hit target")));
+    }
+
+    private static void clickBackpackRegion(ClientGameTestContext context,
+            java.util.function.Function<BackpackScreen, net.minecraft.client.gui.navigation.ScreenRectangle> region) {
+        double[] position = context.computeOnClient(client -> {
+            var screen = (BackpackScreen) client.gui.screen();
+            var bounds = region.apply(screen);
+            check(bounds.left() >= 0 && bounds.top() >= 0 && bounds.right() <= screen.width && bounds.bottom() <= screen.height,
+                    "The actual backpack hit target must fit the viewport: " + bounds);
+            return new double[]{bounds.left() + bounds.width() / 2.0, bounds.top() + bounds.height() / 2.0};
+        });
+        clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
     }
 
     static void clickButton(ClientGameTestContext context, String label) {
@@ -338,6 +625,11 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             var menu = client.player.containerMenu;
             var slot = menu.slots.get(slotIndex);
             var origin = (com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess) screen;
+            check(slot.isActive(), "The requested physical slot must be visible before a real mouse click: " + slotIndex);
+            check(origin.fabricatedBackpacks$left() + slot.x >= 0 && origin.fabricatedBackpacks$top() + slot.y >= 0
+                            && origin.fabricatedBackpacks$left() + slot.x + 16 <= screen.width
+                            && origin.fabricatedBackpacks$top() + slot.y + 16 <= screen.height,
+                    "The requested physical slot must fit the actual viewport: " + slotIndex);
             return new double[]{origin.fabricatedBackpacks$left() + slot.x + 8, origin.fabricatedBackpacks$top() + slot.y + 8};
         });
         clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);

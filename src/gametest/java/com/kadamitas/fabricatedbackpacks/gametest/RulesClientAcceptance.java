@@ -33,7 +33,7 @@ final class RulesClientAcceptance {
         });
         world.getConnection().waitForClientboundPackets();
         BrowserClientAcceptance.openHovered(context, 6);
-        clickButton(context, "1");
+        selectUpgrade(context, 0);
         findRules(context);
         context.waitForScreen(SlotRulesScreen.class);
         clickButton(context, "+");
@@ -50,7 +50,7 @@ final class RulesClientAcceptance {
                 "Health threshold buttons are inactive for non-health conditions");
         context.takeScreenshot("alchemy-per-filter-rules");
         clickButton(context, "Back");
-        clickButton(context, "2");
+        selectUpgrade(context, 1);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 1);
         findRules(context);
         context.waitForScreen(SlotRulesScreen.class);

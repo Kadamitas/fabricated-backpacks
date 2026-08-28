@@ -40,13 +40,13 @@
   "wear_transform": {
     "translation_pixels": [
       0,
-      1,
-      1
+      0,
+      0.7
     ],
     "scale": [
-      0.72,
-      0.72,
-      0.55
+      0.9,
+      1.0,
+      0.7
     ],
     "armor_clearance_pixels": 1
   },
@@ -215,7 +215,7 @@
           "from": [
             4,
             2.125,
-            2.75
+            2
           ],
           "to": [
             12,
@@ -229,7 +229,7 @@
           "from": [
             3.75,
             6.625,
-            2.5
+            1.75
           ],
           "to": [
             12.25,
@@ -243,14 +243,154 @@
           "from": [
             7.375,
             5.75,
-            2.375
+            1.625
           ],
           "to": [
             8.625,
             7.375,
-            2.75
+            2
           ],
           "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_body",
+          "from": [
+            1,
+            2.125,
+            5.75
+          ],
+          "to": [
+            3.25,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_left_cap",
+          "from": [
+            0.875,
+            6.625,
+            5.5
+          ],
+          "to": [
+            3.25,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_strap",
+          "from": [
+            0.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            1.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_clasp",
+          "from": [
+            0.75,
+            4.875,
+            7.375
+          ],
+          "to": [
+            1,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_welt",
+          "from": [
+            0.875,
+            2.125,
+            5.625
+          ],
+          "to": [
+            3.25,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_body",
+          "from": [
+            12.75,
+            2.125,
+            5.75
+          ],
+          "to": [
+            15,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_right_cap",
+          "from": [
+            12.75,
+            6.625,
+            5.5
+          ],
+          "to": [
+            15.125,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_strap",
+          "from": [
+            14.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            15.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_clasp",
+          "from": [
+            15,
+            4.875,
+            7.375
+          ],
+          "to": [
+            15.25,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_right_welt",
+          "from": [
+            12.75,
+            2.125,
+            5.625
+          ],
+          "to": [
+            15.125,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
         },
         {
           "name": "strap_left_upper",
@@ -729,7 +869,7 @@
           "from": [
             4,
             2.125,
-            2.75
+            2
           ],
           "to": [
             12,
@@ -743,7 +883,7 @@
           "from": [
             3.75,
             6.625,
-            2.5
+            1.75
           ],
           "to": [
             12.25,
@@ -757,14 +897,154 @@
           "from": [
             7.375,
             5.75,
-            2.375
+            1.625
           ],
           "to": [
             8.625,
             7.375,
-            2.75
+            2
           ],
           "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_body",
+          "from": [
+            1,
+            2.125,
+            5.75
+          ],
+          "to": [
+            3.25,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_left_cap",
+          "from": [
+            0.875,
+            6.625,
+            5.5
+          ],
+          "to": [
+            3.25,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_strap",
+          "from": [
+            0.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            1.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_clasp",
+          "from": [
+            0.75,
+            4.875,
+            7.375
+          ],
+          "to": [
+            1,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_welt",
+          "from": [
+            0.875,
+            2.125,
+            5.625
+          ],
+          "to": [
+            3.25,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_body",
+          "from": [
+            12.75,
+            2.125,
+            5.75
+          ],
+          "to": [
+            15,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_right_cap",
+          "from": [
+            12.75,
+            6.625,
+            5.5
+          ],
+          "to": [
+            15.125,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_strap",
+          "from": [
+            14.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            15.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_clasp",
+          "from": [
+            15,
+            4.875,
+            7.375
+          ],
+          "to": [
+            15.25,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_right_welt",
+          "from": [
+            12.75,
+            2.125,
+            5.625
+          ],
+          "to": [
+            15.125,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
         },
         {
           "name": "strap_left_upper",
@@ -1299,7 +1579,7 @@
           "from": [
             4,
             2.125,
-            2.75
+            2
           ],
           "to": [
             12,
@@ -1313,7 +1593,7 @@
           "from": [
             3.75,
             6.625,
-            2.5
+            1.75
           ],
           "to": [
             12.25,
@@ -1327,14 +1607,154 @@
           "from": [
             7.375,
             5.75,
-            2.375
+            1.625
           ],
           "to": [
             8.625,
             7.375,
-            2.75
+            2
           ],
           "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_body",
+          "from": [
+            1,
+            2.125,
+            5.75
+          ],
+          "to": [
+            3.25,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_left_cap",
+          "from": [
+            0.875,
+            6.625,
+            5.5
+          ],
+          "to": [
+            3.25,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_strap",
+          "from": [
+            0.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            1.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_clasp",
+          "from": [
+            0.75,
+            4.875,
+            7.375
+          ],
+          "to": [
+            1,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_welt",
+          "from": [
+            0.875,
+            2.125,
+            5.625
+          ],
+          "to": [
+            3.25,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_body",
+          "from": [
+            12.75,
+            2.125,
+            5.75
+          ],
+          "to": [
+            15,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_right_cap",
+          "from": [
+            12.75,
+            6.625,
+            5.5
+          ],
+          "to": [
+            15.125,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_strap",
+          "from": [
+            14.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            15.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_clasp",
+          "from": [
+            15,
+            4.875,
+            7.375
+          ],
+          "to": [
+            15.25,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_right_welt",
+          "from": [
+            12.75,
+            2.125,
+            5.625
+          ],
+          "to": [
+            15.125,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
         },
         {
           "name": "strap_left_upper",
@@ -1897,7 +2317,7 @@
           "from": [
             4,
             2.125,
-            2.75
+            2
           ],
           "to": [
             12,
@@ -1911,7 +2331,7 @@
           "from": [
             3.75,
             6.625,
-            2.5
+            1.75
           ],
           "to": [
             12.25,
@@ -1925,14 +2345,154 @@
           "from": [
             7.375,
             5.75,
-            2.375
+            1.625
           ],
           "to": [
             8.625,
             7.375,
-            2.75
+            2
           ],
           "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_body",
+          "from": [
+            1,
+            2.125,
+            5.75
+          ],
+          "to": [
+            3.25,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_left_cap",
+          "from": [
+            0.875,
+            6.625,
+            5.5
+          ],
+          "to": [
+            3.25,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_strap",
+          "from": [
+            0.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            1.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_clasp",
+          "from": [
+            0.75,
+            4.875,
+            7.375
+          ],
+          "to": [
+            1,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_welt",
+          "from": [
+            0.875,
+            2.125,
+            5.625
+          ],
+          "to": [
+            3.25,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_body",
+          "from": [
+            12.75,
+            2.125,
+            5.75
+          ],
+          "to": [
+            15,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_right_cap",
+          "from": [
+            12.75,
+            6.625,
+            5.5
+          ],
+          "to": [
+            15.125,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_strap",
+          "from": [
+            14.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            15.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_clasp",
+          "from": [
+            15,
+            4.875,
+            7.375
+          ],
+          "to": [
+            15.25,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_right_welt",
+          "from": [
+            12.75,
+            2.125,
+            5.625
+          ],
+          "to": [
+            15.125,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
         },
         {
           "name": "strap_left_upper",
@@ -2345,12 +2905,12 @@
           "from": [
             4,
             2.125,
-            2.5
+            1.75
           ],
           "to": [
             12,
             2.625,
-            2.875
+            2.125
           ],
           "texture": "fittings"
         }
@@ -2509,7 +3069,7 @@
           "from": [
             4,
             2.125,
-            2.75
+            2
           ],
           "to": [
             12,
@@ -2523,7 +3083,7 @@
           "from": [
             3.75,
             6.625,
-            2.5
+            1.75
           ],
           "to": [
             12.25,
@@ -2537,14 +3097,154 @@
           "from": [
             7.375,
             5.75,
-            2.375
+            1.625
           ],
           "to": [
             8.625,
             7.375,
-            2.75
+            2
           ],
           "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_body",
+          "from": [
+            1,
+            2.125,
+            5.75
+          ],
+          "to": [
+            3.25,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_left_cap",
+          "from": [
+            0.875,
+            6.625,
+            5.5
+          ],
+          "to": [
+            3.25,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_strap",
+          "from": [
+            0.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            1.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_clasp",
+          "from": [
+            0.75,
+            4.875,
+            7.375
+          ],
+          "to": [
+            1,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_welt",
+          "from": [
+            0.875,
+            2.125,
+            5.625
+          ],
+          "to": [
+            3.25,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_body",
+          "from": [
+            12.75,
+            2.125,
+            5.75
+          ],
+          "to": [
+            15,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_right_cap",
+          "from": [
+            12.75,
+            6.625,
+            5.5
+          ],
+          "to": [
+            15.125,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_strap",
+          "from": [
+            14.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            15.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_clasp",
+          "from": [
+            15,
+            4.875,
+            7.375
+          ],
+          "to": [
+            15.25,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_right_welt",
+          "from": [
+            12.75,
+            2.125,
+            5.625
+          ],
+          "to": [
+            15.125,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
         },
         {
           "name": "strap_left_upper",
@@ -2957,19 +3657,19 @@
           "from": [
             7.375,
             3.75,
-            2.25
+            1.5
           ],
           "to": [
             8.625,
             5,
-            2.75
+            2
           ],
           "texture": "fittings",
           "rotation": {
             "origin": [
               8,
               4.375,
-              2.5
+              1.75
             ],
             "axis": "z",
             "angle": 45,
@@ -3132,7 +3832,7 @@
           "from": [
             4,
             2.125,
-            2.75
+            2
           ],
           "to": [
             12,
@@ -3146,7 +3846,7 @@
           "from": [
             3.75,
             6.625,
-            2.5
+            1.75
           ],
           "to": [
             12.25,
@@ -3160,14 +3860,154 @@
           "from": [
             7.375,
             5.75,
-            2.375
+            1.625
           ],
           "to": [
             8.625,
             7.375,
-            2.75
+            2
           ],
           "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_body",
+          "from": [
+            1,
+            2.125,
+            5.75
+          ],
+          "to": [
+            3.25,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_left_cap",
+          "from": [
+            0.875,
+            6.625,
+            5.5
+          ],
+          "to": [
+            3.25,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_strap",
+          "from": [
+            0.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            1.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_left_clasp",
+          "from": [
+            0.75,
+            4.875,
+            7.375
+          ],
+          "to": [
+            1,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_left_welt",
+          "from": [
+            0.875,
+            2.125,
+            5.625
+          ],
+          "to": [
+            3.25,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_body",
+          "from": [
+            12.75,
+            2.125,
+            5.75
+          ],
+          "to": [
+            15,
+            6.625,
+            10.75
+          ],
+          "texture": "body"
+        },
+        {
+          "name": "side_pocket_right_cap",
+          "from": [
+            12.75,
+            6.625,
+            5.5
+          ],
+          "to": [
+            15.125,
+            7.25,
+            11
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_strap",
+          "from": [
+            14.875,
+            3.125,
+            7.625
+          ],
+          "to": [
+            15.125,
+            7,
+            8.875
+          ],
+          "texture": "trim"
+        },
+        {
+          "name": "side_pocket_right_clasp",
+          "from": [
+            15,
+            4.875,
+            7.375
+          ],
+          "to": [
+            15.25,
+            5.625,
+            9.125
+          ],
+          "texture": "fittings"
+        },
+        {
+          "name": "side_pocket_right_welt",
+          "from": [
+            12.75,
+            2.125,
+            5.625
+          ],
+          "to": [
+            15.125,
+            2.625,
+            10.875
+          ],
+          "texture": "trim"
         },
         {
           "name": "strap_left_upper",
@@ -3580,12 +4420,12 @@
           "from": [
             4,
             2.125,
-            2.375
+            1.625
           ],
           "to": [
             12,
             2.875,
-            2.875
+            2.125
           ],
           "texture": "fittings"
         },
@@ -3606,13 +4446,13 @@
         {
           "name": "netherite_side_guard_left",
           "from": [
-            2.75,
+            0.75,
             2,
             7.875
           ],
           "to": [
-            3.25,
-            5.5,
+            1.25,
+            4.375,
             8.625
           ],
           "texture": "fittings"
@@ -3620,13 +4460,13 @@
         {
           "name": "netherite_side_guard_right",
           "from": [
-            12.75,
+            14.75,
             2,
             7.875
           ],
           "to": [
-            13.25,
-            5.5,
+            15.25,
+            4.375,
             8.625
           ],
           "texture": "fittings"

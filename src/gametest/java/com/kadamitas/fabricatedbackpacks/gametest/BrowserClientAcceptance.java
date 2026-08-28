@@ -49,7 +49,7 @@ final class BrowserClientAcceptance {
         });
         world.getConnection().waitForClientboundPackets();
         openHovered(context, 3);
-        clickButton(context, "1");
+        selectUpgrade(context, 0);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 0);
         context.waitFor(client -> client.gui.screen().children().stream().anyMatch(widget -> widget instanceof AbstractWidget button && button.getMessage().getString().equals("Open station")));
         clickButton(context, "Open station");
@@ -131,7 +131,7 @@ final class BrowserClientAcceptance {
         openHovered(context, 3);
         clickSlot(context, 1);
         clickPlayerSlot(context, 29);
-        clickButton(context, "2");
+        selectUpgrade(context, 1);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 1);
         awaitButton(context, "Open station");
         clickButton(context, "Open station");
@@ -168,14 +168,9 @@ final class BrowserClientAcceptance {
         context.waitFor(client -> client.gui.screen() == null);
 
         openHovered(context, 3);
-        clickButton(context, "3");
+        selectUpgrade(context, 2);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 2);
-        double[] ghost = context.computeOnClient(client -> {
-            var screen = (BackpackScreen) client.gui.screen();
-            return new double[]{(screen.width - screen.getMenu().imageWidth()) / 2.0 + screen.getMenu().storageWidth() + 59,
-                    (screen.height - screen.getMenu().imageHeight()) / 2.0 + 62};
-        });
-        clickAt(context, ghost[0], ghost[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        clickGhost(context, 0);
         waitBrowser(context);
         searchBrowser(context, "@minecraft \"diamond\" -ore -block -sword -axe -pickaxe -shovel -hoe -helmet -chestplate -leggings -boots -horse");
         context.waitTicks(12);
@@ -214,7 +209,7 @@ final class BrowserClientAcceptance {
         context.waitFor(client -> client.gui.screen() == null);
 
         openHovered(context, 3);
-        clickButton(context, "4");
+        selectUpgrade(context, 3);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 3);
         clickButton(context, "Items");
         waitBrowser(context);

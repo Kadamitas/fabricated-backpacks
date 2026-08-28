@@ -16,6 +16,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HopperBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -24,7 +25,10 @@ import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackTestSupport.*;
 
@@ -133,6 +137,7 @@ final class BlockGameTests {
             var picked = state.getCloneItemStack(level, position, true);
             helper.assertFalse(picked.has(BagComponents.IDENTITY), "Creative clone cannot duplicate a live backpack identity");
             helper.assertValueEqual(count(BagInventory.of(picked), Items.DIAMOND), 100 + tested, "Pick-block preserves requested item data");
+            assertPouchRayHits(helper, position);
             level.destroyBlock(position, true, player);
             var dropped = level.getEntitiesOfClass(ItemEntity.class, new AABB(position).inflate(.1));
             helper.assertValueEqual(dropped.size(), 1, "Breaking produces exactly one backpack, without spilling duplicated contents");
@@ -142,6 +147,63 @@ final class BlockGameTests {
         }
         helper.assertValueEqual(tested, 6, "All six tier block/item pairs were exercised");
         helper.succeed();
+    }
+
+    private static void assertPouchRayHits(GameTestHelper helper, BlockPos position) {
+        var level = helper.getLevel();
+        var original = level.getBlockState(position);
+        try {
+            for (Direction facing : Direction.Plane.HORIZONTAL) {
+                var closed = original.setValue(BackpackBlock.FACING, facing).setValue(BackpackBlock.OPEN, false);
+                var outline = closed.getShape(level, position);
+                var collision = closed.getCollisionShape(level, position);
+                helper.assertTrue(Shapes.equal(outline, collision), "Selection and collision cover the same closed backpack");
+                for (boolean open : new boolean[]{false, true}) {
+                    var state = closed.setValue(BackpackBlock.OPEN, open);
+                    level.setBlockAndUpdate(position, state);
+                    helper.assertTrue(Shapes.equal(outline, state.getShape(level, position))
+                                    && Shapes.equal(collision, state.getCollisionShape(level, position)),
+                            "Opening the rendered lid does not move selection or collision in " + facing);
+                    for (ClipContext.Block mode : new ClipContext.Block[]{ClipContext.Block.OUTLINE, ClipContext.Block.COLLIDER}) {
+                        assertShapeHit(helper, position, facing, mode, new Vec3(-4, 5.25, 8.25),
+                                new Vec3(2, 5.25, 8.25), new Vec3(.75, 5.25, 8.25));
+                        assertShapeHit(helper, position, facing, mode, new Vec3(20, 5.25, 8.25),
+                                new Vec3(14, 5.25, 8.25), new Vec3(15.25, 5.25, 8.25));
+                        assertShapeHit(helper, position, facing, mode, new Vec3(8, 4.25, -4),
+                                new Vec3(8, 4.25, 2.5), new Vec3(8, 4.25, 1.5));
+                        var miss = level.clip(new ClipContext(modelPoint(position, facing, new Vec3(1.5, 14, 8.25)),
+                                modelPoint(position, facing, new Vec3(1.5, 8, 8.25)), mode, ClipContext.Fluid.NONE, CollisionContext.empty()));
+                        helper.assertValueEqual(miss.getType(), HitResult.Type.MISS,
+                                "Empty space above a side pouch is not a solid oversized box: " + facing + " " + mode);
+                    }
+                }
+            }
+        } finally {
+            level.setBlockAndUpdate(position, original);
+        }
+    }
+
+    private static void assertShapeHit(GameTestHelper helper, BlockPos position, Direction facing,
+                                       ClipContext.Block mode, Vec3 from, Vec3 to, Vec3 expected) {
+        var hit = helper.getLevel().clip(new ClipContext(modelPoint(position, facing, from),
+                modelPoint(position, facing, to), mode, ClipContext.Fluid.NONE, CollisionContext.empty()));
+        String context = facing + " " + mode + " from " + from;
+        helper.assertValueEqual(hit.getType(), HitResult.Type.BLOCK, "The enlarged pouch is ray-targetable: " + context);
+        helper.assertValueEqual(hit.getBlockPos(), position, "The ray hits this placed backpack: " + context);
+        helper.assertTrue(hit.getLocation().distanceToSqr(modelPoint(position, facing, expected)) < 1e-12,
+                "The hit reaches the rotated pouch surface, not the old narrow shell: " + context);
+    }
+
+    private static Vec3 modelPoint(BlockPos position, Direction facing, Vec3 point) {
+        // Independent facing basis; do not derive expected rays from the shape
+        // rotation helper used by production code.
+        Direction right = facing.getClockWise();
+        double horizontal = (point.x - 8) / 16;
+        double forward = (8 - point.z) / 16;
+        return Vec3.atLowerCornerOf(position).add(
+                .5 + right.getStepX() * horizontal + facing.getStepX() * forward,
+                point.y / 16,
+                .5 + right.getStepZ() * horizontal + facing.getStepZ() * forward);
     }
 
     static void viewersPickupAndComparator(GameTestHelper helper) {

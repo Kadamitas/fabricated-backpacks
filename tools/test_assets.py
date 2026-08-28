@@ -26,6 +26,15 @@ import generate_assets as assets
 TARGET_JAR: Path | None = None
 
 
+def element_points(parts):
+    return [point for part in parts for side in assets.SIDES for point in assets.vertices(part, side)]
+
+
+def point_bounds(points):
+    return ([min(point[axis] for point in points) for axis in range(3)],
+            [max(point[axis] for point in points) for axis in range(3)])
+
+
 def decode_rgba_png(data: bytes) -> tuple[int, int, bytes]:
     """Independently validate and decode the generator's filter-0 RGBA PNG format."""
     if data[:8] != b"\x89PNG\r\n\x1a\n":
@@ -160,6 +169,7 @@ class AssetGenerationTest(unittest.TestCase):
 
     def test_model_face_closure_uvs_bounds_and_named_parts(self):
         required = {"body_floor", "body_left", "body_right", "body_back", "body_front", "front_pocket",
+                    "side_pocket_left_body", "side_pocket_right_body",
                     "flap_top", "flap_lip", "strap_left_long", "strap_right_long", "handle_top"}
         for path, model in self.models.items():
             names = set()
@@ -286,17 +296,105 @@ class AssetGenerationTest(unittest.TestCase):
         transform = profile["wear_transform"]
         translate, scale = transform["translation_pixels"], transform["scale"]
         offset = profile["source_to_player_body"]["offset"]
+        self.assertEqual([.90, 1.00, .70], scale)
+        self.assertEqual([0, 0, .70], translate)
+        self.assertEqual(1, transform["armor_clearance_pixels"])
         for tier in profile["tiers"]:
-            points = [[translate[axis] + (offset[axis] - part[corner][axis]) * scale[axis] for axis in range(3)]
-                      for part in tier["parts"] for corner in ("from", "to")]
-            for x, y, z in points:
-                self.assertGreaterEqual(x, -4)
-                self.assertLessEqual(x, 4)
-                self.assertGreaterEqual(y, 0)
-                self.assertLessEqual(y, 12)
-                self.assertGreater(z, 2)
-                self.assertLessEqual(z, 8.5)
-                self.assertGreater(z + transform["armor_clearance_pixels"], 3)
+            with self.subTest(tier=tier["id"]):
+                points = [[translate[axis] + (offset[axis] - point[axis]) * scale[axis] for axis in range(3)]
+                          for point in element_points(tier["parts"])]
+                low, high = point_bounds(points)
+                self.assertAlmostEqual(-low[0], high[0], msg="Side pockets remain centered on the torso")
+                self.assertGreaterEqual(high[0] - low[0], 12.5, "Side pouches must contribute a visible silhouette")
+                self.assertLessEqual(high[0] - low[0], 13.25, "Keep the pouches inside the full shoulder width")
+                self.assertGreaterEqual(low[1], 0)
+                self.assertLessEqual(low[1], .5, "Handle reaches the shoulders")
+                self.assertGreaterEqual(high[1], 13, "The bag covers the back to the upper hips")
+                self.assertLessEqual(high[1], 13.5, "Do not extend toward the knees")
+                self.assertLessEqual(high[2], 10.5, "Front pocket depth remains bounded")
+                for armored, back_plane in ((False, 2), (True, 3)):
+                    clearance = low[2] + (transform["armor_clearance_pixels"] if armored else 0) - back_plane
+                    self.assertGreater(clearance, 0, "The straps must not intersect the torso or chestplate")
+                    self.assertLessEqual(clearance, .3, "Do not let the pack float away from the back")
+                core = [part for part in tier["parts"] if part["name"].startswith("body_") or part["name"] == "flap_top"]
+                core_low, core_high = point_bounds(element_points(core))
+                self.assertGreaterEqual((core_high[0] - core_low[0]) * scale[0], 9.4)
+                self.assertGreaterEqual((core_high[1] - core_low[1]) * scale[1], 11.5)
+
+    def test_side_pouches_are_mirrored_attached_and_clear_the_moving_lid(self):
+        for tier in assets.TIERS:
+            with self.subTest(tier=tier.item):
+                parts = {part["name"]: part for part in assets.backpack_elements(tier, False)}
+                pocket_names = {f"side_pocket_{side}_{piece}" for side in ("left", "right")
+                                for piece in ("body", "cap", "strap", "clasp", "welt")}
+                self.assertTrue(pocket_names.issubset(parts))
+                for piece in ("body", "cap", "strap", "clasp", "welt"):
+                    left, right = parts[f"side_pocket_left_{piece}"], parts[f"side_pocket_right_{piece}"]
+                    self.assertEqual([16 - left["to"][0], *left["from"][1:]], right["from"])
+                    self.assertEqual([16 - left["from"][0], *left["to"][1:]], right["to"])
+                    self.assertEqual(left["faces"], right["faces"])
+                    self.assertNotIn("rotation", left)
+                    expected_tint = 0 if piece == "body" else -1 if piece == "clasp" else 1
+                    self.assertTrue(all(face.get("tintindex", -1) == expected_tint for face in left["faces"].values()))
+                for side in ("left", "right"):
+                    pocket, wall = parts[f"side_pocket_{side}_body"], parts[f"body_{side}"]
+                    self.assertGreater(min(pocket["to"][0], wall["to"][0]) - max(pocket["from"][0], wall["from"][0]), 0,
+                                       "The pouch must embed into the shell instead of floating alongside it")
+                    self.assertGreaterEqual(pocket["from"][1], wall["from"][1])
+                    self.assertLessEqual(pocket["to"][2], wall["to"][2])
+                    self.assertGreaterEqual(pocket["to"][1] - pocket["from"][1], 4)
+                    self.assertGreaterEqual(pocket["to"][2] - pocket["from"][2], 4)
+                top = max(parts[name]["to"][1] for name in pocket_names)
+                moving = assets.flap_parts(tier)
+                self.assertFalse(pocket_names & set(moving), "Side pouch lids do not move with the main lid")
+                for progress in (0, .25, .5, .75, 1):
+                    angle = 45 * progress * progress * (3 - 2 * progress)
+                    lid = [{**parts[name], "rotation": {"origin": [8, 11.25, 11.75], "axis": "x", "angle": angle}}
+                           for name in moving]
+                    low, _ = point_bounds(element_points(lid))
+                    self.assertGreaterEqual(low[1] - top, 1, "The side caps must clear every sampled lid pose")
+
+    def test_deeper_front_pouch_keeps_its_flap_and_tier_fittings_attached(self):
+        for tier in assets.TIERS:
+            with self.subTest(tier=tier.item):
+                parts = {part["name"]: part for part in assets.backpack_elements(tier, False)}
+                pocket = parts["front_pocket"]
+                self.assertEqual(2, pocket["from"][2])
+                self.assertGreater(pocket["to"][2], parts["body_front"]["from"][2])
+                self.assertGreaterEqual(parts["body_front"]["from"][2] - pocket["from"][2], 3)
+                self.assertEqual(pocket["to"][1], parts["pocket_flap"]["from"][1])
+                self.assertGreater(parts["pocket_flap"]["to"][2], pocket["from"][2])
+                for name in ("pocket_latch", "gold_pocket_edge", "diamond_pocket_seal", "netherite_pocket_guard"):
+                    if name in parts:
+                        low, high = point_bounds(element_points([parts[name]]))
+                        self.assertLess(low[2], pocket["from"][2], f"{name} must remain visible in front of the leather")
+                        self.assertGreaterEqual(high[2], pocket["from"][2], f"{name} must remain attached")
+
+    def test_exterior_display_anchor_clears_all_tier_decorations(self):
+        path = assets.ROOT / "src/client/java/com/kadamitas/fabricatedbackpacks/client/render/BackpackDisplayState.java"
+        source = path.read_text(encoding="utf-8")
+        def pixels(name):
+            match = re.search(rf"private static final float {name} = ([0-9.]+)F / 16F;", source)
+            self.assertIsNotNone(match, f"Missing actual display constant {name}")
+            return float(match.group(1))
+        center_y, mount_z, size = pixels("POCKET_Y"), pixels("POCKET_FRONT"), pixels("DISPLAY_SIZE")
+        display_low = [8 - size / 2, center_y - size / 2]
+        display_high = [8 + size / 2, center_y + size / 2]
+        for tier in assets.TIERS:
+            with self.subTest(tier=tier.item):
+                parts = assets.backpack_elements(tier, False)
+                pocket = next(part for part in parts if part["name"] == "front_pocket")
+                for axis in (0, 1):
+                    self.assertGreater(display_low[axis], pocket["from"][axis])
+                    self.assertLess(display_high[axis], pocket["to"][axis])
+                fronts = []
+                for part in parts:
+                    low, high = point_bounds(element_points([part]))
+                    if all(low[axis] < display_high[axis] and high[axis] > display_low[axis] for axis in (0, 1)):
+                        fronts.append(low[2])
+                gap = min(fronts) - mount_z
+                self.assertGreaterEqual(gap, .05 - 1e-6, "The default icon must clear every overlapping fitting")
+                self.assertLessEqual(pocket["from"][2] - mount_z, .55 + 1e-6, "Keep the icon close to the pocket")
 
     def test_gold_extends_piglin_safety_without_replacing_other_armor(self):
         tag = json.loads(self.outputs["src/main/resources/data/minecraft/tags/item/piglin_safe_armor.json"])
