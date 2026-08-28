@@ -1125,6 +1125,149 @@ public final class ConduitGameTests {
         });
     }
 
+    public static void backpackHighSlotRouting(GameTestHelper helper) {
+        BackpackBlockEntity source = indexedBackpack(helper, new BlockPos(2, 2, 3));
+        BackpackBlockEntity destination = indexedBackpack(helper, new BlockPos(4, 2, 3));
+        var pipe = conduit(helper, new BlockPos(3, 2, 3), ConduitKind.ITEM);
+        port(pipe, Direction.WEST, ConduitMode.EXTRACT);
+        port(pipe, Direction.EAST, ConduitMode.INSERT);
+        BagInventory inventory = source.inventory();
+        int lastSlot = inventory.getContainerSize() - 1;
+        helper.assertTrue(lastSlot > 73, "The actual Netherite source has both slot73 and a later final slot");
+        ItemStack cobble = new ItemStack(Items.COBBLESTONE, 11);
+        cobble.set(DataComponents.CUSTOM_NAME, Component.literal("High-slot cobble"));
+        ItemStack amethyst = new ItemStack(Items.AMETHYST_SHARD, 5);
+        amethyst.set(DataComponents.CUSTOM_NAME, Component.literal("Last-slot amethyst"));
+        inventory.setItem(73, cobble.copy());
+        inventory.setItem(lastSlot, amethyst.copy());
+        SlottedStorage<ItemVariant> first = indexedItems(helper, source);
+        SlottedStorage<ItemVariant> second = indexedItems(helper, source);
+        helper.assertTrue(first != second, "The real backpack provider returns fresh wrappers, without a test facade");
+        helper.assertValueEqual(first.getSlotCount(), inventory.getContainerSize(), "Indexed extent matches every actual physical slot");
+        SingleSlotStorage<ItemVariant> retained = first.getSlot(73);
+        helper.assertValueEqual(retained.getResource(), ItemVariant.of(cobble), "Slot73 exposes its exact component-bearing resource");
+        helper.assertValueEqual(first.getSlot(lastSlot).getResource(), ItemVariant.of(amethyst), "The final physical slot is indexed without truncation");
+        ItemStack beforeProbe = inventory.stack().copy();
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(retained.extract(ItemVariant.of(cobble), 2, transaction), 2L, "An indexed view performs a real tentative extraction");
+        }
+        assertStack(helper, inventory.stack(), beforeProbe, "Indexed extraction abort preserves the complete source snapshot");
+        Storage<?>[] previous = {second};
+        int[] phase = {0}, lookups = {2};
+        helper.onEachTick(() -> {
+            SlottedStorage<ItemVariant> current = indexedItems(helper, source);
+            helper.assertTrue(current != previous[0], "Subsequent native capability lookups keep returning fresh wrappers");
+            previous[0] = current;
+            lookups[0]++;
+            helper.assertValueEqual(count(inventory, Items.COBBLESTONE) + count(destination.inventory(), Items.COBBLESTONE),
+                    phase[0] == 0 ? 11 : 17, "High-slot routing conserves every cobblestone");
+            helper.assertValueEqual(count(inventory, Items.AMETHYST_SHARD) + count(destination.inventory(), Items.AMETHYST_SHARD),
+                    phase[0] == 0 ? 5 : 8, "Last-slot routing conserves every amethyst shard");
+            if (phase[0] == 0) {
+                if (count(destination.inventory(), Items.COBBLESTONE) != 11 || count(destination.inventory(), Items.AMETHYST_SHARD) != 5) return;
+                helper.assertTrue(inventory.isEmpty(), "OFF filters allow natural routing from slot73 and the final slot");
+                var allowed = backpackFilter(ConduitFilterMode.ALLOW, "cobblestone", "amethyst_shard");
+                pipe.setFilter(ConduitKind.ITEM, Direction.WEST, allowed);
+                pipe.setFilter(ConduitKind.ITEM, Direction.EAST, allowed);
+                for (int slot = 0; slot < 64; slot++) inventory.setItem(slot, new ItemStack(Items.IRON_INGOT));
+                inventory.setItem(73, cobble.copyWithCount(6));
+                inventory.setItem(lastSlot, amethyst.copyWithCount(3));
+                helper.assertValueEqual(retained.getAmount(), 6L, "A warmed indexed view reads new content instead of a cached quantity");
+                phase[0] = 1;
+                return;
+            }
+            helper.assertValueEqual(count(inventory, Items.IRON_INGOT), 64, "The first64 denied physical slots remain untouched");
+            helper.assertValueEqual(count(destination.inventory(), Items.IRON_INGOT), 0, "Neither endpoint's ALLOW filter admits iron");
+            if (count(destination.inventory(), Items.COBBLESTONE) != 17 || count(destination.inventory(), Items.AMETHYST_SHARD) != 8) return;
+            helper.assertTrue(inventory.getItem(73).isEmpty() && inventory.getItem(lastSlot).isEmpty(),
+                    "Natural routing advances past64 denied views to both allowed high slots");
+            for (int slot = 0; slot < destination.inventory().getContainerSize(); slot++) {
+                ItemStack item = destination.inventory().getItem(slot);
+                if (item.isEmpty()) continue;
+                helper.assertTrue(ItemStack.isSameItemSameComponents(item, item.is(Items.COBBLESTONE) ? cobble : amethyst),
+                        "The actual receiving backpack retains both transferred component variants");
+            }
+            helper.assertTrue(lookups[0] > 3, "Successful routing spans repeated fresh native provider lookups");
+            helper.succeed();
+        });
+    }
+
+    public static void backpackIndexedViewOwnership(GameTestHelper helper) {
+        BackpackBlockEntity entity = indexedBackpack(helper, new BlockPos(3, 2, 3), UpgradeKind.INCEPTION);
+        BagInventory root = entity.inventory();
+        root.updateSettings(tag -> tag.putBoolean("inception_nested_first", true));
+        BagInventory child = bag(BackpackTier.NETHERITE);
+        child.setItem(73, new ItemStack(Items.DIAMOND, 5));
+        root.setItem(0, child.stack());
+        root.setItem(73, new ItemStack(Items.STONE, 7));
+        SlottedStorage<ItemVariant> indexed = indexedItems(helper, entity);
+        int rootSize = root.getContainerSize(), childSize = child.getContainerSize();
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize + childSize, "The native index includes the current ordered child and root extents");
+        SingleSlotStorage<ItemVariant> childView = indexed.getSlot(73);
+        SingleSlotStorage<ItemVariant> rootView = indexed.getSlot(childSize + 73);
+        helper.assertValueEqual(childView.getResource(), ItemVariant.of(Items.DIAMOND), "Child-first indexing addresses the actual child");
+        helper.assertValueEqual(rootView.getResource(), ItemVariant.of(Items.STONE), "The root follows the child without shifting its physical slots");
+        ItemStack before = root.stack().copy();
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(childView.extract(ItemVariant.of(Items.DIAMOND), 2, transaction), 2L, "Indexed child extraction joins the actual transaction");
+        }
+        assertStack(helper, root.stack(), before, "Nested indexed extraction abort restores the serialized root and child");
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(childView.extract(ItemVariant.of(Items.DIAMOND), 2, transaction), 2L, "A subsequent indexed child extraction can commit");
+            transaction.commit();
+        }
+        BagInventory saved = BagInventory.of(roundTrip(helper.getLevel(), root.stack()));
+        assertStack(helper, BagInventory.of(saved.getItem(0)).getItem(73), Items.DIAMOND, 3, "Indexed final commit persists the child into the root codec");
+        root.updateSettings(tag -> tag.putBoolean("inception_nested_first", false));
+        helper.assertValueEqual(indexed.getSlot(73).getResource(), ItemVariant.of(Items.STONE), "A retained storage rebuilds its index when node ordering changes");
+        helper.assertValueEqual(indexed.getSlot(rootSize + 73).getAmount(), 3L, "The reordered child keeps its remaining quantity");
+        helper.assertValueEqual(childView.getAmount(), 3L, "A retained slot remains bound to its physical child, not its old ordinal");
+        ItemStack detached = root.getItem(0);
+        root.setItem(0, ItemStack.EMPTY);
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize, "Removing a child shrinks the advertised index");
+        helper.assertTrue(childView.isResourceBlank(), "A retained detached child view becomes blank");
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(childView.extract(ItemVariant.of(Items.DIAMOND), 1, transaction), 0L, "A retained detached child view cannot extract");
+            helper.assertValueEqual(childView.insert(ItemVariant.of(Items.DIAMOND), 1, transaction), 0L, "A retained detached child view cannot insert");
+            transaction.commit();
+        }
+        assertStack(helper, BagInventory.of(detached).getItem(73), Items.DIAMOND, 3, "Detaching and probing the old address conserves the child contents");
+        BagInventory replacementChild = bag(BackpackTier.GOLD);
+        replacementChild.setItem(73, new ItemStack(Items.EMERALD, 2));
+        root.setItem(0, replacementChild.stack());
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize + replacementChild.getContainerSize(), "An added child enters an already-retained storage index");
+        SingleSlotStorage<ItemVariant> replacementView = indexed.getSlot(rootSize + 73);
+        helper.assertValueEqual(replacementView.getResource(), ItemVariant.of(Items.EMERALD), "The new index addresses only the replacement child's resource");
+        helper.assertTrue(childView.isResourceBlank(), "An old child view never follows a replacement at the same parent slot");
+        root.updateSettings(tag -> tag.putBoolean("inception_outer_inventory", false));
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize, "Live outer-inventory policy removes child addresses");
+        helper.assertTrue(replacementView.isResourceBlank(), "The prior child view honors that live policy");
+        root.updateSettings(tag -> tag.putBoolean("inception_outer_inventory", true));
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize + replacementChild.getContainerSize(), "Re-enabled access reconstructs the current child index");
+        helper.assertValueEqual(replacementView.getAmount(), 2L, "The same physically attached child becomes accessible again");
+        BagInventory replacementRoot = bag(BackpackTier.NETHERITE);
+        replacementRoot.setItem(73, new ItemStack(Items.DIRT, 4));
+        entity.setStack(replacementRoot.stack());
+        helper.assertValueEqual(indexed.getSlotCount(), 0, "Replacing the actual placed bag invalidates its retained indexed storage");
+        helper.assertTrue(rootView.isResourceBlank() && replacementView.isResourceBlank(), "Every retained slot keeps the old physical ownership boundary");
+        helper.assertValueEqual(indexedItems(helper, entity).getSlot(73).getResource(), ItemVariant.of(Items.DIRT), "A fresh native lookup can address the replacement bag");
+        helper.succeed();
+    }
+
+    private static BackpackBlockEntity indexedBackpack(GameTestHelper helper, BlockPos relative, UpgradeKind... upgrades) {
+        BlockPos position = helper.absolutePos(relative);
+        helper.getLevel().setBlock(position, BackpackRegistry.block(BackpackTier.NETHERITE).defaultBlockState(), 3);
+        var entity = (BackpackBlockEntity) helper.getLevel().getBlockEntity(position);
+        entity.setStack(bag(BackpackTier.NETHERITE, upgrades).stack());
+        return entity;
+    }
+
+    private static SlottedStorage<ItemVariant> indexedItems(GameTestHelper helper, BackpackBlockEntity entity) {
+        Storage<ItemVariant> storage = ItemStorage.SIDED.find(helper.getLevel(), entity.getBlockPos(), Direction.EAST);
+        helper.assertTrue(storage instanceof SlottedStorage<?>, "The actual registered backpack item API exposes indexed physical views");
+        return (SlottedStorage<ItemVariant>) storage;
+    }
+
     private static <T> long backpackForward(GameTestHelper helper, Storage<T> source, Storage<T> pipe, T resource,
                                            long maximum, TransactionContext transaction) {
         long accepted = pipe.insert(resource, maximum, transaction);

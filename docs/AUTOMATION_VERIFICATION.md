@@ -18,11 +18,11 @@ Focused reports are named `automation-pass.json`, `automation-restart-pass.json`
 and `multiplayer-automation.json`; they do not replace or impersonate the full
 client/release receipts.
 
-## Final automated checkpoint — 28 August 2026
+## Rendered-client checkpoint — 28 August 2026
 
 Epoch 11 is `7566096f-b918-44d5-8869-7590b7850db9`.
-The 749 input hashes in `build/verification/start.json` matched the files on
-disk when this record was updated. Earlier failed attempts are not counted as
+The 749 input hashes matched the files on disk for commit `762375d`.
+The later indexed-storage correction below has a separate verification record. Earlier failed attempts are not counted as
 passes in this checkpoint.
 
 Candidate: `build/libs/fabricated-backpacks-0.5.0-alpha.jar`, **1,381,657 bytes**.
@@ -82,6 +82,38 @@ The corresponding execution logs are `build/automation-verification-11.log`
 and `build/automation-{client,restart,jei,multiplayer}-final-11.log`.
 Screenshots are captures for inspection, not an automated visual-quality or
 performance claim.
+
+## Indexed-storage review correction
+
+A subsequent review found that the generic item wrapper could restart a bounded
+conduit scan before reaching a large backpack's later slots. Native backpack item
+storage now retains indexed slot access through traversal and void wrappers.
+Guarded views rebuild when physical owners, order or slot counts change.
+
+Fresh epoch `2f78d8cb-344e-4e90-b9bb-e04100df9236` passed **494 unit tests and
+170 server cases (169 mod cases)** with no failures, errors or skips. New actual
+backpack regressions cover slot73 and the final slot, allow filters after64denied
+slots, fresh API lookups, transaction rollback, nested reorder/replacement,
+detach/re-attach, changed access and root replacement. Unit execution PID37788.
+
+The open production client held the canonical JAR in use, so only Gradle's JAR
+output directory was redirected for the successful58-second rerun. No source,
+test selection or discovery expectation was changed. Log:
+`build/automation-verification-12b.log`. Scoped audit:
+`build/verification/indexed-resources.json` (`unit-and-server-isolated-output`).
+All749 source hashes, exact test discovery, freshness, and production archive
+checks passed. This scoped audit does not replace the release gate.
+
+Current candidate: `build/index-verification-libs/fabricated-backpacks-0.5.0-alpha.jar`:
+
+```text
+97cfc3dcf2446c08f2312158ea16392c843a8978d4c5895947047c49e67de6d9
+```
+
+The rendered-client, restart, JEI and multiplayer observations above precede
+this three-file storage correction. They are not relabeled as tests of the new
+candidate. A Minecraft1.21.1/Cobblemon compatibility port is maintained on a
+separate branch; none of this26.2 evidence establishes that port's compatibility.
 
 ## Focused commands
 

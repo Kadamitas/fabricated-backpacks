@@ -90,6 +90,8 @@ public final class BackpackGameTests implements ModInitializer {
     @GameTest(structure = STRUCTURE, maxTicks = 80) public void conduitUnrelatedTopologyChanges(GameTestHelper helper) { ConduitGameTests.unrelatedTopologyChanges(helper); }
     @GameTest(structure = STRUCTURE, maxTicks = 200) public void conduitSeparateSidedEnergyStorage(GameTestHelper helper) { ConduitGameTests.separateSidedEnergyStorage(helper); }
     @GameTest(structure = STRUCTURE, maxTicks = 200) public void conduitBackpackFilteredRouting(GameTestHelper helper) { ConduitGameTests.backpackFilteredRouting(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 160) public void conduitBackpackHighSlotRouting(GameTestHelper helper) { ConduitGameTests.backpackHighSlotRouting(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 20) public void conduitBackpackIndexedViewOwnership(GameTestHelper helper) { ConduitGameTests.backpackIndexedViewOwnership(helper); }
     @GameTest(structure = STRUCTURE, maxTicks = 100) public void conduitBackpackFilteredTransactions(GameTestHelper helper) { ConduitGameTests.backpackFilteredTransactions(helper); }
     @GameTest(structure = STRUCTURE, maxTicks = 200) public void conduitBackpackFilterPersistence(GameTestHelper helper) { ConduitGameTests.backpackFilterPersistence(helper); }
     @GameTest(structure = STRUCTURE, maxTicks = 80) public void conduitFilterMenuAuthority(GameTestHelper helper) { ConduitFilterGameTests.menuAuthority(helper); }
