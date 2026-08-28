@@ -44,6 +44,7 @@ backpack saves or provide their accessory and recipe-viewer APIs. Exact executed
 test results and any remaining limitations are documented with the release.
 
 [Feature catalog](https://github.com/Kadamitas/fabricated-backpacks/blob/codex/fabricated-backpacks/docs/FEATURES.md)
+· [Gameplay screenshots](https://github.com/Kadamitas/fabricated-backpacks/blob/codex/fabricated-backpacks/docs/GALLERY.md)
 · [Verification](https://github.com/Kadamitas/fabricated-backpacks/blob/codex/fabricated-backpacks/docs/VERIFICATION.md)
 · [Source and issues](https://github.com/Kadamitas/fabricated-backpacks)
 

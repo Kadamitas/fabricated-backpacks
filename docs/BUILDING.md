@@ -146,8 +146,20 @@ rejected. Capture the actual game window after verification starts; do not use
 an asset render or an earlier build's screenshot. Record any failed observation
 as a failure and resolve it before setting `passed` to true.
 
-`./gradlew runProductionClient` opens an isolated instance under
-`.codex-local/manual-client`. It loads the built main JAR and the declared
+Use the task-specific `--rerun` option for every manual launch and restart:
+
+```powershell
+.\gradlew.bat runProductionClient --rerun
+```
+
+Without this option, Gradle can mark `runProductionClient` as `UP-TO-DATE` and
+finish without starting a JVM. `--rerun` forces the launch task to execute
+without forcing its build dependencies to rerun; do not substitute the global
+`--rerun-tasks` option. Confirm a new Minecraft process/PID and fresh startup
+log for the intended JAR. A successful Gradle exit alone is not a launch check.
+
+The task opens an isolated instance under `.codex-local/manual-client`.
+It loads the built main JAR and the declared
 Fabric API JAR using Loom's
 [production client task](https://docs.fabricmc.net/develop/loom/production-run-tasks).
 It does not include this project's test mod or substitute compiled source

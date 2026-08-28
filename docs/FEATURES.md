@@ -49,7 +49,7 @@ an existing world.
 | Area | Present behavior | Current boundary |
 | --- | --- | --- |
 | Held and inventory use | Open a held item or use the backpack key | The opening key prefers the dedicated equipment slot, then inventory order |
-| Placed use | Facing, waterlogging, comparator/hopper access, viewer-controlled lid motion, pickup and stored-stack drops | Final rendered lid/lighting acceptance is tracked separately |
+| Placed use | Facing, waterlogging, comparator/hopper access, viewer-controlled lid motion, pickup and stored-stack drops | Targeted rendered checks passed; broader lighting and GUI-scale coverage remains limited |
 | Equipment | One persistent native backpack slot alongside chest armor, with third-person rendering | No external accessory API adapter is supplied |
 | Gold equipment | An equipped gold backpack satisfies vanilla piglin-safe armor checks through the native item tag | Holding it does not count; theft, attacks and existing anger still follow vanilla rules |
 | Death handling | Equipped backpack follows `keepInventory`; ordinary drops respect equipment-drop prevention | Multiplayer, respawn and reconnect results must be checked in the evidence record |
@@ -313,11 +313,15 @@ models and follows the player's body pose.
 Placed backpacks animate the lid from 0 to 45 degrees over eight client ticks
 in each direction, following the authoritative viewer state. Frame
 interpolation also handles reversal while opening or closing. Item and worn
-models remain closed. Rendered acceptance is recorded separately.
+models remain closed. Targeted rendered acceptance, including motion reversal,
+all four facings and body/trim changes without changing facing, is recorded in
+[Verification](VERIFICATION.md).
 
-Offline contact sheets and UV/face checks help catch resource mistakes. Actual
-lighting, armor overlap, GUI scales and observer synchronization require client
-verification. See [Asset pipeline](../tools/ASSET_PIPELINE.md).
+Offline contact sheets and UV/face checks help catch resource mistakes. The
+recorded client and visual checks cover selected lighting, armor overlap and UI
+views; the two-client run checks synchronized shared access, appearance privacy
+and audio tracking. These results do not cover every GUI scale, graphics setup
+or observer combination. See [Asset pipeline](../tools/ASSET_PIPELINE.md).
 
 ## Compatibility boundary
 
@@ -337,16 +341,22 @@ mod's item IDs or storage data.
 
 ## Remaining alpha work
 
-These are known scope limits, not a declaration that the complete planned
-feature set has been delivered:
+The current unit/server build, full client scenario, separate-JVM restart,
+two-client TCP scenario and targeted visual review passed, including the
+empty-search hint correction at GUI scale 3. Installed production-JAR
+acceptance, its independent production restart and the complete release gate
+also passed for the recorded scenarios; the local bundle was built. Public
+download availability is tracked separately. See
+[Verification](VERIFICATION.md) for the current artifact and exact outcomes.
+These are the broader remaining coverage and scope limits, not a declaration
+that the complete planned feature set has been delivered:
 
-- A fresh combined server/client regression pass after the latest browser
-  transfer and network changes; per-run evidence is recorded separately.
-- Further visual acceptance of lid motion, exterior displays, worn fit and
-  contents previews across GUI scales and multiplayer observers.
+- Broader visual coverage of exterior displays, worn fit and contents previews
+  across GUI scales, graphics configurations, lighting and observer combinations.
 - Additional ghost/memory drag targets and configurable internal shortcuts.
-- Full-process tests for interrupted in-progress operations, plus broader
-  dedicated-server, two-client, restart and concurrency acceptance.
+- Full-process tests for interrupted in-progress operations and broader
+  dedicated-server, concurrent-user and failure-recovery combinations beyond
+  the completed restart and two-client scenarios.
 - Individually verified external integrations and modpack measurements.
 
 The verification record is the authority for what has actually been exercised.
