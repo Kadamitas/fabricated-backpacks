@@ -15,11 +15,13 @@ rendered search-hint bounds check at GUI scale 3; the replacement correction
 passed that same strict check. Earlier results and failures are identified
 separately below.
 
-Public GitHub Release, CurseForge and Modrinth downloads remain **pending**.
-The [source repository](https://github.com/Kadamitas/fabricated-backpacks) is
-public. Local verification and bundle creation do not establish public download
-availability. Earlier development runs and interactions with an earlier JAR
-do not substitute for checks against the current source snapshot and artifact.
+The [GitHub alpha release](https://github.com/Kadamitas/fabricated-backpacks/releases/tag/v0.5.0-alpha)
+is public. Its main JAR, sources JAR and both checksum files were downloaded
+without authentication and matched the verified local bundle. CurseForge and
+Modrinth submissions remain **pending**; neither has a published project or
+download for this release. Earlier development runs and interactions with an
+earlier JAR do not substitute for checks against the current source snapshot
+and artifact.
 
 ## Current executed results
 
@@ -46,7 +48,8 @@ narration. Recipe catalog and transfer behavior are unchanged.
 | Complete release gate | **PASS:** current source fingerprint, artifact, automated/client/multiplayer/restart reports and installed-JAR observations checked | `build/verification/release.json` |
 | Release bundle | **PASS:** four files produced; Gradle completed in 23 seconds, exit code 0; main JAR unchanged | `release/0.5.0-alpha/`, `build/release-bundle-final.log` |
 | Hosted Linux CI for `3316164` | **PASS:** all workflow steps succeeded; 374 unit and 137 server cases, with 0 failures, errors or skips; source-input and artifact checks passed | [Successful run 33162066369](https://github.com/Kadamitas/fabricated-backpacks/actions/runs/33162066369) |
-| Public platform downloads | **PENDING:** no GitHub Release, CurseForge or Modrinth download verified | Each platform must be checked separately |
+| Public GitHub downloads | **PASS:** public release page and all four assets returned HTTP 200 without authentication; downloaded hashes match the local bundle | [Release v0.5.0-alpha](https://github.com/Kadamitas/fabricated-backpacks/releases/tag/v0.5.0-alpha), `.codex-local/github-publication.json` |
+| CurseForge and Modrinth | **PENDING:** prepared project forms have not been submitted; no public downloads | Each platform must be checked separately |
 
 The main artifact is `build/libs/fabricated-backpacks-0.5.0-alpha.jar`, with
 1,018,130 bytes and 713 archive entries. Its SHA-256 was checked against the
@@ -60,6 +63,27 @@ The local bundle under `release/0.5.0-alpha/` contains that unchanged main JAR,
 the 460,669-byte sources JAR and one SHA-256 file for each. The complete release
 gate passed at `2026-08-28T10:32:52Z` for the same 624-input snapshot and main
 artifact hash. The bundle is not evidence of a completed platform upload.
+
+GitHub release `v0.5.0-alpha` was published at `2026-08-28T10:38:52Z`, targeting
+commit `65319247b032ae7f7e113bb622b4de97b5c62510`. Its
+[hosted CI run](https://github.com/Kadamitas/fabricated-backpacks/actions/runs/33164083341)
+also completed successfully. That commit adds only the
+verification documentation and unedited gameplay gallery to the tested code;
+all 624 source inputs are unchanged. Public HTTP downloads at
+`2026-08-28T10:39:22Z` verified
+the following assets, including their GitHub-reported SHA-256 digests:
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `fabricated-backpacks-0.5.0-alpha.jar` | 1,018,130 | `a91475783e00ac3a8596c27fec77fdbfe6145a47b3cd6b306c2764e7180c6c4d` |
+| `fabricated-backpacks-0.5.0-alpha-sources.jar` | 460,669 | `e7841510d60860b63f2631e9658027d220503b577be3bb21b0127261955193ea` |
+| `fabricated-backpacks-0.5.0-alpha.jar.sha256` | 103 | `de522aa410949b2cac3ea8faa736604ab740db12d67e322bee33cef77918837f` |
+| `fabricated-backpacks-0.5.0-alpha-sources.jar.sha256` | 111 | `cb4888b6398b932f91c301b8743e1a6ed2842670b1b180d15c32d0474b780b72` |
+
+Both downloaded JARs also passed ZIP CRC checks. These requests sent no
+Authorization or Cookie header. Selected production captures are available in
+the [gameplay gallery](GALLERY.md); local worlds and private run directories
+are not release assets.
 
 The tested production-code commit is
 [`33161645935b135af2d3ce01ae8caf7fd53cc315`](https://github.com/Kadamitas/fabricated-backpacks/commit/33161645935b135af2d3ce01ae8caf7fd53cc315).
