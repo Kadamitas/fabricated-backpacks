@@ -61,8 +61,8 @@ final class BrowserClientAcceptance {
             context.getInput().pressKey(GLFW.GLFW_KEY_O);
             waitBrowser(context);
             context.waitTicks(3);
-            checkEmptySearch(context);
             context.takeScreenshot("browser-empty-search-gui-three");
+            checkEmptySearch(context);
         } finally {
             context.runOnClient(client -> { client.options.guiScale().set(originalScale); client.resizeGui(); });
         }

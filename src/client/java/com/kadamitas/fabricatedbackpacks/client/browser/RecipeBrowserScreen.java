@@ -87,13 +87,8 @@ final class RecipeBrowserScreen extends Screen {
         Component searchHelp = text("search_hint");
         search = addRenderableWidget(new EditBox(font, 8, 37, leftWidth, 18, searchHelp));
         search.setMaxLength(BrowserQuery.MAX_LENGTH);
-        // EditBox clips its value, but draws hints without a width limit.
-        int hintWidth = Math.max(0, search.getInnerWidth() - 1);
-        String hint = searchHelp.getString();
-        if (font.width(hint) > hintWidth) {
-            hint = font.plainSubstrByWidth(hint, Math.max(0, hintWidth - font.width("..."))) + "...";
-        }
-        search.setHint(Component.literal(hint));
+        // Keep the hint concise; the full syntax remains in its tooltip and narration.
+        search.setHint(text("search"));
         search.setTooltip(Tooltip.create(searchHelp));
         search.setValue(query);
         search.setResponder(value -> { query = value; itemPage = 0; refreshItems(); });
