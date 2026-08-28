@@ -439,18 +439,19 @@ public final class ConduitGameTests {
             long isolatedWater = source.tank.amount;
             source.itemSides.clear(); source.itemSides.add(Direction.EAST);
             helper.getLevel().updateNeighborsAt(source.getBlockPos(), machineBlock);
-            helper.runAfterDelay(45, () -> {
-                helper.assertValueEqual(source.tank.amount, isolatedWater, "Removing only the middle fluid lane breaks only fluid connectivity");
+            // All fixtures share the world's bounded routing work. Wait for the five
+            // item operations within this test's timeout, not a theoretical idle-world deadline.
+            helper.startSequence().thenWaitUntil(() -> {
                 helper.assertValueEqual(count(target.items, Items.DIAMOND), 33, "The item lane continues through the mixed bundle");
                 helper.assertValueEqual(target.energy.amount, 4_096L, "The energy lane continues independently");
+            }).thenExecute(() -> {
+                helper.assertValueEqual(source.tank.amount, isolatedWater, "Removing only the middle fluid lane breaks only fluid connectivity");
                 helper.assertTrue(middle.install(ConduitKind.FLUID), "A removed lane can be reinstalled once");
-                helper.runAfterDelay(25, () -> {
-                    helper.assertValueEqual(source.tank.amount, 0L, "Rejoining the loaded fluid component resumes transfer");
-                    helper.assertValueEqual(target.tank.amount, mb(1_300), "No fluid was trapped or lost in the disconnected conduit");
-                    helper.assertValueEqual(count(source.items, Items.DIAMOND) + count(target.items, Items.DIAMOND), 33, "Item conservation survives removal/rejoin");
-                    helper.succeed();
-                });
-            });
+            }).thenExecuteAfter(25, () -> {
+                helper.assertValueEqual(source.tank.amount, 0L, "Rejoining the loaded fluid component resumes transfer");
+                helper.assertValueEqual(target.tank.amount, mb(1_300), "No fluid was trapped or lost in the disconnected conduit");
+                helper.assertValueEqual(count(source.items, Items.DIAMOND) + count(target.items, Items.DIAMOND), 33, "Item conservation survives removal/rejoin");
+            }).thenSucceed();
         });
     }
 

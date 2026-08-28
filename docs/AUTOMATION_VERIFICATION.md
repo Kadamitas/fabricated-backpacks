@@ -146,6 +146,19 @@ e9d69b4b242507035265d9e0c405a87428bc236ca24218c0a4ff469324dffd08
 No rendered-client or manual receipt was created for this correction. The
 earlier client observations remain tied to their original checkpoint.
 
+CI exposed a timing assumption in the lane-isolation fixture: one run had
+delivered 32 of 33 items at its fixed 45-tick checkpoint while the other run
+passed. That scenario now uses the native test sequence to await exact item
+and energy completion within its unchanged 160-tick timeout before reconnecting
+fluid. It retains every quantity and conservation assertion; the separate
+same-tick forwarding and bandwidth checks are unchanged.
+
+The resulting fresh epoch `4c83e554-a2a1-46e1-8c4a-365a59e6358c` again passed
+494 unit and 170 server tests in 54 seconds, with unit PID 8920. Log:
+`build/automation-verification-grounded-15.log`; scoped audit:
+`build/verification/grounded-conduits-fair-wait.json`. The production JAR hash
+remains the value above because this follow-up changes only tests and documentation.
+
 ## Focused commands
 
 ```powershell
