@@ -5,6 +5,7 @@ import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal;
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal.Node;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
+import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
@@ -23,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -62,7 +64,13 @@ final class TraversalResources {
     static EnergyStorage energy(BagInventory root) { return energy(root, () -> true, NO_CHANGE); }
 
     static EnergyStorage energy(BagInventory root, BooleanSupplier available, Runnable changed) {
-        return new DynamicEnergy(root, available, changed);
+        return new DynamicEnergy(root, available, changed, false,
+                (node, upgrade) -> new BackpackBattery(node.inventory(), upgrade));
+    }
+
+    static EnergyStorage externalEnergy(BagInventory root, BooleanSupplier available, Runnable changed,
+                                        BiFunction<Node, InstalledUpgrade, EnergyStorage> batteries) {
+        return new DynamicEnergy(root, available, changed, true, batteries);
     }
 
     private static boolean live(BagInventory root, Node node, BooleanSupplier available) {
@@ -130,6 +138,15 @@ final class TraversalResources {
                     .map(node -> new Part<>(node, factory.apply(node), new Persist(node, changed, root))).toList();
         }
 
+        @Override public boolean supportsInsertion() {
+            // Item admission has its own filter/void policy; only fluid ports derive support from their tanks.
+            return itemStorage || parts(false).stream().anyMatch(part -> part.storage.supportsInsertion());
+        }
+
+        @Override public boolean supportsExtraction() {
+            return itemStorage || parts(false).stream().anyMatch(part -> part.storage.supportsExtraction());
+        }
+
         @Override public long insert(T resource, long maximum, TransactionContext transaction) {
             StoragePreconditions.notBlankNotNegative(resource, maximum);
             if (maximum == 0 || !acceptsInput.test(resource)) return 0;
@@ -168,6 +185,12 @@ final class TraversalResources {
                         return live(root, part.node, available)
                                 && !(BackpackTraversal.usesChildren(root) && carrier(leaf.getResource()));
                     }
+                    @Override public boolean supportsInsertion() {
+                        return itemStorage || visible() && leaf instanceof Storage<?> storage && storage.supportsInsertion();
+                    }
+                    @Override public boolean supportsExtraction() {
+                        return itemStorage || visible() && leaf instanceof Storage<?> storage && storage.supportsExtraction();
+                    }
                     @Override public boolean isResourceBlank() { return getResource().isBlank(); }
                     @Override public T getResource() { return visible() ? leaf.getResource() : blank.get(); }
                     @Override public long getAmount() { return visible() ? leaf.getAmount() : 0; }
@@ -193,8 +216,9 @@ final class TraversalResources {
         }
     }
 
-    private record DynamicEnergy(BagInventory root, BooleanSupplier available, Runnable changed) implements EnergyStorage {
-        private record Part(Node node, BackpackBattery battery, Persist persistence) {}
+    private record DynamicEnergy(BagInventory root, BooleanSupplier available, Runnable changed, boolean external,
+                                 BiFunction<Node, InstalledUpgrade, EnergyStorage> batteries) implements EnergyStorage {
+        private record Part(Node node, InstalledUpgrade upgrade, EnergyStorage battery, Persist persistence) {}
 
         private List<Part> parts() {
             if (!available.getAsBoolean()) return List.of();
@@ -202,10 +226,21 @@ final class TraversalResources {
             for (Node node : BackpackTraversal.inventoryBags(root)) {
                 if (!live(root, node, available)) continue;
                 for (var upgrade : node.inventory().installedUpgrades()) if (upgrade.kind() == UpgradeKind.BATTERY) {
-                    parts.add(new Part(node, new BackpackBattery(node.inventory(), upgrade), new Persist(node, changed)));
+                    parts.add(new Part(node, upgrade, batteries.apply(node, upgrade), new Persist(node, changed)));
                 }
             }
             return parts;
+        }
+
+        private boolean output(Part part) {
+            return !external || part.node.inventory().settings(part.upgrade).getBooleanOr("external_output", true);
+        }
+
+        @Override public boolean supportsInsertion() {
+            return parts().stream().anyMatch(part -> part.battery.getCapacity() > 0 && part.battery.supportsInsertion());
+        }
+        @Override public boolean supportsExtraction() {
+            return parts().stream().anyMatch(part -> output(part) && part.battery.getCapacity() > 0 && part.battery.supportsExtraction());
         }
 
         @Override public long getAmount() {
@@ -235,7 +270,7 @@ final class TraversalResources {
             if (maximum == 0) return 0;
             long extracted = 0;
             for (Part part : parts()) {
-                if (!live(root, part.node, available)) continue;
+                if (!live(root, part.node, available) || !output(part)) continue;
                 part.persistence.prepare(transaction);
                 extracted += part.battery.extract(maximum - extracted, transaction);
                 if (extracted == maximum) break;

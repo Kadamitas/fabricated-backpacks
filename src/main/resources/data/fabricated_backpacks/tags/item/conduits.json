@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "fabricated_backpacks:item_conduit",
+    "fabricated_backpacks:fluid_conduit",
+    "fabricated_backpacks:energy_conduit"
+  ]
+}

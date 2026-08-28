@@ -28,6 +28,37 @@ final class VoidFluidStorage implements Storage<FluidVariant> {
         this.available = available;
     }
 
+    @Override public boolean supportsInsertion() {
+        if (!available.getAsBoolean()) return false;
+        if (storage.supportsInsertion()) return true;
+        for (InstalledUpgrade upgrade : bag.installedUpgrades()) {
+            if (!upgrade.kind().family().equals("void") || !UpgradeFilters.enabled(bag, upgrade)) continue;
+            String policy = UpgradeEngine.voidMode(bag.settings(upgrade));
+            String filter = bag.settings(upgrade).getStringOr("filter_mode", "ALLOW");
+            if (policy.equals("SLOT_OVERFLOW") || filter.equals("CONTENTS")) {
+                // Slot overflow requires a stored representation, even when the filter names a fluid.
+                for (var view : storage) if (view.getAmount() > 0 && !view.isResourceBlank()
+                        && matches(upgrade, view.getResource())) return true;
+            } else if (filter.equals("BLOCK") || hasSelectedFluid(upgrade)) return true;
+        }
+        return false;
+    }
+
+    @Override public boolean supportsExtraction() {
+        return available.getAsBoolean() && storage.supportsExtraction();
+    }
+
+    private boolean hasSelectedFluid(InstalledUpgrade upgrade) {
+        if (upgrade.stack().getOrDefault(ResourceComponents.VOID_FLUID_FILTERS, List.<FluidVariant>of()).stream()
+                .limit(ResourceComponents.MAX_FLUID_FILTERS).anyMatch(fluid -> !fluid.isBlank())) return true;
+        for (var ghost : bag.filterItems(upgrade)) {
+            Storage<FluidVariant> contained = ContainerItemContext.withConstant(ghost.copyWithCount(1)).find(FluidStorage.ITEM);
+            if (contained == null) continue;
+            for (var view : contained) if (view.getAmount() > 0 && !view.isResourceBlank()) return true;
+        }
+        return false;
+    }
+
     @Override public long insert(FluidVariant resource, long maximum, TransactionContext transaction) {
         StoragePreconditions.notBlankNotNegative(resource, maximum);
         if (maximum == 0 || !available.getAsBoolean()) return 0;

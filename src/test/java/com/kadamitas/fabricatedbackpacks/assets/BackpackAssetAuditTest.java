@@ -57,7 +57,7 @@ class BackpackAssetAuditTest {
             }
         }
         Set<String> expected = registeredItems();
-        assertEquals(71, expected.size());
+        assertEquals(76, expected.size());
         try (Stream<Path> files = Files.list(ASSETS.resolve("items"))) {
             Set<String> actual = new HashSet<>();
             files.forEach(path -> actual.add(path.getFileName().toString().replace(".json", "")));
@@ -70,7 +70,7 @@ class BackpackAssetAuditTest {
     void generatedFilesAndTheirInputsMatchManifestHashes() throws Exception {
         JsonObject manifest = json(ASSETS.resolve("asset_manifest.json"));
         assertEquals("MIT", manifest.get("license").getAsString());
-        assertEquals(71, manifest.get("registered_item_count").getAsInt());
+        assertEquals(76, manifest.get("registered_item_count").getAsInt());
         for (Map.Entry<String, JsonElement> entry : manifest.getAsJsonObject("files").entrySet()) {
             Path path = RESOURCES.resolve(entry.getKey()).normalize();
             assertTrue(path.startsWith(RESOURCES), "Manifest cannot escape resources: " + entry.getKey());
@@ -250,12 +250,13 @@ class BackpackAssetAuditTest {
                 if (relative.startsWith("textures/item/")) {
                     itemTextures++;
                     assertEquals(0, image.getRGB(0, 0) >>> 24);
-                    assertTrue(occupied > 130 && occupied < 230, relative + " bad icon silhouette");
+                    assertTrue(relative.endsWith("/conduit_wrench.png") ? occupied > 35 && occupied < 100 : occupied > 130 && occupied < 230,
+                            relative + " bad icon silhouette");
                     assertTrue(iconHashes.add(sha256(path)), relative + " duplicates another upgrade icon");
                 }
             }
         }
-        assertEquals(65, itemTextures);
+        assertEquals(66, itemTextures);
     }
 
     @Test
@@ -288,7 +289,8 @@ class BackpackAssetAuditTest {
                 assertTrue(result.startsWith(NAMESPACE + ":"));
                 String resultItem = result.substring(NAMESPACE.length() + 1);
                 assertTrue(allItems.contains(resultItem), file.toString());
-                assertEquals(1, recipe.getAsJsonObject("result").get("count").getAsInt());
+                assertEquals(Set.of("item_conduit", "fluid_conduit", "energy_conduit").contains(resultItem) ? 8 : 1,
+                        recipe.getAsJsonObject("result").get("count").getAsInt());
                 craftable.add(resultItem);
                 if (TIERS.contains(resultItem) && !resultItem.equals("backpack")) {
                     assertEquals(NAMESPACE + (resultItem.equals("netherite_backpack") ? ":backpack_smithing" : ":backpack_upgrade"), recipe.get("type").getAsString());
@@ -540,6 +542,7 @@ class BackpackAssetAuditTest {
 
     private static Set<String> registeredItems() {
         Set<String> items = new LinkedHashSet<>(TIERS);
+        items.addAll(List.of("item_conduit", "fluid_conduit", "energy_conduit", "steam_engine", "conduit_wrench"));
         items.add("upgrade_base");
         Arrays.stream(UpgradeKind.values()).map(UpgradeKind::id).forEach(items::add);
         for (int from = 0; from < 4; from++) {
@@ -560,7 +563,7 @@ class BackpackAssetAuditTest {
 
     private static JsonObject resolveModel(String reference, Set<String> visited) throws IOException {
         if (!visited.add(reference)) throw new IllegalArgumentException("Model parent cycle: " + reference);
-        if (reference.equals("minecraft:item/generated")) return new JsonObject();
+        if (reference.equals("minecraft:item/generated") || reference.equals("minecraft:item/handheld")) return new JsonObject();
         if (!reference.startsWith(NAMESPACE + ":")) throw new IllegalArgumentException("Unsupported model namespace: " + reference);
         JsonObject model = json(ASSETS.resolve("models/" + reference.substring(NAMESPACE.length() + 1) + ".json"));
         if (!model.has("parent")) return model;

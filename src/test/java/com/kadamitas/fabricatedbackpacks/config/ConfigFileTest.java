@@ -72,4 +72,19 @@ class ConfigFileTest {
     @Test void oversizedConfigIsRejectedBeforeParsing() {
         assertThrows(IllegalArgumentException.class, () -> ConfigFile.decode(" ".repeat(1_048_577)));
     }
+
+    @Test void automationPartialOverridesRetainExistingRulesAndExactLongCapacities() {
+        ServerConfig legacy = ConfigFile.decode("{\"upgrades\":{\"allowAlwaysVoid\":false}}");
+        assertEquals(AutomationConfig.defaults(), legacy.automation());
+        ServerConfig changed = ConfigFile.decode("""
+                {"automation":{"engine":{"energyCapacity":1000000000000,"energyOutputPerTick":123456789},
+                  "conduits":{"itemsPerOperation":3,"maximumEndpointVisitsPerTick":1}}}
+                """);
+        assertEquals(1_000_000_000_000L, changed.automation().engine().energyCapacity());
+        assertEquals(123_456_789, changed.automation().engine().energyOutputPerTick());
+        assertEquals(3, changed.automation().conduits().itemsPerOperation());
+        assertEquals(AutomationConfig.Engine.defaults().waterCapacityMb(), changed.automation().engine().waterCapacityMb());
+        assertEquals(ServerConfig.defaults().upgrades(), changed.upgrades());
+        assertEquals(changed, ConfigFile.decode(ConfigFile.encode(changed)));
+    }
 }

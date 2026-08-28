@@ -58,6 +58,7 @@ public final class FluidVoidGameTests {
     }
 
     public static void fluidVoidFiltersAndModes(GameTestHelper helper) {
+        voidOnlyCapabilities(helper);
         BagInventory bag = target();
         BackpackTank physical = tank(bag, 0);
         Storage<FluidVariant> admission = ResourceRuntime.tankStorage(bag, 0, false);
@@ -100,6 +101,68 @@ public final class FluidVoidGameTests {
         helper.assertValueEqual(insert(admission, LAVA, 53), 0L, "A disabled void filter cannot bypass a tank's mixed-fluid rejection");
         helper.assertValueEqual(physical.getAmount(), 43L, "Disabling the upgrade preserves stored resources");
         helper.succeed();
+    }
+
+    private static void voidOnlyCapabilities(GameTestHelper helper) {
+        BagInventory bag = bag(BackpackTier.NETHERITE, UpgradeKind.ADVANCED_VOID);
+        Storage<FluidVariant> port = ResourceRuntime.fluidStorage(bag);
+        mode(bag, 0, "ALWAYS");
+        helper.assertFalse(port.supportsInsertion() || port.supportsExtraction(), "An empty allow list and no tank advertise no fluid capability");
+        helper.assertValueEqual(insert(port, WATER, 13), 0L, "An empty allow list cannot erase fluid without storage");
+        bag.setFilter(upgrade(bag, 0), 0, new ItemStack(Items.APPLE));
+        helper.assertFalse(port.supportsInsertion(), "A non-fluid item ghost does not advertise void-fluid admission");
+        bag.setFilter(upgrade(bag, 0), 0, new ItemStack(Items.WATER_BUCKET));
+        helper.assertTrue(port.supportsInsertion() && !port.supportsExtraction(), "A matched container ghost advertises an input-only void endpoint");
+        helper.assertValueEqual(insert(port, WATER, 17), 17L, "A void-only endpoint intentionally accepts its matched fluid");
+        helper.assertValueEqual(insert(port, LAVA, 17), 0L, "An input-only void endpoint still rejects unmatched fluid");
+        helper.assertFalse(port.iterator().hasNext(), "Void-only admission never fabricates a stored fluid view");
+        bag.setFilter(upgrade(bag, 0), 0, ItemStack.EMPTY);
+        ResourceRuntime.setFluidFilter(bag, 0, 0, WATER);
+        helper.assertTrue(port.supportsInsertion() && !port.supportsExtraction(), "Typed fluid filters also enable input-only void admission");
+        mode(bag, 0, "STORAGE_OVERFLOW");
+        helper.assertTrue(port.supportsInsertion(), "Storage overflow with an explicit match can dispose fluid when no tanks are installed");
+        helper.assertValueEqual(insert(port, WATER, 19), 19L, "No-storage overflow admission agrees with its advertised capability");
+        mode(bag, 0, "SLOT_OVERFLOW");
+        helper.assertFalse(port.supportsInsertion() || port.supportsExtraction(), "Slot overflow cannot advertise a fluid endpoint without a stored representation");
+        helper.assertValueEqual(insert(port, WATER, 23), 0L, "Slot overflow cannot create a representation by deleting the first fluid");
+        mode(bag, 0, "ALWAYS");
+        bag.updateSettings(upgrade(bag, 0), tag -> tag.putString("filter_mode", "CONTENTS"));
+        helper.assertFalse(port.supportsInsertion(), "Contents matching without tanks has no fluid to admit");
+        ResourceRuntime.setFluidFilter(bag, 0, 0, FluidVariant.blank());
+        bag.updateSettings(upgrade(bag, 0), tag -> tag.putString("filter_mode", "BLOCK"));
+        helper.assertTrue(port.supportsInsertion() && !port.supportsExtraction(), "An empty block list intentionally permits void-only insertion");
+        helper.assertValueEqual(insert(port, LAVA, 29), 29L, "Inverted void filters preserve their actual admission semantics");
+        bag.updateSettings(upgrade(bag, 0), tag -> tag.putBoolean("enabled", false));
+        helper.assertFalse(port.supportsInsertion() || port.supportsExtraction(), "Disabling the last void policy clears the cached fluid endpoint");
+        helper.assertValueEqual(insert(port, WATER, 31), 0L, "Disabled void admission preserves supplied resources");
+
+        mode(bag, 0, "ALWAYS");
+        ResourceRuntime.setFluidFilter(bag, 0, 0, WATER);
+        BagInventory source = bag(BackpackTier.IRON, UpgradeKind.TANK);
+        fill(tank(source, 0), WATER, 37);
+        ItemStack sourceBefore = source.stack().copy();
+        ItemStack destinationBefore = bag.stack().copy();
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(StorageUtil.move(tank(source, 0), port, fluid -> fluid.equals(WATER), 37, transaction),
+                    37L, "Advertised void-only admission participates in a real source transaction");
+        }
+        assertStack(helper, source.stack(), sourceBefore, "Aborted void-only transfer restores the exact source components");
+        assertStack(helper, bag.stack(), destinationBefore, "Aborted void-only transfer does not invent destination state");
+
+        BagInventory parent = bag(BackpackTier.NETHERITE, UpgradeKind.INCEPTION);
+        parent.setItem(0, bag.stack());
+        Storage<FluidVariant> nested = ResourceRuntime.fluidStorage(parent);
+        helper.assertTrue(nested.supportsInsertion() && !nested.supportsExtraction(), "An eligible nested void policy contributes only insertion support");
+        parent.updateSettings(tag -> tag.putBoolean("inception_outer_inventory", false));
+        helper.assertFalse(nested.supportsInsertion() || nested.supportsExtraction(), "Disabling child access clears cached nested capabilities immediately");
+        parent.updateSettings(tag -> tag.putBoolean("inception_outer_inventory", true));
+        BagInventory child = BagInventory.of(parent.getItem(0));
+        child.updateSettings(upgrade(child, 0), tag -> tag.putBoolean("enabled", false));
+        child.upgrades().setItem(1, new ItemStack(BackpackRegistry.item(UpgradeKind.TANK)));
+        parent.save();
+        helper.assertTrue(nested.supportsInsertion() && nested.supportsExtraction(), "An empty nested tank contributes both real fluid capabilities");
+        parent.setItem(0, ItemStack.EMPTY);
+        helper.assertFalse(nested.supportsInsertion() || nested.supportsExtraction(), "Removing the child invalidates its aggregate fluid capability");
     }
 
     public static void fluidVoidOverflowAndRollback(GameTestHelper helper) {

@@ -1,0 +1,159 @@
+{
+  "ambientocclusion": true,
+  "textures": {
+    "tube": "fabricated_backpacks:block/automation/item_tube",
+    "collar": "fabricated_backpacks:block/automation/item_collar",
+    "particle": "fabricated_backpacks:block/automation/item_tube",
+    "item_tube": "fabricated_backpacks:block/automation/item_tube",
+    "item_collar": "fabricated_backpacks:block/automation/item_collar",
+    "item_endpoint": "fabricated_backpacks:block/automation/item_endpoint",
+    "item_endpoint_insert": "fabricated_backpacks:block/automation/item_endpoint_insert",
+    "item_endpoint_extract": "fabricated_backpacks:block/automation/item_endpoint_extract",
+    "item_endpoint_both": "fabricated_backpacks:block/automation/item_endpoint_both",
+    "fluid_tube": "fabricated_backpacks:block/automation/fluid_tube",
+    "fluid_collar": "fabricated_backpacks:block/automation/fluid_collar",
+    "fluid_endpoint": "fabricated_backpacks:block/automation/fluid_endpoint",
+    "fluid_endpoint_insert": "fabricated_backpacks:block/automation/fluid_endpoint_insert",
+    "fluid_endpoint_extract": "fabricated_backpacks:block/automation/fluid_endpoint_extract",
+    "fluid_endpoint_both": "fabricated_backpacks:block/automation/fluid_endpoint_both",
+    "energy_tube": "fabricated_backpacks:block/automation/energy_tube",
+    "energy_collar": "fabricated_backpacks:block/automation/energy_collar",
+    "energy_endpoint": "fabricated_backpacks:block/automation/energy_endpoint",
+    "energy_endpoint_insert": "fabricated_backpacks:block/automation/energy_endpoint_insert",
+    "energy_endpoint_extract": "fabricated_backpacks:block/automation/energy_endpoint_extract",
+    "energy_endpoint_both": "fabricated_backpacks:block/automation/energy_endpoint_both"
+  },
+  "display": {
+    "gui": {
+      "rotation": [
+        28,
+        225,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        3,
+        0
+      ],
+      "scale": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        0,
+        90,
+        0
+      ],
+      "scale": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        0,
+        45,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ]
+    },
+    "firstperson_lefthand": {
+      "rotation": [
+        0,
+        225,
+        0
+      ],
+      "scale": [
+        0.4,
+        0.4,
+        0.4
+      ]
+    }
+  },
+  "elements": [
+    {
+      "name": "unloaded_core",
+      "from": [
+        6.25,
+        6.25,
+        6.25
+      ],
+      "to": [
+        9.75,
+        9.75,
+        9.75
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#collar"
+        },
+        "south": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#collar"
+        },
+        "east": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#collar"
+        },
+        "west": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#collar"
+        },
+        "up": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#collar"
+        },
+        "down": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#collar"
+        }
+      }
+    }
+  ]
+}

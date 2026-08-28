@@ -29,6 +29,99 @@ final class ClientAcceptanceFiles {
         invalidate("full-pass.json", "restart-pass.json");
     }
 
+    /** Focused revision acceptance; deliberately does not claim the full backpack walkthrough ran. */
+    static void automation(ClientGameTestContext context) {
+        invalidate("automation-pass.json", "automation-restart-pass.json");
+        try {
+            TestWorldSave save;
+            CompoundTag expected;
+            var checks = new java.util.ArrayList<String>();
+            try (var world = context.worldBuilder().create()) {
+                save = world.getWorldSave();
+                world.getServer().runCommand("time set day");
+                world.getServer().runCommand("weather clear");
+                world.getServer().runOnServer(server -> world.getConnection().getServerPlayer()
+                        .setGameMode(net.minecraft.world.level.GameType.SURVIVAL));
+                world.getConnection().waitForChunksRender();
+                checks.addAll(AutomationClientAcceptance.run(context, world));
+                checks.addAll(ConduitFilterClientAcceptance.run(context, world));
+                expected = automationSnapshot(world);
+            }
+            try (var reopened = save.open()) {
+                reopened.getConnection().waitForChunksRender();
+                context.waitTicks(5);
+                AutomationClientAcceptance.verifyReload(reopened, expected.getCompoundOrEmpty("automation"));
+                ConduitFilterClientAcceptance.verifyReload(reopened, expected.getCompoundOrEmpty("filters"));
+                AutomationClientAcceptance.resumeRoutingAfterReload(reopened);
+                ConduitFilterClientAcceptance.resumeAfterReload(reopened);
+                AutomationClientAcceptance.captureReload(context, reopened, "automation-same-jvm-reopened-network");
+                expected = automationSnapshot(reopened);
+            }
+            checks.add("World save/reopen: exact engine inventory, resources, unfinished work and side flags; all conduit types and modes; rebuilt network transfers one new item and resumes generation.");
+            checks.add("Filtered backpack world save/reopen: exact contents and per-face policies; rebuilt routes admit fresh gold/lava and retain blocked cobble/water.");
+            copyTree(save.getSaveDirectory(), ROOT.resolve("automation-world"));
+            Files.writeString(ROOT.resolve("automation-expected.snbt"), expected.toString());
+            copyTree(Path.of("screenshots"), ROOT.resolve("automation-screenshots"));
+            var proof = new com.google.gson.JsonObject();
+            proof.addProperty("scope", "automation");
+            proof.addProperty("passed", true);
+            proof.addProperty("pid", ProcessHandle.current().pid());
+            proof.addProperty("recorded_at", System.currentTimeMillis());
+            proof.add("checks", new com.google.gson.Gson().toJsonTree(checks));
+            Files.writeString(ROOT.resolve("automation-pass.json"), proof.toString());
+            System.out.println("FABRICATED_BACKPACKS_AUTOMATION_ACCEPTANCE_PASS " + ROOT);
+        } catch (Exception exception) { throw new AssertionError("Focused automation acceptance failed", exception); }
+    }
+
+    private static CompoundTag automationSnapshot(TestSingleplayerContext world) {
+        return world.getServer().computeOnServer(server -> {
+            var player = world.getConnection().getServerPlayer();
+            var expected = new CompoundTag();
+            expected.putString("player", player.getUUID().toString());
+            expected.putLong("writer_pid", ProcessHandle.current().pid());
+            expected.put("automation", AutomationClientAcceptance.snapshot(player.level()));
+            expected.put("filters", ConduitFilterClientAcceptance.snapshot(player.level()));
+            return expected;
+        });
+    }
+
+    static void restartAutomation(ClientGameTestContext context) {
+        invalidate("automation-restart-pass.json");
+        try {
+            CompoundTag expected = TagParser.parseCompoundFully(Files.readString(ROOT.resolve("automation-expected.snbt")));
+            BackpackClientGameTests.check(expected.getLongOr("writer_pid", -1) != ProcessHandle.current().pid(),
+                    "Automation restart requires a different Minecraft JVM");
+            TestWorldSave placeholder;
+            try (var created = context.worldBuilder().create()) { placeholder = created.getWorldSave(); }
+            copyTree(ROOT.resolve("automation-world"), placeholder.getSaveDirectory());
+            try (var reopened = placeholder.open()) {
+                reopened.getConnection().waitForChunksRender();
+                context.waitTicks(5);
+                BackpackClientGameTests.check(reopened.getServer().computeOnServer(server ->
+                                reopened.getConnection().getServerPlayer().getUUID().toString()).equals(expected.getStringOr("player", "")),
+                        "The same saved profile reconnects in the new JVM");
+                AutomationClientAcceptance.verifyReload(reopened, expected.getCompoundOrEmpty("automation"));
+                ConduitFilterClientAcceptance.verifyReload(reopened, expected.getCompoundOrEmpty("filters"));
+                AutomationClientAcceptance.resumeRoutingAfterReload(reopened);
+                ConduitFilterClientAcceptance.resumeAfterReload(reopened);
+                AutomationClientAcceptance.captureReload(context, reopened, "automation-separate-jvm-reopened-network");
+            }
+            copyTree(Path.of("screenshots"), ROOT.resolve("automation-restart-screenshots"));
+            var proof = new com.google.gson.JsonObject();
+            proof.addProperty("scope", "automation");
+            proof.addProperty("passed", true);
+            proof.addProperty("writer_pid", expected.getLongOr("writer_pid", -1));
+            proof.addProperty("reader_pid", ProcessHandle.current().pid());
+            proof.addProperty("recorded_at", System.currentTimeMillis());
+            proof.add("checks", new com.google.gson.Gson().toJsonTree(List.of(
+                    "Separate-JVM exact block/entity state and saved-profile equality.",
+                    "The rebuilt conduit network routes one fresh item and the saved engine resumes generation.",
+                    "Exact filtered backpack state survives restart; fresh gold/lava pass while saved cobble/water remain blocked.")));
+            Files.writeString(ROOT.resolve("automation-restart-pass.json"), proof.toString());
+            System.out.println("FABRICATED_BACKPACKS_AUTOMATION_RESTART_PASS " + ROOT);
+        } catch (Exception exception) { throw new AssertionError("Focused automation JVM restart failed", exception); }
+    }
+
     private static void invalidate(String... names) {
         try {
             Files.createDirectories(ROOT);
@@ -45,6 +138,7 @@ final class ClientAcceptanceFiles {
             tag.put("equipment", ItemStack.OPTIONAL_CODEC.encodeStart(ops, BackpackEquipment.get(player)).getOrThrow());
             tag.putString("player", player.getUUID().toString());
             tag.putLong("writer_pid", ProcessHandle.current().pid());
+            tag.put("automation", AutomationClientAcceptance.snapshot(player.level()));
             return tag;
         });
     }
@@ -77,6 +171,8 @@ final class ClientAcceptanceFiles {
             try (var reopened = placeholder.open()) {
                 reopened.getConnection().waitForChunksRender();
                 context.waitTicks(5);
+                AutomationClientAcceptance.verifyReload(reopened, expected.getCompoundOrEmpty("automation"));
+                AutomationClientAcceptance.resumeRoutingAfterReload(reopened);
                 reopened.getServer().runOnServer(server -> {
                     var player = reopened.getConnection().getServerPlayer();
                     var ops = RegistryOps.create(NbtOps.INSTANCE, player.registryAccess());
@@ -115,7 +211,9 @@ final class ClientAcceptanceFiles {
         Path to = destination.toAbsolutePath().normalize();
         Path saves = FabricLoader.getInstance().getGameDir().toAbsolutePath().normalize().resolve("saves");
         boolean archive = to.equals(ROOT.resolve("restart-world")) || to.equals(ROOT.resolve("full-screenshots"))
-                || to.equals(ROOT.resolve("restart-screenshots"));
+                || to.equals(ROOT.resolve("restart-screenshots")) || to.equals(ROOT.resolve("automation-world"))
+                || to.equals(ROOT.resolve("automation-screenshots")) || to.equals(ROOT.resolve("automation-restart-screenshots"))
+                || to.equals(ROOT.resolve("automation-jei-screenshots"));
         if ((!archive && (!to.startsWith(saves) || to.equals(saves)))
                 || from.equals(to) || to.startsWith(from) || from.startsWith(to)
                 || Files.isSymbolicLink(from) || Files.isSymbolicLink(to))

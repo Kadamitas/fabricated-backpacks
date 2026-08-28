@@ -1,6 +1,7 @@
 package com.kadamitas.fabricatedbackpacks;
 
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
+import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
 import com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment;
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackRuntime;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenus;
@@ -34,11 +35,13 @@ public final class FabricatedBackpacks implements ModInitializer {
         com.kadamitas.fabricatedbackpacks.network.BackpackNetworking.initialize();
         com.kadamitas.fabricatedbackpacks.browser.RecipeBrowserServer.initialize();
         com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime.register();
+        AutomationRegistry.initialize();
         Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, BackpackRegistry.id("backpacks"),
                 CreativeModeTab.builder(CreativeModeTab.Row.TOP, 0).title(Component.literal("Fabricated Backpacks"))
                         .icon(() -> new ItemStack(BackpackRegistry.item(BackpackTier.DIAMOND)))
-                        .displayItems((parameters, output) -> BackpackRegistry.items().entrySet().stream()
+                        .displayItems((parameters, output) -> java.util.stream.Stream.concat(
+                                BackpackRegistry.items().entrySet().stream(), AutomationRegistry.items().entrySet().stream())
                                 .sorted(java.util.Map.Entry.comparingByKey()).forEach(entry -> output.accept(entry.getValue()))).build());
-        LOGGER.info("Fabricated Backpacks initialized with {} registered items", BackpackRegistry.items().size());
+        LOGGER.info("Fabricated Backpacks initialized with {} registered items", BackpackRegistry.items().size() + AutomationRegistry.items().size());
     }
 }

@@ -17,7 +17,10 @@ import java.util.stream.Collectors;
 public final class BackpackGameTests implements ModInitializer {
     private static final String STRUCTURE = "fabricated_backpacks_tests:platform";
 
-    @Override public void onInitialize() { ResourceGameTests.registerFixtures(); WorkstationGameTests.registerFixtures(); }
+    @Override public void onInitialize() {
+        ResourceGameTests.registerFixtures(); WorkstationGameTests.registerFixtures();
+        SteamEngineGameTests.registerFixtures(); ConduitGameTests.registerFixtures();
+    }
 
     @GameTest(structure = STRUCTURE)
     public void requiredTestDiscovery(GameTestHelper helper) {
@@ -26,7 +29,7 @@ public final class BackpackGameTests implements ModInitializer {
                 .map(BackpackGameTests::testId).collect(Collectors.toSet());
         Set<Identifier> discovered = helper.getLevel().registryAccess().lookupOrThrow(Registries.TEST_INSTANCE).keySet().stream()
                 .filter(id -> id.getNamespace().equals("fabricated_backpacks_tests")).collect(Collectors.toSet());
-        helper.assertTrue(expected.size() >= 135, "The required server suite is nonempty and contains every declared feature group");
+        helper.assertTrue(expected.size() >= 162, "The required server suite is nonempty and contains every declared feature group");
         var missing = new HashSet<>(expected);
         missing.removeAll(discovered);
         var unexpected = new HashSet<>(discovered);
@@ -66,9 +69,38 @@ public final class BackpackGameTests implements ModInitializer {
     @GameTest(structure = STRUCTURE) public void toolsAndAttackHooks(GameTestHelper helper) { UpgradeGameTests.toolsAndAttackHooks(helper); }
     @GameTest(structure = STRUCTURE, maxTicks = 100) public void toolModesAndDataRules(GameTestHelper helper) { UpgradeGameTests.toolModesAndDataRules(helper); }
 
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void steamGenerationAndPauses(GameTestHelper helper) { SteamEngineGameTests.generationAndPauses(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void steamFuelAndContainers(GameTestHelper helper) { SteamEngineGameTests.fuelAndContainerConservation(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void steamSidedTransactions(GameTestHelper helper) { SteamEngineGameTests.sidedTransactions(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void steamNeighborEnergyOutput(GameTestHelper helper) { SteamEngineGameTests.neighborEnergyOutput(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void steamPersistenceAndBreaks(GameTestHelper helper) { SteamEngineGameTests.persistenceAndBreaks(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void steamMenuAuthorityAndCounters(GameTestHelper helper) { SteamEngineGameTests.menuAuthorityAndCounters(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void steamSideConfigurationAndTransactions(GameTestHelper helper) { SteamEngineGameTests.sideConfigurationAndTransactions(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void steamSideMenuAuthority(GameTestHelper helper) { SteamEngineGameTests.sideMenuAuthority(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void steamSideOutputConnections(GameTestHelper helper) { SteamEngineGameTests.sideOutputConnections(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 160) public void conduitBundlingAndSurvivalDrops(GameTestHelper helper) { ConduitGameTests.bundlingAndSurvivalDrops(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 160) public void conduitIndependentLanesAndSides(GameTestHelper helper) { ConduitGameTests.independentLanesAndSides(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 240) public void conduitBranchedRoutingFairness(GameTestHelper helper) { ConduitGameTests.branchedRoutingFairness(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 160) public void conduitTransactionAbortAndReplacement(GameTestHelper helper) { ConduitGameTests.transactionAbortAndReplacement(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 160) public void conduitSplitModesAndChunkBoundaries(GameTestHelper helper) { ConduitGameTests.splitModesAndChunkBoundaries(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 160) public void conduitForwardingAndSharedBudgets(GameTestHelper helper) { ConduitGameTests.forwardingAndSharedBudgets(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 160) public void conduitRedstoneAndPersistedConfiguration(GameTestHelper helper) { ConduitGameTests.redstoneAndPersistedConfiguration(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void conduitSourceCursorLifecycle(GameTestHelper helper) { ConduitGameTests.sourceCursorLifecycle(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void conduitReboundEndpointViews(GameTestHelper helper) { ConduitGameTests.reboundEndpointViews(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 80) public void conduitUnrelatedTopologyChanges(GameTestHelper helper) { ConduitGameTests.unrelatedTopologyChanges(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 200) public void conduitSeparateSidedEnergyStorage(GameTestHelper helper) { ConduitGameTests.separateSidedEnergyStorage(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 200) public void conduitBackpackFilteredRouting(GameTestHelper helper) { ConduitGameTests.backpackFilteredRouting(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void conduitBackpackFilteredTransactions(GameTestHelper helper) { ConduitGameTests.backpackFilteredTransactions(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 200) public void conduitBackpackFilterPersistence(GameTestHelper helper) { ConduitGameTests.backpackFilterPersistence(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 80) public void conduitFilterMenuAuthority(GameTestHelper helper) { ConduitFilterGameTests.menuAuthority(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 20) public void conduitFilterPersistenceAndViewers(GameTestHelper helper) { ConduitFilterGameTests.persistedPolicyValidationAndViewerState(helper); }
+
     @GameTest(structure = STRUCTURE) public void tankTransactions(GameTestHelper helper) { ResourceGameTests.tankTransactions(helper); }
     @GameTest(structure = STRUCTURE) public void tankPersistenceAndCapacity(GameTestHelper helper) { ResourceGameTests.tankPersistenceAndCapacity(helper); }
     @GameTest(structure = STRUCTURE) public void itemApiTransactions(GameTestHelper helper) { ResourceGameTests.itemApiTransactions(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void sharedItemAndEquipmentApis(GameTestHelper helper) { ResourceGameTests.sharedItemAndEquipmentApis(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void sidedResourceTransactions(GameTestHelper helper) { ResourceGameTests.sidedResourceTransactions(helper); }
+    @GameTest(structure = STRUCTURE, maxTicks = 100) public void placedEnergyOutput(GameTestHelper helper) { ResourceGameTests.placedEnergyOutput(helper); }
     @GameTest(structure = STRUCTURE, maxTicks = 100) public void containerTransfers(GameTestHelper helper) { ResourceGameTests.containerTransfers(helper); }
     @GameTest(structure = STRUCTURE) public void energyTransactions(GameTestHelper helper) { ResourceGameTests.energyTransactions(helper); }
     @GameTest(structure = STRUCTURE, maxTicks = 100) public void pumpHandlers(GameTestHelper helper) { ResourceGameTests.pumpHandlers(helper); }

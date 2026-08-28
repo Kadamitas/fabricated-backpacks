@@ -272,19 +272,21 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         controlPage = Math.min(controlPage, pageCount - 1);
         for (int i = 0; i < visible && controlPage * visible + i < actions.size(); i++) {
             String action = actions.get(controlPage * visible + i);
-            Button button = icon(UpgradeControls.label(action), panel.x() + 6 + i % panel.controlColumns() * 18,
-                    panel.controlsY() + i / panel.controlColumns() * 18, actionIcon(action),
+            var settings = action.startsWith("inception_") ? menu.preferences() : menu.bag().settings(upgrade);
+            var presentation = UpgradeControls.presentation(action, upgrade.kind(), settings);
+            BackpackIconButton button = icon(presentation.label(), panel.x() + 6 + i % panel.controlColumns() * 18,
+                    panel.controlsY() + i / panel.controlColumns() * 18, 16, presentation.icon(),
                     () -> {
                         if (action.equals("tags") || action.equals("input_tags")) minecraft.gui.setScreen(new FilterTagsScreen(this, action.equals("input_tags")));
                         else if (action.equals("fluids")) minecraft.gui.setScreen(new VoidFluidFiltersScreen(this));
                         else if (action.equals("slot_rules")) minecraft.gui.setScreen(new SlotRulesScreen(this, upgrade));
                         else send(action.startsWith("inception_") ? "setting" : "upgrade", 0, 0, action);
                     });
-            button.setTooltip(Tooltip.create(Component.literal(UpgradeControls.label(action))));
+            button.setSelected(presentation.selected());
             optionButtons.add(new OptionButton(action, button));
         }
         if (pageCount > 1) icon("More " + (controlPage + 1) + "/" + pageCount,
-                panel.x() + panel.width() - 23, panel.controlsPageY(), Icon.NEXT,
+                panel.x() + panel.width() - 23, panel.controlsPageY(), panel.furnaceLayout() ? Icon.GEAR : Icon.NEXT,
                 () -> { controlPage = (controlPage + 1) % pageCount; rebuildWidgets(); });
     }
     private Panel layoutPanel(InstalledUpgrade upgrade) {
@@ -339,7 +341,9 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         int width = panelWidth();
         int columns = Math.max(1, (width - 12) / 18);
         int actionCount = UpgradeControls.actions(menu.bag(), upgrade).size();
-        boolean inlineControlPage = upgrade.kind().family().equals("cooking") && columns > 1 && actionCount > columns;
+        boolean cooking = upgrade.kind().family().equals("cooking");
+        boolean furnaceControlPage = cooking && furnaceLayout;
+        boolean inlineControlPage = cooking && !furnaceControlPage && columns > 1 && actionCount > columns;
         int controlRows = Math.min(maxControlRows, Math.ceilDiv(actionCount, columns));
         int controlsPerPage = Math.max(1, maxControlRows * columns - (inlineControlPage ? 1 : 0));
         boolean inventoryPages = !upgrade.kind().family().equals("cooking")
@@ -349,7 +353,6 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         boolean fuelPages = fuelFilters > Math.max(1, fuelRows) * filterColumns(upgrade);
         boolean controlPages = actionCount > controlsPerPage;
         boolean jukebox = upgrade.kind().family().equals("jukebox");
-        boolean cooking = upgrade.kind().family().equals("cooking");
         int y = 24;
         int inventoryY = y, filterY = y, fuelY = y, controlsY = y;
         int inventoryPageY = y, filterPageY = y, fuelPageY = y, controlsPageY = y;
@@ -368,7 +371,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
             controlsY = y;
             y += controlRows * 18 + 4;
             controlsPageY = inlineControlPage ? controlsY : y;
-            if (controlPages && !inlineControlPage) y += 16;
+            if (controlPages && !inlineControlPage && !furnaceControlPage) y += 16;
         }
         if (filterRows > 0) {
             filterY = y;
@@ -382,6 +385,8 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
             inventoryPageY = y;
             if (inventoryPages) y += 16;
         }
+        // The furnace has a free square below its result; keep paging out of the four filter controls.
+        if (furnaceControlPage) controlsPageY = inventoryY + 38;
         if (fuelRows > 0) {
             fuelY = y;
             y += fuelRows * 18 + 4;
@@ -394,26 +399,6 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
                 inventoryPageY, controlsPageY, inventoryRows, columns, controlsPerPage, furnaceLayout);
     }
 
-    private static Icon actionIcon(String action) {
-        return switch (action) {
-            case "play" -> Icon.PLAY;
-            case "stop" -> Icon.STOP;
-            case "previous" -> Icon.PREVIOUS;
-            case "next" -> Icon.NEXT;
-            case "shuffle" -> Icon.SHUFFLE;
-            case "repeat" -> Icon.REPEAT;
-            case "toggle", "mending" -> Icon.POWER;
-            case "container", "store", "take", "store_all", "take_all" -> Icon.TRANSFER;
-            case "tags", "input_tags", "tag_match", "input_tag_match" -> Icon.TAG;
-            case "match_damage", "input_match_damage" -> Icon.DAMAGE;
-            case "match_components", "input_match_components" -> Icon.COMPONENTS;
-            case "direction", "filter_direction" -> Icon.DIRECTION;
-            case "target_up", "levels_up" -> Icon.PLUS;
-            case "target_down", "levels_down" -> Icon.MINUS;
-            case "slot_rules" -> Icon.MEMORY;
-            default -> Icon.FILTER;
-        };
-    }
     private int auxiliaryPageSize(InstalledUpgrade upgrade) {
         return upgrade.kind().family().equals("cooking") ? 3 : inventoryColumns(upgrade) * Math.max(1, panel.inventoryRows());
     }
@@ -831,15 +816,10 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
             var settings = menu.bag().settings(upgrade);
             for (OptionButton option : optionButtons) {
                 var optionSettings = option.action().startsWith("inception_") ? menu.preferences() : settings;
-                String key = option.action().equals("toggle") ? "enabled" : option.action();
-                String value = optionSettings.getStringOr(key, "");
-                boolean booleanOption = optionSettings.getBoolean(key).isPresent() || key.equals("enabled") || key.startsWith("inception_")
-                        || key.equals("alchemy_all_missing") || key.startsWith("alchemy_match_");
-                if (booleanOption) value = optionSettings.getBooleanOr(key, true) ? "On" : "Off";
-                String label = UpgradeControls.label(option.action()) + (value.isEmpty() ? "" : ": " + value);
-                option.button().setMessage(Component.literal(label));
+                var presentation = UpgradeControls.presentation(option.action(), upgrade.kind(), optionSettings);
+                option.button().setMessage(Component.literal(presentation.label()));
                 if (option.button() instanceof BackpackIconButton button)
-                    button.setSelected(booleanOption && optionSettings.getBooleanOr(key, true));
+                    button.setIcon(presentation.icon()).setSelected(presentation.selected());
             }
         });
     }

@@ -53,6 +53,7 @@ final class BrowserClientIndex {
     int itemCount() { return items.size(); }
     int recipeCount() { return recipes.size(); }
     boolean building() { return !pendingItems.isEmpty() || !pendingRecipes.isEmpty(); }
+    boolean itemsBuilding() { return !pendingItems.isEmpty(); }
     long buildNanos() { return buildNanos; }
     long searchNanos() { return searchNanos; }
     List<BrowserRecipeView> allRecipes() { return List.copyOf(recipes); }

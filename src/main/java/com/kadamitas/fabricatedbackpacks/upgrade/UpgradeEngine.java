@@ -332,6 +332,7 @@ public final class UpgradeEngine {
             return true;
         }
         switch (action) {
+            case "external_output" -> { if (!upgrade.kind().family().equals("battery")) return false; toggle(bag, upgrade, action, true); }
             case "result_destination" -> { if (!Set.of("crafting", "stonecutter", "anvil", "smithing").contains(upgrade.kind().family())) return false; cycle(bag, upgrade, action, "STORAGE", "STORAGE", "PLAYER"); }
             case "grid_refill" -> { if (!Set.of("crafting", "stonecutter").contains(upgrade.kind().family())) return false; toggle(bag, upgrade, action, false); }
             case "filter_direction" -> { if (!upgrade.kind().family().equals("filter")) return false; cycle(bag, upgrade, action, "BOTH", "BOTH", "INPUT", "OUTPUT"); }

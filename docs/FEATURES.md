@@ -28,6 +28,12 @@ The registered item catalog contains six backpacks, 54 functional upgrade
 variants, ten stack-tier conversion ingredients and `upgrade_base`. Conversion
 ingredients are crafting materials, not installable upgrades.
 
+The working branch adds five automation items: `item_conduit`, `fluid_conduit`,
+`energy_conduit`, `conduit_wrench` and `steam_engine`. They are independent blocks
+and tools, not backpack upgrades. See [native automation](AUTOMATION.md) for
+their controls, transport limits and current verification status. These additions
+are not present in the existing `v0.5.0-alpha` download.
+
 ### Crafting and colors
 
 | Feature | Current implementation |
@@ -327,12 +333,16 @@ or observer combination. See [Asset pipeline](../tools/ASSET_PIPELINE.md).
 
 | Interface | Included | What this does not establish |
 | --- | --- | --- |
-| Fabric item storage | Placed backpack adapter and vanilla container behavior | Every automation mod's routing or permissions |
+| Fabric item storage | Placed backpack adapter, carried item contexts and vanilla container behavior | Every automation mod's routing or permissions |
 | Fabric fluid storage | Installed tanks on placed and item backpacks, plus supported containers | Every modded fluid container or world-fluid interaction |
-| Team Reborn Energy | Installed battery access on placed and item backpacks | Energy generation or universal machine compatibility |
-| Native equipment | This mod's own slot, attachment, menus and rendering | Another equipment mod's API, plug-ins or save format |
+| Team Reborn Energy | Installed battery access on placed and item backpacks; placed output to adjacent receivers | Energy generation or universal machine compatibility |
+| Native equipment | This mod's own slot, attachment, menus, rendering and an explicit shared-resource context | Another equipment mod's API, plug-ins or save format |
 | Native browser | This mod's own search, display, bookmark and transfer protocol | External recipe-viewer plug-ins or API compatibility |
 | Data packs | Recipes/tags, server recipe displays, tool rules, settings templates and administrator whole-backpack templates | Other mods' template schemas or storage save formats |
+
+The shared resource adapters and their connection rules are documented in
+[Item, fluid and energy integration](INTEGRATION.md). The additional item
+contexts and placed battery output belong to the unreleased working revision.
 
 No external recipe-viewer, accessory, conditional workstation or storage-mod
 adapter is currently supplied. Compatibility claims need an exact-version

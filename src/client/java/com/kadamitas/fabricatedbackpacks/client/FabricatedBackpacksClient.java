@@ -32,6 +32,7 @@ public final class FabricatedBackpacksClient implements ClientModInitializer {
         MenuScreens.register(BackpackMenus.BACKPACK, BackpackScreen::new);
         MenuScreens.register(BackpackMenus.EQUIPMENT, EquipmentScreen::new);
         BackpackRendering.initialize();
+        com.kadamitas.fabricatedbackpacks.client.automation.AutomationRendering.initialize();
         com.kadamitas.fabricatedbackpacks.client.tooltip.BackpackTooltips.initialize();
         com.kadamitas.fabricatedbackpacks.client.screen.WorkstationControls.initialize();
         var category = KeyMapping.Category.register(BackpackRegistry.id("backpacks"));

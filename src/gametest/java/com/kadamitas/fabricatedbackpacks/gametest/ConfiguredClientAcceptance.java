@@ -1,6 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
 import com.google.gson.JsonParser;
+import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackIconButton;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackScreen;
@@ -13,13 +14,16 @@ import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.network.ServerRules;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
+import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
+import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -28,6 +32,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.font.TextRenderable;
+import net.minecraft.client.gui.narration.ScreenNarrationCollector;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.renderer.item.MissingItemModel;
@@ -35,16 +40,24 @@ import net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState;
 import net.minecraft.client.renderer.state.gui.GuiItemRenderState;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.client.renderer.state.gui.GuiTextRenderState;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.lwjgl.glfw.GLFW;
+import team.reborn.energy.api.EnergyStorage;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests.*;
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackTestSupport.*;
@@ -153,6 +166,7 @@ final class ConfiguredClientAcceptance {
     static void run(ClientGameTestContext context, TestSingleplayerContext world) {
         checkItemModels(context);
         basicReferenceLayout(context, world);
+        placedEnergyCapabilities(context, world);
         ServerConfig previous = BackpackConfig.get();
         try {
             var json = JsonParser.parseString(ConfigFile.encode(previous)).getAsJsonObject();
@@ -254,6 +268,81 @@ final class ConfiguredClientAcceptance {
         auxiliarySwitchingAndRetainedInventory(context, world);
     }
 
+    private static void placedEnergyCapabilities(ClientGameTestContext context, TestSingleplayerContext world) {
+        BlockPos position = new BlockPos(5, 80, 4);
+        ItemStack original = world.getServer().computeOnServer(server -> {
+            var placed = (BackpackBlockEntity) server.overworld().getBlockEntity(position);
+            check(placed != null && placed.inventory().installedUpgrades().isEmpty(),
+                    "The existing Netherite display sample starts without an energy upgrade");
+            for (Direction side : Direction.values()) {
+                EnergyStorage neighbor = EnergyStorage.SIDED.find(server.overworld(), position.relative(side), side.getOpposite());
+                check(neighbor == null || !neighbor.supportsInsertion(), "The capability fixture has no adjacent energy receiver: " + side);
+            }
+            return placed.stack().copy();
+        });
+        final List<EnergyStorage> ports;
+        try {
+            world.getServer().runOnServer(server -> {
+                var charged = BagInventory.of(original.copy());
+                charged.upgrades().setItem(0, new ItemStack(BackpackRegistry.item(UpgradeKind.BATTERY)));
+                charged.updateSettings(upgrade(charged, 0), state -> state.putLong("amount", 3210));
+                ((BackpackBlockEntity) server.overworld().getBlockEntity(position)).setStack(charged.stack());
+            });
+            world.getConnection().waitForClientboundPackets();
+            context.waitFor(client -> client.level != null && Arrays.stream(Direction.values()).allMatch(side -> {
+                EnergyStorage port = EnergyStorage.SIDED.find(client.level, position, side);
+                return port != null && port.supportsInsertion() && port.supportsExtraction();
+            }));
+            ports = context.computeOnClient(client -> Arrays.stream(Direction.values())
+                    .map(side -> EnergyStorage.SIDED.find(client.level, position, side)).toList());
+            context.runOnClient(client -> checkClientEnergyPorts(ports, true, true, "Output enabled"));
+            world.getServer().runOnServer(server -> {
+                var placed = (BackpackBlockEntity) server.overworld().getBlockEntity(position);
+                check(ResourceRuntime.energyStorage(placed.inventory()).getAmount() == 3210,
+                        "Client capability queries and committed writes cannot change the server's 3210 energy");
+                check(UpgradeEngine.action(placed.inventory(), 0, "external_output", player(world)),
+                        "The actual server action switches the placed battery to input-only");
+            });
+            context.waitFor(client -> ports.stream().allMatch(port -> port.supportsInsertion() && !port.supportsExtraction()));
+            context.runOnClient(client -> checkClientEnergyPorts(ports, true, false, "Output disabled"));
+            world.getServer().runOnServer(server -> {
+                var placed = (BackpackBlockEntity) server.overworld().getBlockEntity(position);
+                check(!placed.inventory().settings(upgrade(placed.inventory(), 0)).getBooleanOr("external_output", true)
+                                && ResourceRuntime.energyStorage(placed.inventory()).getAmount() == 3210,
+                        "Updating the cached client flags leaves the authoritative setting Off and all 3210 energy intact");
+            });
+        } finally {
+            world.getServer().runOnServer(server -> {
+                var placed = (BackpackBlockEntity) server.overworld().getBlockEntity(position);
+                placed.setStack(original);
+                check(ItemStack.matches(placed.stack(), original), "The placed sample's exact original stack is restored");
+            });
+            world.getConnection().waitForClientboundPackets();
+        }
+        context.waitFor(client -> ports.stream().allMatch(port -> !port.supportsInsertion() && !port.supportsExtraction()));
+        context.runOnClient(client -> checkClientEnergyPorts(ports, false, false, "Original sample restored"));
+        world.getServer().runOnServer(server -> check(ItemStack.matches(
+                ((BackpackBlockEntity) server.overworld().getBlockEntity(position)).stack(), original),
+                "Late client capability calls preserve the restored sample's items and components"));
+    }
+
+    private static void checkClientEnergyPorts(List<EnergyStorage> ports, boolean input, boolean output, String phase) {
+        check(ports.size() == 6, "Energy capabilities are checked on all six physical sides");
+        for (int index = 0; index < ports.size(); index++) {
+            EnergyStorage port = ports.get(index);
+            String label = phase + ", " + Direction.values()[index];
+            check(port != null && port.supportsInsertion() == input && port.supportsExtraction() == output,
+                    label + ": the retained API handle reports the current synchronized capabilities");
+            check(port.getAmount() == 0 && port.getCapacity() == 0, label + ": public capability flags reveal no quantities");
+            try (Transaction transaction = Transaction.openOuter()) {
+                check(port.insert(17, transaction) == 0 && port.extract(17, transaction) == 0,
+                        label + ": client-side API insertion and extraction both return zero");
+                transaction.commit();
+            }
+            check(port.getAmount() == 0 && port.getCapacity() == 0, label + ": committing a client query creates no energy");
+        }
+    }
+
     private static void basicReferenceLayout(ClientGameTestContext context, TestSingleplayerContext world) {
         int previousScale = context.computeOnClient(client -> client.options.guiScale().get());
         world.getServer().waitFor(server -> player(world).containerMenu == player(world).inventoryMenu);
@@ -297,6 +386,10 @@ final class ConfiguredClientAcceptance {
             ItemStack previousLoose = player.getInventory().getItem(9).copy();
             ItemStack previousSmall = player.getInventory().getItem(10).copy();
             var bag = bag(BackpackTier.NETHERITE, UpgradeKind.TANK, UpgradeKind.TANK);
+            // Slot2 stays empty for the retained-jukebox installation below. The charged
+            // battery has no container inputs or external receiver, so ticking cannot drain it.
+            bag.upgrades().setItem(3, new ItemStack(BackpackRegistry.item(UpgradeKind.BATTERY)));
+            bag.updateSettings(upgrade(bag, 3), settings -> settings.putLong("amount", 12_345));
             var first = bag.upgradeInventory(upgrade(bag, 0));
             var buckets = new ItemStack(Items.BUCKET, 3);
             buckets.set(DataComponents.CUSTOM_NAME, Component.literal("First tank buckets"));
@@ -349,6 +442,30 @@ final class ConfiguredClientAcceptance {
                 world.getServer().waitFor(server -> player(world).containerMenu.getCarried().isEmpty());
                 assertTankPair(context, world, fixture.first(), fixture.second(), ItemStack.EMPTY, selected);
             }
+
+            selectUpgrade(context, 3);
+            ItemStack batteryCursor = context.computeOnClient(client -> clientMenu.getCarried().copy());
+            for (boolean enabled : new boolean[]{false, true}) {
+                clickButton(context, "External energy output: " + (enabled ? "Off" : "On"));
+                world.getServer().waitFor(server -> {
+                    var bag = ((BackpackMenu) player(world).containerMenu).bag();
+                    return bag.settings(upgrade(bag, 3)).getBooleanOr("external_output", true) == enabled;
+                });
+                check(world.getServer().computeOnServer(server -> {
+                    var menu = (BackpackMenu) player(world).containerMenu;
+                    return ResourceRuntime.batteryStored(menu.bag(), 3) == 12_345 && ItemStack.matches(menu.getCarried(), batteryCursor);
+                }), "The real battery output toggle preserves every stored energy unit and the server cursor");
+                world.getConnection().waitForClientboundPackets();
+                context.waitFor(client -> client.gui.screen() instanceof BackpackScreen screen
+                        && screen.getMenu().bag().settings(upgrade(screen.getMenu().bag(), 3)).getBooleanOr("external_output", true) == enabled
+                        && screen.children().stream().anyMatch(child -> child instanceof BackpackIconButton button
+                        && button.getMessage().getString().equals("External energy output: " + (enabled ? "On" : "Off"))));
+                check(context.computeOnClient(client -> ResourceRuntime.batteryStored(clientMenu.bag(), 3) == 12_345
+                                && ItemStack.matches(clientMenu.getCarried(), batteryCursor)),
+                        "Battery output settings synchronize without consuming charge or cursor items on the actual client");
+                assertTankPair(context, world, fixture.first(), fixture.second(), batteryCursor, 3);
+            }
+            context.takeScreenshot("ui-battery-external-output-restored");
 
             // First install into the empty physical slot of this already-open menu. Then replace
             // the selected empty12 with retained64 using a real swap, without another tab action.
@@ -712,20 +829,28 @@ final class ConfiguredClientAcceptance {
             awaitLayout(context);
             int auxiliary = context.computeOnClient(client -> ((BackpackScreen) client.gui.screen()).getMenu().auxiliaryStart());
             clickPlayerSlot(context, 9);
+            clickCookingGhost(context, 0);
             clickSlot(context, auxiliary);
             clickPlayerSlot(context, 10);
+            clickCookingGhost(context, 8);
             clickSlot(context, auxiliary + 1);
             world.getServer().waitFor(server -> {
                 var bag = BagInventory.of(player(world).getInventory().getItem(7));
                 var input = bag.upgradeInventory(upgrade(bag, 1));
                 return input.getItem(0).is(Items.RAW_IRON) && input.getItem(0).getCount() == 2 && input.getItem(1).is(Items.COAL);
             });
+            CookingGuard guard = world.getServer().computeOnServer(server -> cookingGuard(
+                    BagInventory.of(player(world).getInventory().getItem(7)), player(world)));
+            Map<BackpackIconButton.Icon, List<Integer>> glyphs = new EnumMap<>(BackpackIconButton.Icon.class);
             for (int scale : new int[]{2, 3}) {
                 resizeLayout(context, scale);
                 checkCompactFrame(context, scale == 2);
                 checkCookingFilterGeometry(context);
+                cookingControlStates(context, world, guard, glyphs, scale);
                 context.takeScreenshot("ui-auto-smelting-paused-scale-" + scale);
             }
+            check(glyphs.size() == 10, "Real clicks exercise all ten cooking filter glyph states, not just their enum names");
+            clickButton(context, "More 1/2");
             clickButton(context, "Enabled: Off");
             context.waitFor(client -> {
                 var menu = ((BackpackScreen) client.gui.screen()).getMenu();
@@ -734,11 +859,13 @@ final class ConfiguredClientAcceptance {
             });
             checkCompactFrame(context, false);
             checkCookingFilterGeometry(context);
+            clickButton(context, "More 2/2");
             context.takeScreenshot("ui-auto-smelting-running");
             world.getServer().waitFor(server -> {
                 var bag = BagInventory.of(player(world).getInventory().getItem(7));
                 return count(bag, Items.IRON_INGOT) + count(bag.upgradeInventory(upgrade(bag, 1)), Items.IRON_INGOT) == 2;
             }, 800);
+            clickButton(context, "More 1/2");
             clickButton(context, "Enabled: On");
             world.getServer().waitFor(server -> {
                 var bag = BagInventory.of(player(world).getInventory().getItem(7));
@@ -765,6 +892,224 @@ final class ConfiguredClientAcceptance {
             world.getConnection().waitForClientboundPackets();
             context.runOnClient(client -> { client.options.guiScale().set(previousScale); client.resizeGui(); });
         }
+    }
+
+    private record CookingControls(String mode, String match, boolean damage, boolean components) {
+        static CookingControls defaults() { return new CookingControls("ALLOW", "ITEM", false, false); }
+        String[] labels() {
+            return new String[]{"Input filter mode: " + mode, "Input filter match: " + match,
+                    "Input match damage: " + (damage ? "On" : "Off"), "Input match components: " + (components ? "On" : "Off")};
+        }
+        BackpackIconButton.Icon[] icons() {
+            return new BackpackIconButton.Icon[]{switch (mode) {
+                case "ALLOW" -> BackpackIconButton.Icon.FILTER_ALLOW;
+                case "BLOCK" -> BackpackIconButton.Icon.FILTER_BLOCK;
+                case "CONTENTS" -> BackpackIconButton.Icon.FILTER_CONTENTS;
+                default -> throw new AssertionError("Unknown tested filter mode: " + mode);
+            }, switch (match) {
+                case "ITEM" -> BackpackIconButton.Icon.MATCH_ITEM;
+                case "NAMESPACE" -> BackpackIconButton.Icon.MATCH_MOD;
+                case "TAGS" -> BackpackIconButton.Icon.MATCH_TAGS;
+                default -> throw new AssertionError("Unknown tested primary match: " + match);
+            }, damage ? BackpackIconButton.Icon.MATCH_DAMAGE : BackpackIconButton.Icon.IGNORE_DAMAGE,
+                    components ? BackpackIconButton.Icon.MATCH_COMPONENTS : BackpackIconButton.Icon.IGNORE_COMPONENTS};
+        }
+        boolean matches(CompoundTag settings) {
+            return settings.getStringOr("input_filter_mode", "ALLOW").equals(mode)
+                    && settings.getStringOr("input_filter_match", "ITEM").equals(match)
+                    && settings.getBooleanOr("input_match_damage", false) == damage
+                    && settings.getBooleanOr("input_match_components", false) == components;
+        }
+    }
+    private record CookingClick(String label, CookingControls result, String capture) {}
+    private record CookingGuard(String identity, InventorySnapshot storage, InventorySnapshot auxiliary,
+                                InventorySnapshot filters, InventorySnapshot player, ItemStack cursor, CompoundTag otherSettings) {}
+
+    private static void clickCookingGhost(ClientGameTestContext context, int index) {
+        double[] position = context.computeOnClient(client -> {
+            var bounds = ((BackpackScreen) client.gui.screen()).ghostBounds(index).orElseThrow();
+            return new double[]{bounds.left() + 8, bounds.top() + 8};
+        });
+        clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+    }
+
+    private static void cookingControlStates(ClientGameTestContext context, TestSingleplayerContext world, CookingGuard guard,
+                                             Map<BackpackIconButton.Icon, List<Integer>> glyphs, int scale) {
+        check(guard.filters().entries().size() == 2
+                        && guard.filters().entries().stream().anyMatch(entry -> entry.slot() == 0 && entry.count() == 1 && entry.create().is(Items.RAW_IRON))
+                        && guard.filters().entries().stream().anyMatch(entry -> entry.slot() == 8 && entry.count() == 1 && entry.create().is(Items.COAL)),
+                "Real ghost clicks remember one input and one fuel without consuming the physical furnace stacks");
+        checkCookingState(context, world, guard, CookingControls.defaults(), "ALLOW", "ANY");
+        checkCookingRow(context, CookingControls.defaults().labels(), CookingControls.defaults().icons(), glyphs, "More 1/2");
+        var clicks = List.of(
+                new CookingClick("Input filter mode: ALLOW", new CookingControls("BLOCK", "ITEM", false, false), "reference-block"),
+                new CookingClick("Input filter mode: BLOCK", new CookingControls("CONTENTS", "ITEM", false, false), null),
+                new CookingClick("Input filter mode: CONTENTS", CookingControls.defaults(), null),
+                new CookingClick("Input filter match: ITEM", new CookingControls("ALLOW", "NAMESPACE", false, false), null),
+                new CookingClick("Input match damage: Off", new CookingControls("ALLOW", "NAMESPACE", true, false), null),
+                new CookingClick("Input match components: Off", new CookingControls("ALLOW", "NAMESPACE", true, true), "alternate-match"),
+                new CookingClick("Input filter match: NAMESPACE", new CookingControls("ALLOW", "TAGS", true, true), null),
+                new CookingClick("Input filter match: TAGS", new CookingControls("ALLOW", "ITEM", true, true), null),
+                new CookingClick("Input match damage: On", new CookingControls("ALLOW", "ITEM", false, true), null),
+                new CookingClick("Input match components: On", CookingControls.defaults(), null));
+        for (var step : clicks) {
+            clickButton(context, step.label());
+            checkCookingState(context, world, guard, step.result(), "ALLOW", "ANY");
+            checkCookingRow(context, step.result().labels(), step.result().icons(), glyphs, "More 1/2");
+            if (step.capture() != null) context.takeScreenshot("ui-auto-smelting-controls-" + step.capture() + "-scale-" + scale);
+        }
+        if (scale == 3) {
+            clickButton(context, "More 1/2");
+            checkCookingExtras(context, "ALLOW", "ANY");
+            clickButton(context, "Input tag match: ANY");
+            checkCookingState(context, world, guard, CookingControls.defaults(), "ALLOW", "ALL");
+            checkCookingExtras(context, "ALLOW", "ALL");
+            clickButton(context, "Input tag match: ALL");
+            checkCookingState(context, world, guard, CookingControls.defaults(), "ALLOW", "ANY");
+            for (String[] modes : new String[][]{{"ALLOW", "BLOCK"}, {"BLOCK", "CONTENTS"}, {"CONTENTS", "ALLOW"}}) {
+                clickButton(context, "Fuel filter mode: " + modes[0]);
+                checkCookingState(context, world, guard, CookingControls.defaults(), modes[1], "ANY");
+                checkCookingExtras(context, modes[1], "ANY");
+            }
+            clickButton(context, "Input tags");
+            context.waitFor(client -> client.gui.screen() instanceof com.kadamitas.fabricatedbackpacks.client.screen.FilterTagsScreen);
+            clickButton(context, "Back");
+            context.waitFor(client -> client.gui.screen() instanceof BackpackScreen);
+            checkCookingState(context, world, guard, CookingControls.defaults(), "ALLOW", "ANY");
+            checkCookingExtras(context, "ALLOW", "ANY");
+            clickButton(context, "More 2/2");
+            checkCookingRow(context, CookingControls.defaults().labels(), CookingControls.defaults().icons(), glyphs, "More 1/2");
+        }
+    }
+
+    private static CookingGuard cookingGuard(BagInventory bag, net.minecraft.world.entity.player.Player player) {
+        var upgrade = upgrade(bag, 1);
+        CompoundTag settings = bag.settings(upgrade);
+        for (String key : List.of("input_filter_mode", "input_filter_match", "input_match_damage", "input_match_components", "input_tag_match", "fuel_filter_mode"))
+            settings.remove(key);
+        return new CookingGuard(bag.identity(), InventorySnapshot.capture(bag), InventorySnapshot.capture(bag.upgradeInventory(upgrade)),
+                upgrade.stack().getOrDefault(BagComponents.FILTERS, InventorySnapshot.EMPTY),
+                withoutSlot(InventorySnapshot.capture(player.getInventory()), 7), player.containerMenu.getCarried().copy(), settings);
+    }
+
+    private static boolean cookingStateMatches(BagInventory bag, CookingControls controls, String fuelMode, String tagMatch) {
+        var settings = bag.settings(upgrade(bag, 1));
+        return controls.matches(settings) && settings.getStringOr("fuel_filter_mode", "ALLOW").equals(fuelMode)
+                && settings.getStringOr("input_tag_match", "ANY").equals(tagMatch) && !settings.getBooleanOr("enabled", true);
+    }
+
+    private static void checkCookingState(ClientGameTestContext context, TestSingleplayerContext world, CookingGuard guard,
+                                          CookingControls controls, String fuelMode, String tagMatch) {
+        world.getServer().waitFor(server -> cookingStateMatches(BagInventory.of(player(world).getInventory().getItem(7)), controls, fuelMode, tagMatch));
+        world.getServer().runOnServer(server -> checkCookingGuard(guard,
+                cookingGuard(BagInventory.of(player(world).getInventory().getItem(7)), player(world)), "server"));
+        world.getConnection().waitForClientboundPackets();
+        context.waitFor(client -> client.gui.screen() instanceof BackpackScreen screen
+                && cookingStateMatches(screen.getMenu().bag(), controls, fuelMode, tagMatch));
+        context.runOnClient(client -> checkCookingGuard(guard,
+                cookingGuard(((BackpackScreen) client.gui.screen()).getMenu().bag(), client.player), "client"));
+    }
+
+    private static void checkCookingGuard(CookingGuard expected, CookingGuard actual, String side) {
+        check(expected.identity().equals(actual.identity()) && expected.storage().equals(actual.storage())
+                        && expected.auxiliary().equals(actual.auxiliary()) && expected.filters().equals(actual.filters())
+                        && expected.player().equals(actual.player()) && ItemStack.matches(expected.cursor(), actual.cursor())
+                        && expected.otherSettings().equals(actual.otherSettings()),
+                "Cooking control clicks change only their intended settings, preserving identity, every ghost/physical stack/cursor and unrelated state on " + side);
+    }
+
+    private static void checkCookingExtras(ClientGameTestContext context, String fuelMode, String tagMatch) {
+        checkCookingRow(context, new String[]{"Enabled: Off", "Input tag match: " + tagMatch, "Input tags", "Fuel filter mode: " + fuelMode},
+                null, null, "More 2/2");
+    }
+
+    private static void checkCookingRow(ClientGameTestContext context, String[] labels, BackpackIconButton.Icon[] icons,
+                                        Map<BackpackIconButton.Icon, List<Integer>> glyphs, String moreLabel) {
+        context.waitFor(client -> client.gui.screen() instanceof BackpackScreen screen && Arrays.stream(labels).allMatch(label ->
+                screen.children().stream().anyMatch(child -> child instanceof BackpackIconButton button
+                        && button.visible && button.active && button.getMessage().getString().equals(label))));
+        context.runOnClient(client -> {
+            var screen = (BackpackScreen) client.gui.screen();
+            var panel = screen.upgradePanelBounds().orElseThrow();
+            var targets = new ArrayList<ScreenRectangle>();
+            for (int index = 0; index < labels.length; index++) {
+                var button = cookingButton(screen, labels[index]);
+                var expected = new ScreenRectangle(panel.left() + 6 + index * 18, panel.top() + 24, 16, 16);
+                check(expected.equals(new ScreenRectangle(button.getX(), button.getY(), button.getWidth(), button.getHeight())),
+                        "The four cooking actions occupy the reference16-pixel buttons in semantic order: " + labels[index]);
+                checkIcon(button, false, labels[index]);
+                var narrator = new ScreenNarrationCollector();
+                narrator.update(button::updateNarration);
+                check(narrator.collectNarrationText(true).contains(labels[index]), "Native button narration announces the action and current state: " + labels[index]);
+                targets.add(expected);
+                if (icons != null) {
+                    check(button.getIcon() == icons[index], "The current setting selects its semantic glyph: " + labels[index]);
+                    var painted = cookingGlyph(button);
+                    List<Integer> previous = glyphs.putIfAbsent(icons[index], painted);
+                    if (previous != null) check(previous.equals(painted), "A filter glyph is stable across real clicks and GUI scales: " + icons[index]);
+                    for (var other : glyphs.entrySet()) if (other.getKey() != icons[index])
+                        check(!painted.equals(other.getValue()), "Different cooking states paint different glyphs, not merely different borders: " + icons[index] + " vs " + other.getKey());
+                }
+            }
+            var more = cookingButton(screen, moreLabel);
+            var moreBounds = new ScreenRectangle(more.getX(), more.getY(), more.getWidth(), more.getHeight());
+            check(more.getIcon() == BackpackIconButton.Icon.GEAR
+                            && moreBounds.equals(new ScreenRectangle(panel.right() - 23, panel.top() + 124, 14, 14)),
+                    "The extras gear sits in the furnace's unused lower-right corner without replacing one of the four filters");
+            targets.add(moreBounds);
+            for (int index = 0; index < 12; index++) targets.add(screen.ghostBounds(index).orElseThrow());
+            var origin = (ContainerScreenAccess) (Object) screen;
+            for (int index = 0; index < 3; index++) {
+                var slot = screen.getMenu().getSlot(screen.getMenu().auxiliaryStart() + index);
+                targets.add(new ScreenRectangle(origin.fabricatedBackpacks$left() + slot.x, origin.fabricatedBackpacks$top() + slot.y, 16, 16));
+            }
+            for (int index = 0; index < targets.size(); index++) {
+                var bounds = targets.get(index);
+                check(bounds.equals(bounds.intersection(panel)), "Every cooking click target remains inside its panel");
+                for (int earlier = 0; earlier < index; earlier++) check(bounds.intersection(targets.get(earlier)) == null,
+                        "Cooking controls, ghosts and actual item slots must have disjoint native hit boxes");
+            }
+        });
+    }
+
+    private static BackpackIconButton cookingButton(BackpackScreen screen, String label) {
+        var matches = screen.children().stream().filter(BackpackIconButton.class::isInstance).map(BackpackIconButton.class::cast)
+                .filter(button -> button.visible && button.active && button.getMessage().getString().equals(label)).toList();
+        check(matches.size() == 1, "One actual visible button must expose the complete cooking label: " + label);
+        return matches.getFirst();
+    }
+
+    private static List<Integer> cookingGlyph(BackpackIconButton button) {
+        var client = net.minecraft.client.Minecraft.getInstance();
+        var state = new GuiRenderState();
+        button.extractRenderState(new GuiGraphicsExtractor(client, state, -1, -1), -1, -1, 0);
+        int[] pixels = new int[button.getWidth() * button.getHeight()];
+        // The native button draws its bevel before entering the icon scissor. Inspect only
+        // its actual clipped glyph commands; hover/selection borders cannot satisfy this test.
+        state.forEachElement(element -> {
+            if (!(element instanceof ColoredRectangleRenderState rectangle) || rectangle.scissorArea() == null || rectangle.bounds() == null) return;
+            check(rectangle.col1() == rectangle.col2(), "Pixel glyph spans are solid colors");
+            var bounds = rectangle.bounds();
+            check(bounds.left() >= button.getX() && bounds.top() >= button.getY()
+                            && bounds.right() <= button.getRight() && bounds.bottom() <= button.getBottom(),
+                    "Native glyph spans stay inside their16-pixel input target");
+            for (int y = bounds.top(); y < bounds.bottom(); y++) for (int x = bounds.left(); x < bounds.right(); x++)
+                pixels[(y - button.getY()) * button.getWidth() + x - button.getX()] = rectangle.col1();
+        }, GuiRenderState.TraverseRange.ALL);
+        check(Arrays.stream(pixels).anyMatch(color -> color != 0), "The actual semantic button submits visible glyph pixels");
+        boolean requiresRed = switch (button.getIcon()) {
+            case FILTER_BLOCK, MATCH_ITEM, IGNORE_DAMAGE, IGNORE_COMPONENTS -> true;
+            default -> false;
+        };
+        if (requiresRed) check(Arrays.stream(pixels).anyMatch(color -> {
+            int r = color >> 16 & 255, g = color >> 8 & 255, b = color & 255;
+            return color >>> 24 != 0 && r >= 140 && r * 2 > g * 3 && r * 2 > b * 3;
+        }), "The block/apple/ignore symbol retains its red semantic detail: " + button.getIcon());
+        if (button.getIcon() == BackpackIconButton.Icon.FILTER_ALLOW) check(Arrays.stream(pixels).anyMatch(color -> {
+            int r = color >> 16 & 255, g = color >> 8 & 255, b = color & 255;
+            return color >>> 24 != 0 && g >= 100 && g * 5 > r * 6 && g * 5 > b * 6;
+        }), "The allow state paints a green check rather than the block state's red X");
+        return Arrays.stream(pixels).boxed().toList();
     }
 
     private static void checkCookingFilterGeometry(ClientGameTestContext context) {
@@ -903,7 +1248,7 @@ final class ConfiguredClientAcceptance {
                 "The actual Inventory caption starts two pixels below the full-width strip's top: " + captionOrigin);
     }
 
-    private static org.joml.Vector2f nativeTextOrigin(GuiTextRenderState state) {
+    static org.joml.Vector2f nativeTextOrigin(GuiTextRenderState state) {
         try {
             var x = GuiTextRenderState.class.getDeclaredField("x");
             var y = GuiTextRenderState.class.getDeclaredField("y");
@@ -913,7 +1258,7 @@ final class ConfiguredClientAcceptance {
         } catch (ReflectiveOperationException failure) { throw new AssertionError("Cannot inspect the native submitted text origin", failure); }
     }
 
-    private static FormattedCharSequence nativeText(GuiTextRenderState state) {
+    static FormattedCharSequence nativeText(GuiTextRenderState state) {
         try {
             var field = GuiTextRenderState.class.getDeclaredField("text");
             field.setAccessible(true);
@@ -921,7 +1266,7 @@ final class ConfiguredClientAcceptance {
         } catch (ReflectiveOperationException failure) { throw new AssertionError("Cannot inspect the native submitted text", failure); }
     }
 
-    private static void checkNoTextShadow(GuiTextRenderState state, String label) {
+    static void checkNoTextShadow(GuiTextRenderState state, String label) {
         int[] glyphs = {0};
         state.ensurePrepared().visit(new Font.GlyphVisitor() {
             @Override public void acceptGlyph(TextRenderable.Styled glyph) {
@@ -943,7 +1288,7 @@ final class ConfiguredClientAcceptance {
             check(shadow == 0, "A dark heading must not emit offset shadow glyphs: " + label + "; shadow=0x" + Integer.toHexString(shadow));
         } catch (ReflectiveOperationException failure) { throw new AssertionError("Cannot inspect native prepared heading glyph " + glyph.getClass().getName(), failure); }
     }
-    private static String plain(FormattedCharSequence sequence) {
+    static String plain(FormattedCharSequence sequence) {
         StringBuilder text = new StringBuilder();
         sequence.accept((index, style, codePoint) -> { text.appendCodePoint(codePoint); return true; });
         return text.toString();

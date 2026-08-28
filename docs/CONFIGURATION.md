@@ -162,6 +162,13 @@ it fully, with intermediate values interpolating its contribution. Rates do
 not make a full tank or battery accept more than its capacity. Existing excess
 after changed configuration can be extracted without being discarded.
 
+Placed batteries additionally share their configured output rate across
+neighboring receivers per server tick. The per-backpack **External energy
+output** switch defaults to On; Off allows external charging but prevents
+external discharge. Item charging/discharging remains separate. See
+[Item, fluid and energy integration](INTEGRATION.md) for the shared APIs,
+equipment context and connection rules in the unreleased working revision.
+
 ### Stack multipliers
 
 `upgrades.stack.baseMultiplier` defaults to 1 and accepts 1/64–64.
@@ -382,3 +389,47 @@ operator export creates a new pack and never overwrites an existing one. These
 bounded settings resources are distinct from administrator whole-backpack
 JSON templates. Browser bookmarks are client-local in
 `config/fabricated-backpacks-browser.json`.
+
+## Native automation (working branch)
+
+The existing configuration file accepts an `automation` section. Older files
+inherit its defaults; invalid or unknown fields fail validation before rules
+are applied. The following values are defaults, not additional configuration
+files:
+
+```json
+{
+  "automation": {
+    "conduits": {
+      "itemsPerOperation": 8,
+      "itemIntervalTicks": 10,
+      "fluidMbPerTick": 100,
+      "energyPerTick": 256,
+      "maximumNetworkNodes": 2048,
+      "maximumEndpointVisitsPerTick": 128
+    },
+    "engine": {
+      "waterCapacityMb": 4000,
+      "energyCapacity": 32000,
+      "waterMbPerTick": 1,
+      "energyPerTick": 40,
+      "energyOutputPerTick": 256,
+      "containerTransferMbPerTick": 1000
+    }
+  }
+}
+```
+
+Conduit bandwidth is shared across the faces of each physical endpoint.
+The network-size limit rejects oversized connected networks; the endpoint
+work limit bounds routing work per dimension/tick. Resources stay in their
+machines while a route is unavailable or being rebuilt. These are endpoint
+bandwidth limits, not simulated per-segment pipe pressure or cable resistance.
+
+Engine water is configured in mB but persisted in exact Fabric droplets;
+fractional transfers are retained. Both generation quanta must fit their
+configured capacity. Reducing capacity preserves stored excess; filling and
+generation stop until the excess is recovered. The engine's On/Off control
+pauses generation, not external item/fluid access or output of stored energy.
+
+See [Native conduits and steam engine](AUTOMATION.md) for the player controls.

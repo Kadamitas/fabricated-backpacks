@@ -35,6 +35,13 @@ def point_bounds(points):
             [max(point[axis] for point in points) for axis in range(3)])
 
 
+def inside_part(point, part, epsilon=2e-6):
+    if "rotation" in part:
+        rotation = {**part["rotation"], "angle": -part["rotation"]["angle"]}
+        point = assets.rotated_vertex(point, rotation)
+    return all(part["from"][axis] - epsilon <= point[axis] <= part["to"][axis] + epsilon for axis in range(3))
+
+
 def decode_rgba_png(data: bytes) -> tuple[int, int, bytes]:
     """Independently validate and decode the generator's filter-0 RGBA PNG format."""
     if data[:8] != b"\x89PNG\r\n\x1a\n":
@@ -125,8 +132,8 @@ class AssetGenerationTest(unittest.TestCase):
     def setUpClass(cls):
         cls.outputs, cls.rasters, cls.models = assets.generate()
         cls.upgrades = assets.read_upgrade_ids()
-        cls.items = {tier.item for tier in assets.TIERS} | set(cls.upgrades) | {"upgrade_base"} | {row[2] for row in assets.CONVERSIONS}
-        cls.recipes = assets.generate_recipes(cls.upgrades)
+        cls.items = {tier.item for tier in assets.TIERS} | set(cls.upgrades) | {"upgrade_base"} | {row[2] for row in assets.CONVERSIONS} | set(assets.automation.ITEMS)
+        cls.recipes = {**assets.generate_recipes(cls.upgrades), **assets.automation.recipes(assets)}
 
     def test_two_generations_are_byte_identical(self):
         another, _, _ = assets.generate()
@@ -153,12 +160,13 @@ class AssetGenerationTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(path.startswith(assets.ASSET + "/") or path.startswith(assets.DATA + "/")
                                 or path == "src/main/resources/data/minecraft/tags/item/piglin_safe_armor.json"
+                                or path == "src/main/resources/data/minecraft/tags/block/mineable/pickaxe.json"
                                 or path == assets.PROJECT_ICON)
                 if path.endswith(".json"):
                     self.assertIsInstance(json.loads(content), dict)
 
     def test_registry_resources_exactly_cover_catalog(self):
-        self.assertEqual(71, len(self.items))
+        self.assertEqual(76, len(self.items))
         definitions = {Path(path).stem for path in self.outputs if path.startswith(assets.ASSET + "/items/")}
         self.assertEqual(self.items, definitions)
         lang = json.loads(self.outputs[assets.ASSET + "/lang/en_us.json"])
@@ -194,8 +202,9 @@ class AssetGenerationTest(unittest.TestCase):
                     if "rotation" in element:
                         self.assertIn(element["rotation"]["axis"], {"x", "y", "z"})
                         self.assertIn(element["rotation"]["angle"], {-45, -22.5, 0, 22.5, 45})
-                expected = required - {"flap_top", "flap_lip"} if path.endswith("_body.json") else required
-                self.assertTrue(expected.issubset(names))
+                if any(path.endswith(f"/{tier.item}_{suffix}.json") for tier in assets.TIERS for suffix in ("closed", "open", "body")):
+                    expected = required - {"flap_top", "flap_lip"} if path.endswith("_body.json") else required
+                    self.assertTrue(expected.issubset(names))
 
     def test_all_blockstates_and_item_color_layers(self):
         for tier in assets.TIERS:
@@ -224,8 +233,13 @@ class AssetGenerationTest(unittest.TestCase):
                     self.assertTrue(all(pixel[3] == 255 for pixel in raster.pixels))
                 if "/textures/item/" in path:
                     self.assertEqual(0, raster.at(0, 0)[3])
-                    self.assertGreater(sum(pixel[3] == 255 for pixel in raster.pixels), 130)
-                    self.assertLess(sum(pixel[3] == 255 for pixel in raster.pixels), 230)
+                    occupied = sum(pixel[3] == 255 for pixel in raster.pixels)
+                    if path.endswith("/conduit_wrench.png"):
+                        self.assertGreater(occupied, 35)
+                        self.assertLess(occupied, 100)
+                    else:
+                        self.assertGreater(occupied, 130)
+                        self.assertLess(occupied, 230)
 
     def test_project_icon_is_original_model_branding_with_safe_pixel_clusters(self):
         icon = self.rasters[assets.PROJECT_ICON]
@@ -247,8 +261,8 @@ class AssetGenerationTest(unittest.TestCase):
 
     def test_icons_are_distinct_and_glyphs_fit_the_drawing_grid(self):
         icons = [data for path, data in self.outputs.items() if "/textures/item/" in path]
-        self.assertEqual(65, len(icons))
-        self.assertEqual(65, len({hashlib.sha256(data).hexdigest() for data in icons}))
+        self.assertEqual(66, len(icons))
+        self.assertEqual(66, len({hashlib.sha256(data).hexdigest() for data in icons}))
         for name, glyph in assets.GLYPHS.items():
             with self.subTest(glyph=name):
                 self.assertEqual(9, len(glyph))
@@ -400,6 +414,19 @@ class AssetGenerationTest(unittest.TestCase):
         tag = json.loads(self.outputs["src/main/resources/data/minecraft/tags/item/piglin_safe_armor.json"])
         self.assertEqual({"replace": False, "values": ["fabricated_backpacks:gold_backpack"]}, tag)
 
+    def test_metal_automation_blocks_extend_pickaxe_speed_without_harvest_requirements(self):
+        path = "src/main/resources/data/minecraft/tags/block/mineable/pickaxe.json"
+        tag = json.loads(self.outputs[path])
+        self.assertEqual({"replace": False, "values": ["fabricated_backpacks:conduit_bundle",
+                                                       "fabricated_backpacks:steam_engine"]}, tag)
+        for block in tag["values"]:
+            self.assertIn(f"{assets.ASSET}/blockstates/{block.split(':', 1)[1]}.json", self.outputs)
+        # This contribution selects mining speed, not any needs_*_tool harvest tier.
+        self.assertEqual({path}, {name for name in self.outputs if "/data/minecraft/tags/block/" in name})
+        if TARGET_JAR is not None:
+            with ZipFile(TARGET_JAR) as jar:
+                self.assertIn("data/minecraft/tags/block/mineable/pickaxe.json", jar.namelist())
+
     def test_utility_tool_rules_are_manual_and_resolve_native_resources(self):
         rules = {Path(path).stem: json.loads(data) for path, data in self.outputs.items() if "/backpack_tools/" in path}
         self.assertEqual({"shearing", "tilling", "flattening"}, set(rules))
@@ -466,6 +493,124 @@ class AssetGenerationTest(unittest.TestCase):
                 self.assertEqual(assets.rgb("202C36"), standard.at(x, 0))
                 self.assertEqual(assets.rgb("202C36"), standard.at(x, 71))
 
+    def test_automation_profiles_partition_static_and_moving_geometry_exactly(self):
+        profile = json.loads(self.outputs[f"{assets.ASSET}/steam_engine_profiles.json"])
+        self.assertEqual(1, profile["schema"])
+        self.assertEqual("radians", profile["phase_units"])
+        self.assertEqual([64, 64], profile["atlas_size"])
+        self.assertEqual({"body", "wheel", "rod", "piston"}, set(profile["groups"]))
+        full = self.models[f"{assets.ASSET}/models/block/steam_engine.json"]
+        body = self.models[f"{assets.ASSET}/models/block/steam_engine_body.json"]
+        names = [part["name"] for group in profile["groups"].values() for part in group]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(set(names), {part["name"] for part in full["elements"]})
+        self.assertEqual({part["name"] for part in profile["groups"]["body"]}, {part["name"] for part in body["elements"]})
+        self.assertFalse({part["name"] for part in body["elements"]} &
+                         {part["name"] for group in ("wheel", "rod", "piston") for part in profile["groups"][group]})
+        for group in profile["groups"].values():
+            for part in group:
+                size = [part["to"][i] - part["from"][i] for i in range(3)]
+                self.assertLessEqual(2 * (size[0] + size[2]), 64)
+                self.assertLessEqual(size[1] + size[2], 64)
+                self.assertIn(part["texture"], profile["material_textures"])
+        states = json.loads(self.outputs[f"{assets.ASSET}/blockstates/steam_engine.json"])["variants"]
+        self.assertEqual(8, len(states))
+        for facing, angle in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
+            for active in ("false", "true"):
+                self.assertEqual({"model": f"{assets.MOD}:block/steam_engine_body", "y": angle}, states[f"facing={facing},active={active}"])
+        for block in ("conduit_bundle", "steam_engine"):
+            self.assertEqual([], json.loads(self.outputs[f"{assets.DATA}/loot_table/blocks/{block}.json"])["pools"])
+
+    def test_engine_cylinder_is_octagonal_and_wheel_chimney_have_real_openings(self):
+        groups = assets.automation.engine_parts(assets)
+        boiler = [part for part in groups["body"] if part["name"].startswith("boiler_") and not part["name"].startswith("boiler_foot")]
+        self.assertEqual(6, len(boiler))
+        tangent = 3 * math.tan(math.pi / 8)
+        for iy in range(-12, 13):
+            for iz in range(-12, 13):
+                y, z = iy / 4, iz / 4
+                expected = abs(y) <= 3 and abs(z) <= 3 and abs(y) + abs(z) <= 3 + tangent
+                self.assertEqual(expected, any(inside_part((4.8, 7.25 + y, 10.25 + z), part) for part in boiler), (y, z))
+        for sector in range(8):
+            angle = math.radians(22.5 + sector * 45)
+            point = (2.5 * math.cos(angle), 2.5 * math.sin(angle), 0)
+            self.assertFalse(any(inside_part(point, part) for part in groups["wheel"]), "Spoked wheel sector must remain genuinely open")
+        self.assertFalse(any(inside_part((4, 14, 10.5), part) for part in groups["body"]), "Chimney is made of four walls around an open center")
+        body = {part["name"]: part for part in groups["body"]}
+        self.assertLess(body["output_socket"]["from"][1], body["plinth_cap"]["to"][1], "Output socket must attach to the plinth")
+        self.assertTrue(inside_part((6.6, 8.4, 7.4), body["steam_pipe_to_boiler"]))
+        self.assertTrue(any(inside_part((6.6, 8.4, 7.4), part) for part in boiler), "Steam pipe must penetrate the boiler")
+
+    def test_engine_linkage_stays_connected_and_inside_its_block_through_a_full_turn(self):
+        groups = assets.automation.engine_parts(assets)
+        minimum_slider, maximum_slider = math.inf, -math.inf
+        for degrees in range(0, 361, 5):
+            angle = math.radians(degrees)
+            pin_x, pin_y, slider, rod_angle = assets.automation.linkage(angle)
+            self.assertAlmostEqual(assets.automation.ROD_LENGTH, math.hypot(pin_x - slider, pin_y - assets.automation.WHEEL_CENTER[1]), places=10)
+            self.assertAlmostEqual(pin_x, slider + assets.automation.ROD_LENGTH * math.cos(rod_angle), places=10)
+            self.assertAlmostEqual(pin_y, assets.automation.WHEEL_CENTER[1] + assets.automation.ROD_LENGTH * math.sin(rod_angle), places=10)
+            self.assertGreaterEqual(slider - 3, 1.5 - 1e-8, "Retracted shaft stays inside the working cylinder's rear cap")
+            self.assertLessEqual(slider - 3, 4.5, "Extended shaft still penetrates the working cylinder")
+            minimum_slider, maximum_slider = min(minimum_slider, slider), max(maximum_slider, slider)
+            model = assets.automation.engine_model(assets, groups, angle)
+            low, high = point_bounds(element_points(model["elements"]))
+            self.assertTrue(all(value >= -1e-6 for value in low), (degrees, low))
+            self.assertTrue(all(value <= 16 + 1e-6 for value in high), (degrees, high))
+            actual = {part["name"]: part for part in model["elements"]}
+            # Independently compose the wheel's local element rotation, then
+            # the engine phase, and compare with the production review model.
+            for part in groups["wheel"]:
+                for face in assets.SIDES:
+                    expected = [assets.rotated_vertex(point, {"origin": [0, 0, 0], "axis": "z", "angle": degrees})
+                                for point in assets.vertices(part, face)]
+                    expected = [[point[i] + assets.automation.WHEEL_CENTER[i] for i in range(3)] for point in expected]
+                    for wanted, observed in zip(expected, assets.vertices(actual[part["name"]], face)):
+                        for first, second in zip(wanted, observed): self.assertAlmostEqual(first, second, places=5)
+        self.assertAlmostEqual(4.5, minimum_slider)
+        self.assertAlmostEqual(7.0, maximum_slider)
+
+    def test_conduit_types_and_public_mode_materials_are_distinct(self):
+        hashes = set()
+        for kind in assets.automation.KINDS:
+            model = self.models[f"{assets.ASSET}/models/item/{kind}_conduit.json"]
+            self.assertEqual({"pipe", "collar_north", "collar_south"}, {part["name"] for part in model["elements"]})
+            parts = {part["name"]: part for part in model["elements"]}
+            pipe, north, south = (parts[name] for name in ("pipe", "collar_north", "collar_south"))
+            self.assertEqual([6.75, 6.75], pipe["from"][:2])
+            self.assertEqual([9.25, 9.25], pipe["to"][:2])
+            self.assertLess(north["from"][2], pipe["from"][2])
+            self.assertLess(pipe["from"][2], north["to"][2], "The pipe remains physically inside its north collar")
+            self.assertLess(south["from"][2], pipe["to"][2], "The pipe remains physically inside its south collar")
+            self.assertLess(pipe["to"][2], south["to"][2])
+            self.assertEqual(([6.25, 6.25, 0], [9.75, 9.75, 16]), point_bounds(element_points(model["elements"])))
+            for index, first in enumerate(model["elements"]):
+                for second in model["elements"][index + 1:]:
+                    for axis in range(3):
+                        for a in (first["from"][axis], first["to"][axis]):
+                            for b in (second["from"][axis], second["to"][axis]):
+                                if a != b: continue
+                                area = math.prod(max(0, min(first["to"][other], second["to"][other])
+                                                     - max(first["from"][other], second["from"][other]))
+                                                 for other in range(3) if other != axis)
+                                self.assertEqual(0, area, "No overlapping coplanar faces may fight in the held item")
+            for hand in ("firstperson_righthand", "firstperson_lefthand"):
+                transform = model["display"][hand]
+                self.assertTrue(all(.35 <= value <= .5 for value in transform["scale"]))
+                yaw = math.radians(transform["rotation"][1])
+                # Both hand poses show the long axis diagonally, rather than pointing its cap at the camera.
+                self.assertGreater(abs(math.sin(yaw)) * 16 * transform["scale"][0], 4)
+                self.assertGreater(abs(math.cos(yaw)) * 16 * transform["scale"][2], 4)
+            for role in ("tube", "collar", "endpoint", "endpoint_insert", "endpoint_extract", "endpoint_both"):
+                data = self.outputs[f"{assets.ASSET}/textures/block/automation/{kind}_{role}.png"]
+                digest = hashlib.sha256(data).hexdigest()
+                self.assertNotIn(digest, hashes, (kind, role))
+                hashes.add(digest)
+        manifest = json.loads(self.outputs[f"{assets.ASSET}/asset_manifest.json"])
+        self.assertEqual(list(assets.automation.ITEMS), manifest["automation_items"])
+        self.assertIn("tools/generate_automation_assets.py", manifest["inputs"])
+        self.assertIn("tools/assets/automation_strings.json", manifest["inputs"])
+
     def test_recipe_ingredients_and_parents_exist_in_exact_target(self):
         if TARGET_JAR is None:
             self.skipTest("Pass --minecraft-jar for exact-target vanilla-resource validation")
@@ -486,6 +631,7 @@ class AssetGenerationTest(unittest.TestCase):
                             self.assertEqual(assets.MOD, namespace)
                             self.assertIn(item, self.items)
             self.assertIn("assets/minecraft/models/item/generated.json", names)
+            self.assertIn("assets/minecraft/models/item/handheld.json", names)
 
 
 if __name__ == "__main__":

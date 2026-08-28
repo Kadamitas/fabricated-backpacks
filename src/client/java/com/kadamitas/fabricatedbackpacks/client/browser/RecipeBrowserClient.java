@@ -23,9 +23,13 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+
 /** Client browsing state; all actual crafting and filter mutations go to the server. */
 public final class RecipeBrowserClient {
     private static BrowserClientIndex index = new BrowserClientIndex();
+    private static BrowserFluidIndex fluids = new BrowserFluidIndex();
     private static BrowserBookmarks bookmarks;
     private static boolean initialized;
     private static long epoch;
@@ -74,6 +78,26 @@ public final class RecipeBrowserClient {
 
     public static void open(Screen previous) { openForGhost(previous, -1); }
 
+    public static void openItemPicker(Screen previous, BooleanSupplier valid, Consumer<Identifier> selected) {
+        openPicker(previous, RegistryPickerScreen.Kind.ITEM, valid, selected);
+    }
+
+    public static void openFluidPicker(Screen previous, BooleanSupplier valid, Consumer<Identifier> selected) {
+        openPicker(previous, RegistryPickerScreen.Kind.FLUID, valid, selected);
+    }
+
+    private static void openPicker(Screen previous, RegistryPickerScreen.Kind kind, BooleanSupplier valid, Consumer<Identifier> selected) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player == null || client.level == null || !client.player.isAlive() || !valid.getAsBoolean()) return;
+        if (!client.player.containerMenu.getCarried().isEmpty()) {
+            client.player.sendOverlayMessage(Component.translatable("browser.fabricated_backpacks.clear_cursor"));
+            return;
+        }
+        RegistryPickerScreen screen = new RegistryPickerScreen(previous, kind, valid, selected);
+        screen.beginIndex(client);
+        client.gui.setScreen(screen);
+    }
+
     public static void openForGhost(Screen previous, int ghostSlot) {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.level == null || !client.player.isAlive()) return;
@@ -92,6 +116,7 @@ public final class RecipeBrowserClient {
     }
 
     static BrowserClientIndex index() { return index; }
+    static BrowserFluidIndex fluids() { return fluids; }
     static BrowserBookmarks bookmarks() { return bookmarks; }
     static int ticks() { return ticks; }
     static int received() { return nextOffset; }
@@ -109,6 +134,7 @@ public final class RecipeBrowserClient {
 
     static void refresh() {
         index = new BrowserClientIndex();
+        fluids = new BrowserFluidIndex();
         epoch = 0;
         nextOffset = 0;
         total = -1;
@@ -122,6 +148,7 @@ public final class RecipeBrowserClient {
             index.begin(client);
             requestContext(client.player.containerMenu.containerId);
         }
+        if (client.gui.screen() instanceof RegistryPickerScreen picker) picker.beginIndex(client);
     }
 
     static long transfer(Identifier recipe, int containerId, boolean maximum) {
@@ -173,6 +200,7 @@ public final class RecipeBrowserClient {
             if (epoch != 0) refresh();
         }
         index.tick(client);
+        fluids.tick(client);
         if (!(client.gui.screen() instanceof RecipeBrowserScreen)) return;
         index.begin(client);
         if (requestInFlight && ticks - requestTick > 100) requestInFlight = false;

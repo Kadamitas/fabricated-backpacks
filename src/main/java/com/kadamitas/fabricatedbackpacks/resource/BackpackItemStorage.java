@@ -54,6 +54,8 @@ public final class BackpackItemStorage implements Storage<ItemVariant> {
         return views.stream().map(view -> (StorageView<ItemVariant>) view).iterator();
     }
 
+    SingleSlotStorage<ItemVariant> slot(int slot) { return views.get(slot); }
+
     private final class View extends SnapshotParticipant<ItemStack> implements SingleSlotStorage<ItemVariant> {
         private final int slot;
         private final SingleSlotStorage<ItemVariant> storage;

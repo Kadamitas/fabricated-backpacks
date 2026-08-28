@@ -56,12 +56,13 @@ public final class ResourceRuntime {
             return TraversalResources.fluids(bag, true, () -> current(entity, bag, direction), entity::setChanged);
         }, BackpackRegistry.BLOCK_ENTITY);
         EnergyStorage.SIDED.registerForBlockEntity((entity, direction) -> {
+            if (entity.getLevel() != null && entity.getLevel().isClientSide()) return entity.energyStorage(direction);
             if (!connectionAllowed(entity.getLevel(), entity.getBlockPos(), direction)) return null;
-            BagInventory bag = entity.inventory();
-            return TraversalResources.energy(bag, () -> current(entity, bag, direction), entity::setChanged);
+            return entity.energyStorage(direction);
         }, BackpackRegistry.BLOCK_ENTITY);
         var backpacks = Arrays.stream(BackpackTier.values()).map(BackpackRegistry::item)
                 .toArray(net.minecraft.world.item.Item[]::new);
+        ItemStorage.ITEM.registerForItems((stack, context) -> BackpackItemAccess.items(context), backpacks);
         FluidStorage.ITEM.registerForItems((stack, context) -> BackpackConfig.get().storage().itemFluidAccess()
                 ? BackpackItemAccess.fluids(context) : null, backpacks);
         EnergyStorage.ITEM.registerForItems((stack, context) -> BackpackItemAccess.energy(context), backpacks);
@@ -79,9 +80,12 @@ public final class ResourceRuntime {
         return TraversalResources.items(bag, direction, () -> true, () -> {});
     }
 
+    /** No entity lookup is invented: integrations explicitly select a server player's native equipped slot. */
+    public static ContainerItemContext equippedContext(ServerPlayer player) { return new BackpackEquipmentContext(player); }
+
     /** An adapter retained by a machine must not address a replaced block or bypass later connection changes. */
     private static boolean current(BackpackBlockEntity entity, BagInventory bag, Direction direction) {
-        return !entity.isRemoved() && entity.stack() == bag.stack()
+        return !entity.isRemoved() && entity.getLevel() instanceof ServerLevel && entity.stack() == bag.stack()
                 && connectionAllowed(entity.getLevel(), entity.getBlockPos(), direction);
     }
 

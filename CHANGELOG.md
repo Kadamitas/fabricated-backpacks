@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Add native item, fluid and energy conduit lanes in a shared bundle, with
+  directional endpoint controls, redstone gates, per-endpoint transfer limits,
+  loaded-network routing and atomic resource transfers.
+- Add nine ghost-filter positions per item/fluid interface, with Off, Allow
+  and Block modes. Search registered items and fluids by name, ID or namespace;
+  right-click a ghost to clear it without consuming an item or fluid container.
+- Support optional JEI 26.2 ingredient dragging into conduit filters, including
+  native fluid ingredients and filled fluid containers. JEI is not required or bundled.
+- Apply both endpoint filters to live and retained transfer handlers, including
+  rollback when a filter changes during a transaction. Keep item components and
+  exact fluid droplets intact when routing between upgraded backpacks.
+- Open conduit settings only from physical interface plates. A wrench cycles
+  external tube connections, restores disabled stubs and reconnects internal
+  links; the bundle center does not open a menu. Normal mining removes only the
+  aimed conduit, including by hand, while preserving the other strands.
+- Add a steam engine that consumes furnace fuel and water, exposes standard
+  sided APIs, retains unfinished fuel while paused, and preserves its contents
+  in one stateful drop. Its original model has an animated flywheel and piston.
+- Configure the engine's six faces with the wrench, with independent item,
+  water and energy permissions that persist through pickup and world reload.
+- Add real-client, restart and multiplayer acceptance scenarios for engine
+  controls and resources, shared conduit placement and actual network transfers.
+- Avoid synchronous chunk lookups while saved conduit bundles are loading;
+  pending chunks and missing machine registrations cannot create resource ports.
 - Compact leather and amber backpack frames, gray inventory cells, physical
   upgrade slots on the left, and item-icon tabs on the right. Main-screen
   controls use icons with complete hover help and accessible labels.
@@ -10,6 +34,14 @@
 - Match the reference body proportions and attached upgrade panels, join the
   Inventory bar to the storage frame, and slim resource gauges to 16 pixels.
   Remove dark heading shadows and separate sorting from sort-order selection.
+- Give automatic cooking its four reference-style filter controls: allow/block,
+  item/mod/tag identity, durability and components. Colored state icons and hover
+  help follow the actual saved settings; additional controls remain on a second page.
+- Expose carried backpack contents through Fabric's item storage API, alongside
+  existing item-context fluid and energy access, with an explicit context for
+  the native equipment slot.
+- Push stored energy from placed batteries into compatible neighboring receivers,
+  with a saved output switch, sided connection checks and a shared transfer budget.
 - Fuller original worn models with two side pouches, deeper front pockets,
   torso-to-hip coverage, armor clearance, and matching placed interaction shapes.
 - Preserve drag ownership across layout changes, reserve the native click
@@ -17,7 +49,8 @@
   and expose retained upgrade inventories installed after a menu opens.
 
 This revision is not the published 0.5.0-alpha artifact. See the separate
-[UI revision record](docs/UI_REVISION.md) for its verification status.
+[UI revision record](docs/UI_REVISION.md) and
+[automation verification record](docs/AUTOMATION_VERIFICATION.md) for test status.
 
 ## 0.5.0-alpha
 

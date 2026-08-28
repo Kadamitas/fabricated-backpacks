@@ -3,6 +3,10 @@
 Target: **Minecraft 26.2, Fabric, Java 25**. The checked-in Gradle wrapper and
 `gradle.properties` define the toolchain and dependency versions.
 
+This guide includes unreleased source changes. A local build may still have
+the `0.5.0-alpha` filename; it is not the immutable published `v0.5.0-alpha`
+download. Identify a tested build by its exact source and artifact hashes.
+
 ## Local build
 
 Install a Java 25 JDK and make it available to Gradle. On Windows, use
@@ -54,7 +58,8 @@ game files in Gradle's cache.
 
 Edit the generator or its explicit language inputs, not generated files.
 Regenerate after changes to the upgrade catalog,
-`tools/assets/ui_strings.json` or `tools/assets/browser_strings.json`.
+`tools/assets/ui_strings.json`, `tools/assets/browser_strings.json` or
+`tools/assets/automation_strings.json`.
 The generated manifest records input and output hashes; a stale manifest is a
 test failure, not something to bypass.
 
@@ -93,6 +98,44 @@ For a focused worn-model iteration, use
 world and records actual rear, armor, dye, and crouch views. This focused run
 does not produce a full-client passing receipt and cannot replace the complete
 client or multiplayer scenarios.
+
+For a conduit/engine change, use the focused automation paths instead of
+walking through unrelated backpack screens:
+
+```powershell
+.\gradlew.bat runClientGameTest -PclientScenario=automation
+.\gradlew.bat runClientGameTest -PclientScenario=automation_restart
+.\tools\run-multiplayer.ps1 -Scenario automation
+```
+
+These exercise actual conduit placement, hand mining, physical interface and
+wrench input, machine-side controls, item/fluid/energy transfers, persistence
+and two real TCP clients. They write separate automation receipts and do not
+claim the full backpack scenario ran. See the
+[automation verification record](AUTOMATION_VERIFICATION.md) for executed results.
+
+### Optional JEI development and tests
+
+The adapter compiles against JEI's public Fabric API pinned to **30.28.0.191**
+for Minecraft **26.2**. JEI is not embedded in the main JAR and is absent from
+default development/test runtimes. The built-in item/fluid picker works without
+it. Opt in to the actual JEI runtime for a development session or its focused
+drag-and-drop scenario:
+
+```powershell
+.\gradlew.bat runClient -PwithJei=true
+.\gradlew.bat runClientGameTest -PclientScenario=automation_jei -PwithJei=true
+```
+
+Run the normal `automation` scenario without that flag as well. The optional
+scenario targets real JEI search and item/fluid/container ghost dragging, with
+server filter updates and unchanged inventory. Its separate
+`automation-jei-pass.json` receipt is valid only after successful execution;
+listing the command here is not a pass claim or a replacement for the native
+client, restart or multiplayer checks. For a normal installed client, install
+the compatible JEI mod separately only if wanted.
+
+### Multiplayer and evidence scope
 
 The PowerShell multiplayer launcher prepares both launch commands in one
 Gradle invocation, then starts two separate Minecraft JVMs with different

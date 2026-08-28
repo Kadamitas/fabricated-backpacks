@@ -3,7 +3,7 @@
   "id": "fabricated_backpacks",
   "version": "${version}",
   "name": "Fabricated Backpacks",
-  "description": "Configurable backpacks, modular upgrades, native equipment, and recipe browsing.",
+  "description": "Configurable backpacks, modular upgrades, native equipment, recipe browsing, shared conduit bundles and a steam engine.",
   "authors": ["Kadamitas"],
   "contact": {
     "sources": "https://github.com/Kadamitas/fabricated-backpacks",
@@ -14,7 +14,8 @@
   "environment": "*",
   "entrypoints": {
     "main": ["com.kadamitas.fabricatedbackpacks.FabricatedBackpacks"],
-    "client": ["com.kadamitas.fabricatedbackpacks.client.FabricatedBackpacksClient"]
+    "client": ["com.kadamitas.fabricatedbackpacks.client.FabricatedBackpacksClient"],
+    "jei_mod_plugin": ["com.kadamitas.fabricatedbackpacks.client.compat.FabricatedBackpacksJeiPlugin"]
   },
   "mixins": ["fabricated_backpacks.mixins.json", {"config":"fabricated_backpacks.client.mixins.json","environment":"client"}],
   "depends": {

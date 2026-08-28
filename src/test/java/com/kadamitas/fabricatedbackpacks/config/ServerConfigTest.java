@@ -45,6 +45,20 @@ class ServerConfigTest {
     })
     void malformedRulesCannotPartiallyApply(String json) { assertThrows(RuntimeException.class, () -> ConfigFile.decode(json)); }
 
+    @ParameterizedTest @ValueSource(strings = {
+            "{\"conduits\":{\"itemsPerOperation\":0}}", "{\"conduits\":{\"itemsPerOperation\":65}}",
+            "{\"conduits\":{\"itemIntervalTicks\":0}}", "{\"conduits\":{\"fluidMbPerTick\":-1}}",
+            "{\"conduits\":{\"energyPerTick\":1000000001}}", "{\"conduits\":{\"maximumNetworkNodes\":16385}}",
+            "{\"conduits\":{\"maximumEndpointVisitsPerTick\":0}}", "{\"conduits\":{\"unknownRate\":5}}",
+            "{\"engine\":{\"waterCapacityMb\":0}}", "{\"engine\":{\"waterMbPerTick\":4001}}",
+            "{\"engine\":{\"energyCapacity\":39}}", "{\"engine\":{\"energyPerTick\":32001}}",
+            "{\"engine\":{\"energyOutputPerTick\":0}}", "{\"engine\":{\"containerTransferMbPerTick\":0}}",
+            "{\"engine\":{\"energyCapacity\":1000000000001}}", "{\"engine\":null}"
+    })
+    void invalidAutomationCannotStartOrPartiallyReplaceRules(String settings) {
+        assertThrows(RuntimeException.class, () -> ConfigFile.decode("{\"automation\":" + settings + "}"));
+    }
+
     @Test void dropProbabilitySaturatesWithoutLosingTheLootingIncrement() {
         var rules = ServerConfig.defaults().carriers();
         assertEquals(.5, rules.effectiveDropChance(BackpackTier.LEATHER, 0));

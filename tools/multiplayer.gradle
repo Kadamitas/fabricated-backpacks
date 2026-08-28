@@ -7,6 +7,8 @@ import java.security.MessageDigest
 
 // Prepare both launch descriptions in one build; PowerShell starts them after Gradle exits.
 def requestedId = providers.gradleProperty('multiplayerRunId').orNull
+def scenario = providers.gradleProperty('multiplayerScenario').getOrElse('full')
+if (!(scenario in ['full', 'automation'])) throw new GradleException('multiplayerScenario must be full or automation.')
 def prepareClients = tasks.register('prepareMultiplayerClients') {
     group = 'verification'
     description = 'Export two exact, separate real-client commands without starting either JVM.'
@@ -33,6 +35,7 @@ if (requestedId == null) {
             getGenerateRunConfig().set(false)
             getSystemProperties().put('fabricated.backpacks.clientScenario', "multiplayer_${role}")
             getSystemProperties().put('fabricated.backpacks.multiplayerRunId', runId)
+            getSystemProperties().put('fabricated.backpacks.multiplayerScope', scenario)
             getSystemProperties().put('fabricated.backpacks.evidenceRoot', evidenceRoot.toString())
             getSystemProperties().put('java.net.preferIPv4Stack', 'true')
             getJvmArguments().add(role == 'host' ? '-Xmx3G' : '-Xmx2G')
@@ -143,12 +146,12 @@ if (requestedId == null) {
                 else inputs.add([path: file.absolutePath, missing: true])
             }
             writeNew(launchRoot.resolve('classpath-inputs.json'), json(inputs))
-            def manifest = [schema: 2, run_id: runId, prepared_at: java.time.Instant.now().toString(),
+            def manifest = [schema: 2, run_id: runId, scope: scenario, prepared_at: java.time.Instant.now().toString(),
                     project: project.projectDir.absolutePath, mod_version: project.version.toString(),
                     minecraft_version: project.minecraft_version, evidence: evidence.toString(), commands: commands]
             writeNew(launchRoot.resolve('launch.json'), json(manifest))
             logger.lifecycle('MULTIPLAYER_PREPARED {}', launchRoot.resolve('launch.json'))
-            logger.lifecycle('No Minecraft JVM has started. Launch with tools/run-multiplayer.ps1 -RunId {} -SkipPrepare', runId)
+            logger.lifecycle('No Minecraft JVM has started. Launch with tools/run-multiplayer.ps1 -RunId {} -Scenario {} -SkipPrepare', runId, scenario)
         }
     }
 }

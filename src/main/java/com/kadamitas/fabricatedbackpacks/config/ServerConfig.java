@@ -11,7 +11,8 @@ import java.util.regex.Pattern;
 
 /** Immutable, validated server rules. Files are read at startup; geometry changes need a restart. */
 public record ServerConfig(int format, Map<String, Capacity> capacities, Storage storage,
-                           Capture capture, Carriers carriers, boolean chestLoot, UpgradeConfig upgrades) {
+                           Capture capture, Carriers carriers, boolean chestLoot, UpgradeConfig upgrades,
+                           AutomationConfig automation) {
     private static final Pattern ID = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
 
     public ServerConfig {
@@ -23,12 +24,18 @@ public record ServerConfig(int format, Map<String, Capacity> capacities, Storage
         Objects.requireNonNull(capture, "capture");
         Objects.requireNonNull(carriers, "carriers");
         Objects.requireNonNull(upgrades, "upgrades");
+        Objects.requireNonNull(automation, "automation");
     }
 
     /** Retains the original source API while old files inherit the added upgrade defaults. */
     public ServerConfig(int format, Map<String, Capacity> capacities, Storage storage,
                         Capture capture, Carriers carriers, boolean chestLoot) {
-        this(format, capacities, storage, capture, carriers, chestLoot, UpgradeConfig.defaults());
+        this(format, capacities, storage, capture, carriers, chestLoot, UpgradeConfig.defaults(), AutomationConfig.defaults());
+    }
+
+    public ServerConfig(int format, Map<String, Capacity> capacities, Storage storage,
+                        Capture capture, Carriers carriers, boolean chestLoot, UpgradeConfig upgrades) {
+        this(format, capacities, storage, capture, carriers, chestLoot, upgrades, AutomationConfig.defaults());
     }
 
     public Capacity capacity(BackpackTier tier) { return capacities.get(tier.id()); }
@@ -36,7 +43,8 @@ public record ServerConfig(int format, Map<String, Capacity> capacities, Storage
     public static ServerConfig defaults() {
         Map<String, Capacity> capacities = new LinkedHashMap<>();
         for (BackpackTier tier : BackpackTier.values()) capacities.put(tier.id(), new Capacity(tier.slots(), tier.upgradeSlots()));
-        return new ServerConfig(1, capacities, Storage.defaults(), Capture.defaults(), Carriers.defaults(), true, UpgradeConfig.defaults());
+        return new ServerConfig(1, capacities, Storage.defaults(), Capture.defaults(), Carriers.defaults(), true,
+                UpgradeConfig.defaults(), AutomationConfig.defaults());
     }
 
     public record Capacity(int slots, int upgrades) {

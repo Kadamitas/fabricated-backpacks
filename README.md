@@ -9,9 +9,10 @@ The feature list describes the current implementation, not a claim that every
 interaction or multiplayer scenario has passed acceptance testing. Release
 evidence belongs in [Verification](docs/VERIFICATION.md).
 
-The working branch also contains an **unreleased interface and worn-model
-revision**. Its screenshots and test status are tracked separately in the
-[UI revision record](docs/UI_REVISION.md); the existing alpha download is unchanged.
+The working branch also contains an **unreleased interface, worn-model and
+automation revision**. See the [UI revision record](docs/UI_REVISION.md) and
+[automation verification record](docs/AUTOMATION_VERIFICATION.md) for their separate
+test status; the existing alpha download is unchanged.
 
 ## What is included
 
@@ -22,6 +23,12 @@ revision**. Its screenshots and test status are tracked separately in the
 - A native backpack equipment slot that leaves the chest armor slot available.
 - Modular collection, filtering, processing, transfer, resource, music,
   protection and mob-capture upgrades.
+- Fabric item and fluid transfer interfaces, with Team Reborn Energy battery
+  access and placed-backpack output for compatible machines and cables.
+- Native item, fluid and energy conduits that share one block space, plus a
+  fuel-and-water steam engine with a moving flywheel and piston (working branch).
+- Per-interface item/fluid allow/block filters, searchable ghost pickers and
+  optional JEI drag-and-drop integration (working branch).
 - An item and recipe browser with recipes, uses, search, bookmarks, history,
   ingredient displays and server-checked workstation transfer.
 - Shift contents previews, per-backpack preferences and private settings
@@ -44,6 +51,9 @@ Install the same mod build and compatible Fabric API on the client and server.
 The native equipment slot and recipe browser do not require separate equipment
 or recipe-viewer mods. Only the target listed above is supported by this build;
 other Minecraft versions and loaders need separate ports.
+
+The working branch optionally integrates with JEI for Fabric 26.2. Its built-in
+filter search remains available without JEI; the mod does not bundle JEI.
 
 When a verified release is available, place its main JAR in the instance's
 `mods` directory. Do not install the sources JAR or the separate development
@@ -106,6 +116,8 @@ or grant missing ingredients. Other recipe categories remain viewable.
 
 - [Features and current limits](docs/FEATURES.md)
 - [Server configuration and data packs](docs/CONFIGURATION.md)
+- [Item, fluid and energy integration](docs/INTEGRATION.md)
+- [Native conduits and steam engine](docs/AUTOMATION.md)
 - [Building and testing](docs/BUILDING.md)
 - [Verification](docs/VERIFICATION.md)
 - [Changelog](CHANGELOG.md)

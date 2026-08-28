@@ -62,6 +62,9 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         context.runOnClient(client -> { client.options.guiScale().set(2); client.resizeGui(); });
         switch (System.getProperty("fabricated.backpacks.clientScenario", "full")) {
             case "restart" -> { ClientAcceptanceFiles.restart(context); return; }
+            case "automation" -> { ClientAcceptanceFiles.automation(context); return; }
+            case "automation_restart" -> { ClientAcceptanceFiles.restartAutomation(context); return; }
+            case "automation_jei" -> { JeiConduitClientAcceptance.run(context); return; }
             case "appearance" -> {
                 try (var world = context.worldBuilder().create()) {
                     setup(world);
@@ -79,6 +82,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         TestWorldSave save;
         String identity;
         net.minecraft.nbt.CompoundTag expected;
+        net.minecraft.nbt.CompoundTag automationExpected;
         try (var world = context.worldBuilder().create()) {
             save = world.getWorldSave();
             setup(world);
@@ -143,12 +147,16 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             StorageClientAcceptance.run(context, world);
             RulesClientAcceptance.run(context, world);
             evidence.addAll(PlacedAppearanceAcceptance.run(context, world));
+            evidence.addAll(AutomationClientAcceptance.run(context, world));
+            automationExpected = world.getServer().computeOnServer(server -> AutomationClientAcceptance.snapshot(server.overworld()));
             check(world.getServer().computeOnServer(server -> recordCount(bag(world))) == 12, "All twelve physical records must persist after unrelated menus");
             evidence.add("Input: storage click/return, 12 physical record inserts, actual audio channels, bucket transfer, browser recipe transfer/craft/ghost/bookmarks/reload, equip with armor");
         }
         try (var reopened = save.open()) {
             reopened.getConnection().waitForChunksRender();
             context.waitTicks(5);
+            AutomationClientAcceptance.verifyReload(reopened, automationExpected);
+            AutomationClientAcceptance.resumeRoutingAfterReload(reopened);
             check(reopened.getServer().computeOnServer(server -> bag(reopened).identity()).equals(identity), "Backpack identity must survive world save/reopen");
             check(reopened.getServer().computeOnServer(server -> bag(reopened).getItem(0).getCount()) == 200_000, "200000 stored items must survive world save/reopen");
             check(reopened.getServer().computeOnServer(server -> recordCount(bag(reopened))) == 12, "Twelve discs must survive world save/reopen");
@@ -160,6 +168,8 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             check(context.computeOnClient(client -> ((BackpackScreen) client.gui.screen()).getMenu().bag().tier()) == BackpackTier.GOLD, "B must open the equipped backpack after reconnect");
             screenshot(context, "09-world-reopened-equipment");
             evidence.add("Save/reopen: identity, 200000-count stack, all12records, 1000mB water, persistent crafting input, independent equipment");
+            evidence.add("Save/reopen: exact paused steam engine components, physical slots and every installed conduit lane/face mode.");
+            evidence.add("Reload routing: the reconstructed conduit graph transfers a new physical item and the saved engine resumes natural generation.");
             context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
             expected = ClientAcceptanceFiles.snapshot(reopened);

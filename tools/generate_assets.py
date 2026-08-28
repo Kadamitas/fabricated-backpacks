@@ -19,6 +19,7 @@ import re
 import struct
 import sys
 import zlib
+import generate_automation_assets as automation
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -617,7 +618,7 @@ def translations(upgrades):
         lang[f"item.{MOD}.{item}"] = f"Stack Conversion: {first} to {second}"
         lang[f"tooltip.{MOD}.{item}"] = f"Combine with a {first} stack upgrade to obtain tier {second}."
     # UI prose lives in one explicit input, so regeneration never discards it.
-    for filename in ("ui_strings.json", "browser_strings.json"):
+    for filename in ("ui_strings.json", "browser_strings.json", "automation_strings.json"):
         ui_path = ROOT / "tools/assets" / filename
         if ui_path.exists():
             additions = json.loads(ui_path.read_text(encoding="utf-8"))
@@ -757,15 +758,17 @@ def generate():
                              for element in backpack_elements(tier, False)]} for tier in TIERS],
     }
     put_json(f"{ASSET}/backpack_profiles.json", profiles)
+    automation.generate(sys.modules[__name__], put_json, put_png, models)
     put_png(PROJECT_ICON, project_icon(rasters, models))
     manifest = {
         "schema": 1, "generator": "tools/generate_assets.py", "license": "MIT",
-        "registered_item_count": 71, "backpack_tier_count": 6, "upgrade_count": 54, "conversion_count": 10,
+        "registered_item_count": 76, "backpack_tier_count": 6, "upgrade_count": 54, "conversion_count": 10,
+        "automation_items": list(automation.ITEMS),
         "creative_only": ["infinity_upgrade", "stack_upgrade_omega_tier"],
         "loot_policy": "Backpack block code drops its persisted ItemStack; generated block loot pools are empty to prevent duplicate drops.",
         "texture_policy": "16x16 pixel-cluster item and block textures; 64x64 tiled material atlases; 128x128 mod emblem; 512x512 original production-model project icon. No generated file depends on an external image.",
         "inputs": {str(path.relative_to(ROOT)).replace("\\", "/"): hashlib.sha256(path.read_bytes()).hexdigest()
-                   for path in (Path(__file__).resolve(), ROOT / "tools/assets/ui_strings.json", ROOT / "tools/assets/browser_strings.json",
+                   for path in (Path(__file__).resolve(), ROOT / "tools/generate_automation_assets.py", ROOT / "tools/assets/automation_strings.json", ROOT / "tools/assets/ui_strings.json", ROOT / "tools/assets/browser_strings.json",
                                 ROOT / "src/main/java/com/kadamitas/fabricatedbackpacks/domain/UpgradeKind.java") if path.exists()},
         "files": {path.removeprefix("src/main/resources/"): hashlib.sha256(contents).hexdigest()
                   for path, contents in sorted(outputs.items()) if path.startswith("src/main/resources/")},
@@ -962,6 +965,8 @@ def review_images(rasters, models):
     report = {"kind": "offline_production_asset_render", "minecraft_client_capture": False,
               "model_views": 35, "upgrade_icons": len(items), "animation_frames": animation_frames,
               "images": ["backpack-models.png", "backpack-six-faces.png", "flap-animation.png", "upgrade-icons.png", "logo.png", "project-icon.png"]}
+    report["images"].extend(automation.review(sys.modules[__name__], rasters, models, output))
+    report["automation_model_views"] = 17
     (output / "review.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return output
 
