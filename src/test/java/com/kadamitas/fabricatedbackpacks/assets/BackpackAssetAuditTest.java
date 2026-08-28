@@ -58,7 +58,7 @@ class BackpackAssetAuditTest {
         }
         Set<String> expected = registeredItems();
         assertEquals(76, expected.size());
-        try (Stream<Path> files = Files.list(ASSETS.resolve("items"))) {
+        try (Stream<Path> files = Files.list(ASSETS.resolve("models/item"))) {
             Set<String> actual = new HashSet<>();
             files.forEach(path -> actual.add(path.getFileName().toString().replace(".json", "")));
             assertEquals(expected, actual);
@@ -70,6 +70,7 @@ class BackpackAssetAuditTest {
     void generatedFilesAndTheirInputsMatchManifestHashes() throws Exception {
         JsonObject manifest = json(ASSETS.resolve("asset_manifest.json"));
         assertEquals("MIT", manifest.get("license").getAsString());
+        assertEquals("1.21.1", manifest.get("minecraft_version").getAsString());
         assertEquals(76, manifest.get("registered_item_count").getAsInt());
         for (Map.Entry<String, JsonElement> entry : manifest.getAsJsonObject("files").entrySet()) {
             Path path = RESOURCES.resolve(entry.getKey()).normalize();
@@ -118,9 +119,8 @@ class BackpackAssetAuditTest {
     @Test
     void allItemModelsAndTextureAliasesResolveWithoutCycles() throws IOException {
         for (String item : registeredItems()) {
-            JsonObject definition = json(ASSETS.resolve("items/" + item + ".json")).getAsJsonObject("model");
-            assertEquals("minecraft:model", definition.get("type").getAsString(), item);
-            String reference = definition.get("model").getAsString();
+            String reference = NAMESPACE + ":item/" + item;
+            assertFalse(Files.exists(ASSETS.resolve("items/" + item + ".json")), "1.21.1 uses legacy item model resources");
             JsonObject resolved = resolveModel(reference, new HashSet<>());
             JsonObject textures = resolved.getAsJsonObject("textures");
             assertNotNull(textures, item + " has no textures");
@@ -211,15 +211,17 @@ class BackpackAssetAuditTest {
     @ParameterizedTest
     @MethodSource("tiers")
     void eachTierItemUsesIndependentBodyAndTrimTintSources(String tier) throws IOException {
-        JsonObject definition = json(ASSETS.resolve("items/" + tier + ".json")).getAsJsonObject("model");
-        JsonArray tints = definition.getAsJsonArray("tints");
-        assertEquals(2, tints.size());
-        for (int index = 0; index < 2; index++) {
-            JsonObject tint = tints.get(index).getAsJsonObject();
-            assertEquals("minecraft:custom_model_data", tint.get("type").getAsString());
-            assertEquals(index, tint.get("index").getAsInt());
-            assertEquals(index == 0 ? 0xB97843 : 0x503B36, tint.get("default").getAsInt());
-        }
+        JsonObject profile = json(ASSETS.resolve("backpack_profiles.json"));
+        assertEquals(0xB97843, profile.get("body_color").getAsInt());
+        assertEquals(0x503B36, profile.get("trim_color").getAsInt());
+        assertEquals(0, profile.getAsJsonObject("material_tints").get("body").getAsInt());
+        assertEquals(1, profile.getAsJsonObject("material_tints").get("trim").getAsInt());
+        JsonObject resolved = resolveModel(NAMESPACE + ":item/" + tier, new HashSet<>());
+        Set<Integer> indices = new HashSet<>();
+        for (JsonElement element : resolved.getAsJsonArray("elements"))
+            for (JsonElement face : element.getAsJsonObject().getAsJsonObject("faces").asMap().values())
+                if (face.getAsJsonObject().has("tintindex")) indices.add(face.getAsJsonObject().get("tintindex").getAsInt());
+        assertTrue(indices.containsAll(Set.of(0, 1)), "Both legacy item-color providers have geometry to tint");
         JsonObject model = json(ASSETS.resolve("models/item/" + tier + ".json"));
         assertEquals(NAMESPACE + ":block/" + tier + "_closed", model.get("parent").getAsString());
     }
@@ -297,7 +299,7 @@ class BackpackAssetAuditTest {
                     if (recipe.has("source")) {
                         String source = recipe.get("source").getAsString();
                         assertTrue(TIERS.stream().map(id -> NAMESPACE + ":" + id).anyMatch(source::equals));
-                        assertTrue(recipe.getAsJsonObject("key").asMap().values().stream().anyMatch(value -> value.getAsString().equals(source)));
+                        assertTrue(recipe.getAsJsonObject("key").asMap().values().stream().anyMatch(value -> value.getAsJsonObject().has("item") && value.getAsJsonObject().get("item").getAsString().equals(source)));
                     }
                 }
                 List<JsonElement> ingredients = new ArrayList<>();
@@ -307,8 +309,10 @@ class BackpackAssetAuditTest {
                     if (recipe.has(key)) ingredients.add(recipe.get(key));
                 }
                 for (JsonElement ingredient : ingredients) {
-                    assertTrue(ingredient.isJsonPrimitive() && ingredient.getAsJsonPrimitive().isString(), "26.2 ingredients must use modern string/tag form: " + file);
-                    String id = ingredient.getAsString();
+                    assertTrue(ingredient.isJsonObject(), "1.21.1 ingredients must be item/tag objects: " + file);
+                    JsonObject object = ingredient.getAsJsonObject();
+                    assertTrue(object.keySet().equals(Set.of("item")) || object.keySet().equals(Set.of("tag")));
+                    String id = object.get(object.has("item") ? "item" : "tag").getAsString();
                     assertTrue(id.startsWith("minecraft:") || id.startsWith(NAMESPACE + ":"), "Unexpected external recipe dependency: " + id);
                     if (id.startsWith(NAMESPACE + ":")) assertTrue(allItems.contains(id.substring(NAMESPACE.length() + 1)), id);
                 }

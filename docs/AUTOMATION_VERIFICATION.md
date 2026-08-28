@@ -1,3 +1,5 @@
+> Historical **26.2** evidence only. For this branch, see [1.21.1 compatibility](COMPATIBILITY_1_21_1.md); these results do not certify the port.
+
 # Automation revision verification
 
 This record covers the **UNRELEASED** conduit and steam-engine revision for
@@ -18,7 +20,7 @@ Focused reports are named `automation-pass.json`, `automation-restart-pass.json`
 and `multiplayer-automation.json`; they do not replace or impersonate the full
 client/release receipts.
 
-## Final automated checkpoint — 28 August 2026
+## Final automated checkpoint â€” 28 August 2026
 
 Epoch 11 is `7566096f-b918-44d5-8869-7590b7850db9`.
 The 749 input hashes in `build/verification/start.json` matched the files on

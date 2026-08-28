@@ -16,7 +16,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 
 /** Loaded solely by JEI's optional Fabric entrypoint; no common or normal client code links its API. */
 public final class FabricatedBackpacksJeiPlugin implements IModPlugin {
-    @Override public Identifier getPluginUid() { return BackpackRegistry.id("conduit_filters"); }
+    @Override public ResourceLocation getPluginUid() { return BackpackRegistry.id("conduit_filters"); }
 
     @Override public void registerGuiHandlers(IGuiHandlerRegistration registration) {
         registration.addGuiContainerHandler(ConduitScreen.class, new IGuiContainerHandler<ConduitScreen>() {
@@ -46,7 +46,7 @@ public final class FabricatedBackpacksJeiPlugin implements IModPlugin {
             if (kind.isEmpty() || identity(kind.get(), ingredient.getIngredient()).isEmpty()) return List.of();
             return screen.filterTargets().stream().filter(target -> target.kind() == kind.get())
                     .<Target<I>>map(target -> new GhostTarget<>(rectangle(target.bounds()), value -> {
-                        if (Minecraft.getInstance().gui.screen() != screen || screen.selectedFilterKind().orElse(null) != target.kind()) return;
+                        if (Minecraft.getInstance().screen != screen || screen.selectedFilterKind().orElse(null) != target.kind()) return;
                         identity(target.kind(), value).ifPresent(id -> {
                             if (target.kind() == ConduitKind.ITEM) screen.acceptItem(target.slot(), id);
                             else screen.acceptFluid(target.slot(), id);
@@ -62,7 +62,7 @@ public final class FabricatedBackpacksJeiPlugin implements IModPlugin {
         @Override public void accept(I ingredient) { selection.accept(ingredient); }
     }
 
-    private static Optional<Identifier> identity(ConduitKind kind, Object ingredient) {
+    private static Optional<ResourceLocation> identity(ConduitKind kind, Object ingredient) {
         if (kind == ConduitKind.ITEM) return ingredient instanceof ItemStack stack && !stack.isEmpty()
                 ? Optional.of(BuiltInRegistries.ITEM.getKey(stack.getItem())) : Optional.empty();
         if (kind != ConduitKind.FLUID) return Optional.empty();
@@ -71,7 +71,7 @@ public final class FabricatedBackpacksJeiPlugin implements IModPlugin {
         // Read a constant copy: a bucket is a convenient fluid selector, never a transferred item.
         var storage = ContainerItemContext.withConstant(stack.copyWithCount(1)).find(FluidStorage.ITEM);
         if (storage == null) return Optional.empty();
-        Identifier selected = null;
+        ResourceLocation selected = null;
         int inspected = 0;
         for (var view : storage) {
             if (++inspected > 64) return Optional.empty();
@@ -84,7 +84,7 @@ public final class FabricatedBackpacksJeiPlugin implements IModPlugin {
         return Optional.ofNullable(selected);
     }
 
-    private static Optional<Identifier> fluidId(FluidVariant fluid) {
+    private static Optional<ResourceLocation> fluidId(FluidVariant fluid) {
         return fluid.isBlank() ? Optional.empty() : Optional.of(BuiltInRegistries.FLUID.getKey(fluid.getFluid()));
     }
 }

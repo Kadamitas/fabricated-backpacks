@@ -21,8 +21,8 @@ abstract class ItemEntityMixin implements UpgradeAccess.ItemClaims {
     @Override @Accessor("target") public abstract UUID fabricatedBackpacks$target();
     @Inject(method = "tick", at = @At("HEAD"))
     private void fabricatedBackpacks$protect(CallbackInfo callback) { BackpackRuntime.protectDropped((ItemEntity) (Object) this); }
-    @Inject(method = "hurtServer", at = @At("HEAD"), cancellable = true)
-    private void fabricatedBackpacks$resistDamage(ServerLevel level, DamageSource damage, float amount, CallbackInfoReturnable<Boolean> callback) {
+    @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
+    private void fabricatedBackpacks$resistDamage(DamageSource damage, float amount, CallbackInfoReturnable<Boolean> callback) {
         if (BackpackRuntime.everlasting(((ItemEntity) (Object) this).getItem())) callback.setReturnValue(false);
     }
     @Inject(method = "playerTouch", at = @At("HEAD"), cancellable = true)

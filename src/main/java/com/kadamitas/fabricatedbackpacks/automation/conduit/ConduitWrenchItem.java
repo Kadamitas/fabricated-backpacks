@@ -10,21 +10,19 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.function.Consumer;
+import java.util.List;
 
 /** Physical-part interaction: endpoint settings, direct link changes, or one strand's removal. */
 public final class ConduitWrenchItem extends Item {
     public ConduitWrenchItem(Properties properties) { super(properties); }
 
-    @Override public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display,
-                                          Consumer<Component> lines, TooltipFlag flags) {
-        super.appendHoverText(stack, context, display, lines, flags);
-        lines.accept(Component.translatable("tooltip.fabricated_backpacks.conduit_wrench"));
+    @Override public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flags) {
+        super.appendHoverText(stack, context, lines, flags);
+        lines.add(Component.translatable("tooltip.fabricated_backpacks.conduit_wrench"));
     }
 
     @Override public InteractionResult useOn(UseOnContext context) {
@@ -38,7 +36,7 @@ public final class ConduitWrenchItem extends Item {
             return InteractionResult.SUCCESS;
         }
         var bundle = (ConduitBundleBlockEntity) target;
-        if (!context.getLevel().isClientSide()) bundle.refreshVisual();
+        if (!context.getLevel().isClientSide) bundle.refreshVisual();
         Vec3 local = context.getClickLocation().subtract(Vec3.atLowerCornerOf(context.getClickedPos()));
         var part = ConduitGeometry.hitPart(bundle.visualState(), local, context.getClickedFace()).orElse(null);
         if (part == null || !bundle.has(part.kind())) return InteractionResult.PASS;
@@ -65,7 +63,7 @@ public final class ConduitWrenchItem extends Item {
     private static void repair(ConduitBundleBlockEntity bundle, ConduitKind kind, Direction face,
                                ServerPlayer player, ItemStack wrench) {
         if (bundle.mode(kind, face) == ConduitMode.DISABLED) bundle.setMode(kind, face, ConduitMode.defaultFor(kind));
-        var level = player.level();
+        var level = player.serverLevel();
         var neighbor = bundle.getBlockPos().relative(face);
         // An internal cut retracts both rendered ends. Either hub may repair it, but never across
         // an unloaded chunk or a neighbour the player cannot configure.
@@ -75,7 +73,7 @@ public final class ConduitWrenchItem extends Item {
                 && other.mode(kind, face.getOpposite()) == ConduitMode.DISABLED) {
             other.setMode(kind, face.getOpposite(), ConduitMode.defaultFor(kind));
         }
-        ConduitNetworks.neighborChanged(player.level(), bundle.getBlockPos());
+        ConduitNetworks.neighborChanged(player.serverLevel(), bundle.getBlockPos());
         bundle.refreshVisual();
     }
 }

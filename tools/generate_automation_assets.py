@@ -292,8 +292,6 @@ def generate(api, put_json, put_png, models):
     image.rect(12, 2, 14, 6, "C3D0CC"); image.rect(9, 6, 12, 7, "E2E6D7")
     put_png(f"{api.ASSET}/textures/item/conduit_wrench.png", image)
     put_json(f"{api.ASSET}/models/item/conduit_wrench.json", wrench)
-    for item in ITEMS:
-        put_json(f"{api.ASSET}/items/{item}.json", {"model": {"type": "minecraft:model", "model": f"{api.MOD}:item/{item}"}})
     for block in ("steam_engine", "conduit_bundle"):
         put_json(f"{api.DATA}/loot_table/blocks/{block}.json", {"type": "minecraft:block", "pools": []})
     put_json(f"{api.DATA}/tags/item/conduits.json", {"replace": False, "values": [f"{api.MOD}:{kind}_conduit" for kind in KINDS]})
@@ -306,7 +304,7 @@ def generate(api, put_json, put_png, models):
 def recipes(api):
     def shaped(pattern, key, result, count=1):
         return {"type": "minecraft:crafting_shaped", "category": "redstone", "pattern": pattern,
-                "key": {symbol: "minecraft:" + item for symbol, item in key.items()},
+                "key": {symbol: api.ingredient("minecraft:" + item) for symbol, item in key.items()},
                 "result": {"id": api.MOD + ":" + result, "count": count}}
     return {
         "item_conduit": shaped(["III", "RGR", "III"], {"I": "iron_ingot", "R": "redstone", "G": "glass"}, "item_conduit", 8),

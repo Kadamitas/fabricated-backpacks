@@ -1,8 +1,9 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -42,25 +43,27 @@ public final class FilterTagsScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal(text), ignored -> action.run()).bounds(left + x, top + y, width, 18).build());
     }
     private List<String> selected() {
-        return parent.getMenu().selected().map(upgrade -> Arrays.stream(parent.getMenu().bag().settings(upgrade).getStringOr(cookingInput ? "input_tags" : "tags", "").split(","))
+        return parent.getMenu().selected().map(upgrade -> Arrays.stream(NbtAccess.getStringOr(parent.getMenu().bag().settings(upgrade), cookingInput ? "input_tags" : "tags", "").split(","))
                 .filter(value -> !value.isBlank()).sorted().toList()).orElse(List.of());
     }
     private void toggle(String value) {
         ClientPlayNetworking.send(new MenuAction(parent.getMenu().containerId, "upgrade", 0, 0, (cookingInput ? "input_tag:" : "tag:") + value.strip()));
     }
     @Override public void tick() {
-        if (minecraft.player == null || minecraft.player.containerMenu != parent.getMenu()) { minecraft.gui.setScreen(null); return; }
+        if (minecraft.player == null || minecraft.player.containerMenu != parent.getMenu()) { minecraft.setScreen(null); return; }
         if (!fingerprint.equals(selected().toString())) rebuildWidgets();
     }
-    @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    // This screen paints its own backdrop before its native widgets.
+    @Override public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {}
+
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         graphics.fill(left, top, left + 330, top + 236, 0xffccb996);
-        graphics.outline(left, top, 330, 236, 0xff493326);
-        graphics.text(font, title, left + 10, top + 9, 0xff302a21, false);
-        graphics.text(font, "Click a selected tag to remove it; use Match tags in the tab.", left + 10, top + 50, 0xff493326, false);
-        graphics.text(font, (page + 1) + "/" + Math.max(1, Math.ceilDiv(selected().size(), 7)), left + 78, top + 212, 0xff493326, false);
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
+        graphics.renderOutline(left, top, 330, 236, 0xff493326);
+        graphics.drawString(font, title, left + 10, top + 9, 0xff302a21, false);
+        graphics.drawString(font, "Click a selected tag to remove it; use Match tags in the tab.", left + 10, top + 50, 0xff493326, false);
+        graphics.drawString(font, (page + 1) + "/" + Math.max(1, Math.ceilDiv(selected().size(), 7)), left + 78, top + 212, 0xff493326, false);
+        super.render(graphics, mouseX, mouseY, delta);
     }
-    @Override public void onClose() { minecraft.gui.setScreen(minecraft.player != null && minecraft.player.containerMenu == parent.getMenu() ? parent : null); }
+    @Override public void onClose() { minecraft.setScreen(minecraft.player != null && minecraft.player.containerMenu == parent.getMenu() ? parent : null); }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public boolean isInGameUi() { return true; }
 }

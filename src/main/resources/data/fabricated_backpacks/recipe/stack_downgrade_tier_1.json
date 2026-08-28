@@ -7,9 +7,15 @@
     " C "
   ],
   "key": {
-    "S": "minecraft:string",
-    "U": "fabricated_backpacks:upgrade_base",
-    "C": "minecraft:iron_chain"
+    "S": {
+      "item": "minecraft:string"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "C": {
+      "item": "minecraft:chain"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:stack_downgrade_tier_1",

@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:stonecutter",
-    "T": "minecraft:iron_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:smooth_stone"
+    "M": {
+      "item": "minecraft:stonecutter"
+    },
+    "T": {
+      "item": "minecraft:iron_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:smooth_stone"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:stonecutter_upgrade",

@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.config.ConfigFile;
@@ -24,7 +25,7 @@ import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
 import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
+import net.fabricmc.fabric.api.transfer.v1.item.InventoryStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
@@ -161,7 +162,7 @@ public final class InceptionGameTests {
         child.setItem(1, new ItemStack(Items.DIAMOND_PICKAXE));
         var player = player(helper);
         player.getInventory().setItem(10, root.stack());
-        player.getInventory().setItem(player.getInventory().getSelectedSlot(), new ItemStack(Items.STICK, 3));
+        player.getInventory().setItem(player.getInventory().selected, new ItemStack(Items.STICK, 3));
         helper.assertTrue(ToolRuntime.forBlock(root, player, Blocks.STONE.defaultBlockState(), false), "Outer tool selection reaches an owned child's pickaxe");
         helper.assertTrue(player.getMainHandItem().is(Items.DIAMOND_PICKAXE), "The physical tool is moved to the player's hand");
         helper.assertValueEqual(count(child, Items.DIAMOND_PICKAXE), 0, "The selected tool is not duplicated");
@@ -190,8 +191,8 @@ public final class InceptionGameTests {
         BlockPos position = helper.absolutePos(new BlockPos(2, 1, 2));
         BackpackTraversal.tick(root, helper.getLevel(), position, null);
         BackpackTraversal.tick(root, helper.getLevel(), position, null);
-        helper.assertValueEqual(child.settings(upgrade(child, 0)).getIntOr("burn_remaining", -1), 9, "Carried-style child dispatch runs once in a server tick");
-        helper.assertValueEqual(savedChild(helper, root, 0).settings(upgrade(savedChild(helper, root, 0), 0)).getIntOr("burn_remaining", -1), 9,
+        helper.assertValueEqual(NbtAccess.getIntOr(child.settings(upgrade(child, 0)), "burn_remaining", -1), 9, "Carried-style child dispatch runs once in a server tick");
+        helper.assertValueEqual(NbtAccess.getIntOr(savedChild(helper, root, 0).settings(upgrade(savedChild(helper, root, 0), 0)), "burn_remaining", -1), 9,
                 "Child progress is serialized into the parent after ticking");
 
         BagInventory disabled = root();
@@ -200,8 +201,8 @@ public final class InceptionGameTests {
         attach(disabled, 0, paused);
         disabled.updateSettings(tag -> tag.putBoolean("inception_inner_upgrades", false));
         BackpackTraversal.tick(disabled, helper.getLevel(), position, null);
-        helper.assertValueEqual(paused.settings(upgrade(paused, 0)).getIntOr("burn_remaining", -1), 10, "Disabled child upgrades preserve remaining fuel");
-        helper.assertFalse(paused.settings(upgrade(paused, 0)).getBooleanOr("burning", true), "Paused cooking does not remain visually active");
+        helper.assertValueEqual(NbtAccess.getIntOr(paused.settings(upgrade(paused, 0)), "burn_remaining", -1), 10, "Disabled child upgrades preserve remaining fuel");
+        helper.assertFalse(NbtAccess.getBooleanOr(paused.settings(upgrade(paused, 0)), "burning", true), "Paused cooking does not remain visually active");
         helper.assertTrue(BackpackTraversal.usesChildren(disabled), "Pausing child upgrades leaves outer inventory access independent");
 
         BagInventory placed = root();
@@ -216,7 +217,7 @@ public final class InceptionGameTests {
         BackpackBlockEntity.tick(helper.getLevel(), position, entity.getBlockState(), entity);
         BackpackBlockEntity.tick(helper.getLevel(), position, entity.getBlockState(), entity);
         BagInventory actualChild = BackpackTraversal.children(entity.inventory()).getFirst().inventory();
-        helper.assertValueEqual(actualChild.settings(upgrade(actualChild, 0)).getIntOr("burn_remaining", -1), 9, "The actual placed block ticks its child once even with outer access off");
+        helper.assertValueEqual(NbtAccess.getIntOr(actualChild.settings(upgrade(actualChild, 0)), "burn_remaining", -1), 9, "The actual placed block ticks its child once even with outer access off");
         helper.succeed();
     }
 
@@ -276,7 +277,7 @@ public final class InceptionGameTests {
         BagInventory child = bag(BackpackTier.IRON, UpgradeKind.TANK, UpgradeKind.BATTERY);
         attach(root, 0, child);
         SimpleContainer holder = new SimpleContainer(root.stack());
-        ContainerItemContext context = ContainerItemContext.ofSingleSlot(ContainerStorage.of(holder, null).getSlot(0));
+        ContainerItemContext context = ContainerItemContext.ofSingleSlot(InventoryStorage.of(holder, null).getSlot(0));
         Storage<FluidVariant> fluid = context.find(FluidStorage.ITEM);
         EnergyStorage energy = context.find(EnergyStorage.ITEM);
         ItemStack before = holder.getItem(0).copy();

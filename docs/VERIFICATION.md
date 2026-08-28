@@ -1,3 +1,5 @@
+> Historical **26.2** evidence only. For this branch, see [1.21.1 compatibility](COMPATIBILITY_1_21_1.md); these results do not certify the port.
+
 # Verification record
 
 Target: **Fabricated Backpacks 0.5.0-alpha**, Minecraft **26.2**, Fabric,

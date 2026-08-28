@@ -8,7 +8,7 @@ import com.mojang.serialization.JsonOps;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.PackType;
@@ -43,12 +43,12 @@ public final class BackpackTemplates {
     }
     public static Optional<WholeBagTemplate> load(MinecraftServer server, String reference) throws IOException {
         if (AdminNames.isLocal(reference)) return AdminSavedData.of(server).template(reference);
-        Identifier id = Identifier.tryParse(reference);
+        ResourceLocation id = ResourceLocation.tryParse(reference);
         if (id == null || !reference.contains(":")) throw new IllegalArgumentException("Invalid template reference");
         return read(server.getResourceManager(), server.registryAccess(), id);
     }
-    public static Optional<WholeBagTemplate> read(ResourceManager resources, HolderLookup.Provider registries, Identifier id) throws IOException {
-        var resource = resources.getResource(Identifier.fromNamespaceAndPath(id.getNamespace(), DIRECTORY + "/" + id.getPath() + ".json"));
+    public static Optional<WholeBagTemplate> read(ResourceManager resources, HolderLookup.Provider registries, ResourceLocation id) throws IOException {
+        var resource = resources.getResource(ResourceLocation.fromNamespaceAndPath(id.getNamespace(), DIRECTORY + "/" + id.getPath() + ".json"));
         if (resource.isEmpty()) return Optional.empty();
         try (var input = resource.get().open()) {
             byte[] bytes = input.readNBytes(MAX_BYTES + 1);
@@ -71,10 +71,10 @@ public final class BackpackTemplates {
         AdminNames.local(exportName);
         WholeBagTemplate template = load(server, reference).orElseThrow(() -> new IllegalArgumentException("Template not found: " + reference));
         String encoded = encode(server.registryAccess(), template);
-        var format = SharedConstants.getCurrentVersion().packVersion(PackType.SERVER_DATA);
-        var metadata = new PackMetadataSection(Component.literal("Fabricated Backpacks whole-backpack template"), new InclusiveRange<>(format, format));
+        var format = SharedConstants.getCurrentVersion().getPackVersion(PackType.SERVER_DATA);
+        var metadata = new PackMetadataSection(Component.literal("Fabricated Backpacks whole-backpack template"), format, java.util.Optional.of(new InclusiveRange<>(format, format)));
         JsonObject manifest = new JsonObject();
-        manifest.add("pack", PackMetadataSection.SERVER_TYPE.codec().encodeStart(JsonOps.INSTANCE, metadata).getOrThrow());
+        manifest.add("pack", PackMetadataSection.CODEC.encodeStart(JsonOps.INSTANCE, metadata).getOrThrow());
 
         Path root = server.getWorldPath(LevelResource.DATAPACK_DIR).toAbsolutePath().normalize();
         rejectSymbolicAncestors(root);

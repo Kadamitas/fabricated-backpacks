@@ -3,7 +3,7 @@ package com.kadamitas.fabricatedbackpacks.config;
 import com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -28,7 +28,7 @@ public final class BurdenRuntime {
         if (extra == 0) return;
         int level = (int)Math.min(10, extra * burden.levelsPerExtra());
         var effect = player.registryAccess().lookupOrThrow(Registries.MOB_EFFECT)
-                .get(ResourceKey.create(Registries.MOB_EFFECT, Identifier.parse(burden.effect())));
+                .get(ResourceKey.create(Registries.MOB_EFFECT, ResourceLocation.parse(burden.effect())));
         // Use a short ordinary effect. Never strip somebody else's potion when their bag count falls.
         effect.ifPresent(holder -> player.addEffect(new MobEffectInstance(holder, 40, level - 1, true, false)));
     }

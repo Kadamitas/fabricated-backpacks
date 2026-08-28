@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.menu;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackLayout;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
@@ -18,7 +20,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -64,11 +66,11 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
         this.bag = bag;
         this.source = data;
         this.owner = inventory.player;
-        if (owner.level().isClientSide()) bag.markClientMirror();
+        if (owner.level().isClientSide) bag.markClientMirror();
         this.placed = placed;
         this.lease = lease;
-        if (preferences().getBooleanOr("keep_tab", true)) {
-            int saved = bag.settings().getIntOr("last_tab", -1);
+        if (NbtAccess.getBooleanOr(preferences(), "keep_tab", true)) {
+            int saved = NbtAccess.getIntOr(bag.settings(), "last_tab", -1);
             if (saved >= 0 && saved < bag.upgrades().getContainerSize()) state[1] = saved;
         }
         BackpackLayout layout = layout();
@@ -89,7 +91,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
         for (int index = 0; index < bag.upgrades().getContainerSize(); index++) {
             final int upgradeSlot = index;
             addSlot(new Slot(bag.upgrades(), index, layout.upgradeSlotX(), layout.upgradeSlotY(index)) {
-                @Override public boolean isActive() { return !owner.level().isClientSide()
+                @Override public boolean isActive() { return !owner.level().isClientSide
                         || upgradeSlot >= visibleUpgradeFirst && upgradeSlot - visibleUpgradeFirst < visibleUpgradeCount; }
                 @Override public boolean mayPlace(ItemStack stack) {
                     UpgradeKind kind = BackpackRegistry.kind(stack).orElse(null);
@@ -115,7 +117,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
                 @Override public boolean mayPlace(ItemStack stack) { return validAuxiliary(auxiliarySlot, stack); }
                 @Override public boolean isActive() {
                     return selected().filter(upgrade -> !isWorkstation(upgrade.kind()) && auxiliarySlot < bag.inventorySlots(upgrade)
-                            && (!owner.level().isClientSide() || auxiliarySlot >= visibleAuxiliaryFirst
+                            && (!owner.level().isClientSide || auxiliarySlot >= visibleAuxiliaryFirst
                             && auxiliarySlot - visibleAuxiliaryFirst < visibleAuxiliaryCount)).isPresent();
                 }
                 @Override public void onTake(Player player, ItemStack item) {
@@ -125,7 +127,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
             });
         }
         playerStart = slots.size();
-        addStandardInventorySlots(inventory, layout.inventoryX(), layout.inventoryY());
+        MenuSlots.addInventory(this::addSlot, inventory, layout.inventoryX(), layout.inventoryY());
         for (int index = 0; index < state.length; index++) addDataSlot(DataSlot.shared(state, index));
         if (placed != null) placed.open();
     }
@@ -133,7 +135,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
     public BagInventory bag() { return bag; }
     public int upgradeSlotStart() { return upgradeStart; }
     public void setUpgradeWindow(int first, int count) {
-        if (!owner.level().isClientSide()) return;
+        if (!owner.level().isClientSide) return;
         int nextFirst = Math.clamp(first, 0, bag.upgrades().getContainerSize());
         int nextCount = Math.clamp(count, 0, bag.upgrades().getContainerSize());
         if (nextFirst != visibleUpgradeFirst || nextCount != visibleUpgradeCount) resetQuickCraft();
@@ -143,7 +145,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
     public int auxiliaryStart() { return auxiliaryStart; }
     public int auxiliaryCount() { return auxiliaryCount; }
     public void setAuxiliaryWindow(int first, int count) {
-        if (!owner.level().isClientSide()) return;
+        if (!owner.level().isClientSide) return;
         int nextFirst = Math.clamp(first, 0, auxiliaryCount);
         int nextCount = Math.clamp(count, 0, auxiliaryCount);
         if (nextFirst != visibleAuxiliaryFirst || nextCount != visibleAuxiliaryCount) resetQuickCraft();
@@ -164,7 +166,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
     public void retainView() { retainedViews++; if (placed != null) placed.open(); }
     public void releaseView() { retainedViews = Math.max(0, retainedViews - 1); if (placed != null) placed.close(); releaseLease(); }
     private void releaseLease() {
-        if (!owner.level().isClientSide() && removed && retainedViews == 0 && lease != null && !leaseClosed) {
+        if (!owner.level().isClientSide && removed && retainedViews == 0 && lease != null && !leaseClosed) {
             leaseClosed = true;
             lease.close();
         }
@@ -235,7 +237,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
 
     @Override public boolean stillValid(Player player) {
         if (owner != player || !player.isAlive()) return false;
-        if (player.level().isClientSide()) return true;
+        if (player.level().isClientSide) return true;
         if (source.source() == BagOpeningData.PLACED) return placed != null && placed.stillValid(player);
         if (source.source() == BagOpeningData.LEASED) return lease != null && !leaseClosed && lease.valid();
         if (source.source() == BagOpeningData.EQUIPPED) return BackpackEquipment.isCurrent(player, bag);
@@ -245,19 +247,19 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
                 && (source.source() == BagOpeningData.EQUIPPED || current == bag.stack());
     }
 
-    @Override public void clicked(int index, int button, ContainerInput input, Player player) {
+    @Override public void clicked(int index, int button, ClickType input, Player player) {
         if (!stillValid(player)) return;
         if (index >= slots.size() || index < -999) return;
         if (index >= 0 && !slots.get(index).isActive()) return;
         if (index >= 0 && lease != null && lease.locks(slots.get(index).getItem())) return;
-        if (input == ContainerInput.SWAP && button >= 0 && button < player.getInventory().getContainerSize()
+        if (input == ClickType.SWAP && button >= 0 && button < player.getInventory().getContainerSize()
                 && lease != null && lease.locks(player.getInventory().getItem(button))) return;
         if (source.source() == BagOpeningData.INVENTORY && index >= playerStart && index < slots.size()
                 && slots.get(index).getContainerSlot() == source.inventorySlot()) return;
         // Number-key swaps can target the bag itself even when another slot is clicked.
-        if (input == ContainerInput.SWAP && source.source() == BagOpeningData.INVENTORY && button == source.inventorySlot()) return;
+        if (input == ClickType.SWAP && source.source() == BagOpeningData.INVENTORY && button == source.inventorySlot()) return;
         if (index >= 0 && index < bag.getContainerSize() && state[2] != 0) {
-            if (input != ContainerInput.PICKUP || button < 0 || button > 1) return;
+            if (input != ClickType.PICKUP || button < 0 || button > 1) return;
             if (state[2] == 1) bag.remember(index, button == 1 ? ItemStack.EMPTY : getCarried().isEmpty() ? bag.getItem(index) : getCarried());
             else bag.toggleNoSort(index);
             persist();
@@ -288,7 +290,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
             selectUpgrade(action - 1000);
         }
         else if (action >= 200 && action < 300) {
-            if (action < 203 || action > 212 || player.level().isClientSide()) return false;
+            if (action < 203 || action > 212 || player.level().isClientSide) return false;
             int previousRows = visibleRows(), previousPage = state[0];
             long firstVisibleRow = (long) previousPage * previousRows;
             state[3] = action - 200;
@@ -314,7 +316,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
             case 8 -> StorageActions.noSort(bag, true);
             case 9 -> StorageActions.noSort(bag, false);
             case 10 -> {
-                String next = switch (preferences().getStringOr("sort_order", "name")) {
+                String next = switch (NbtAccess.getStringOr(preferences(), "sort_order", "name")) {
                     case "name" -> "count";
                     case "count" -> "mod";
                     case "mod" -> "tags";
@@ -345,15 +347,15 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
 
     public void persist() {
         bag.save();
-        if (!owner.level().isClientSide() && source.source() == BagOpeningData.EQUIPPED) BackpackEquipment.setFromInventory(owner, bag);
+        if (!owner.level().isClientSide && source.source() == BagOpeningData.EQUIPPED) BackpackEquipment.setFromInventory(owner, bag);
         if (placed != null) placed.setChanged();
         if (lease != null) lease.persist();
         if (owner instanceof ServerPlayer player && stillValid(player))
-            com.kadamitas.fabricatedbackpacks.admin.BackpackArchives.record(player.level(), bag, player);
+            com.kadamitas.fabricatedbackpacks.admin.BackpackArchives.record(player.serverLevel(), bag, player);
     }
     @Override public void removed(Player player) {
         super.removed(player);
-        if (!player.level().isClientSide()) persist();
+        if (!player.level().isClientSide) persist();
         if (placed != null) placed.close();
         removed = true;
         releaseLease();
@@ -369,7 +371,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
         ItemStack moving = slot.getItem();
         if (index < playerStart) {
             if (!moveItemStackTo(moving, playerStart, slots.size(), true)) return ItemStack.EMPTY;
-        } else if (preferences().getBooleanOr("shift_into_tab", false) && selected().isPresent()
+        } else if (NbtAccess.getBooleanOr(preferences(), "shift_into_tab", false) && selected().isPresent()
                 && moveItemStackTo(moving, auxiliaryStart, playerStart, false)) {
             // Upgrade inputs enforce their real validators, just like direct cursor placement.
         } else if (BackpackRegistry.kind(moving).isPresent() && moveItemStackTo(moving, upgradeStart, auxiliaryStart, false)) {
@@ -385,7 +387,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
         return original;
     }
 
-    private void infiniteClick(int index, int button, ContainerInput input, Player player) {
+    private void infiniteClick(int index, int button, ClickType input, Player player) {
         if (!slots.get(index).mayPickup(player)) return;
         ItemStack seed = bag.getItem(index);
         int limit = seed.getMaxStackSize();

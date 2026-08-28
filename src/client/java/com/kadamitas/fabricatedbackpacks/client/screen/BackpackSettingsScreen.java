@@ -1,9 +1,10 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -36,7 +37,7 @@ public final class BackpackSettingsScreen extends Screen {
             onClose();
         }).setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Cycle memory slots, no-sort slots, and normal interaction")));
         button("Equipment", 194, 5, 76, () -> ClientPlayNetworking.send(new MenuAction(-1, "equipment", 0, 0, "")));
-        button("Slot tools", 274, 5, 74, () -> minecraft.gui.setScreen(new StorageToolsScreen(this, menu)));
+        button("Slot tools", 274, 5, 74, () -> minecraft.setScreen(new StorageToolsScreen(this, menu)));
         name = field("Backpack name", 12, 26, 258, menu.bag().stack().getHoverName().getString(), 50);
         button("Rename", 274, 26, 74, () -> send("rename", 0, name.getValue()));
         toggle("keep_search", "Keep search", true, 12, 52);
@@ -45,7 +46,7 @@ public final class BackpackSettingsScreen extends Screen {
         toggle("shift_into_tab", "Shift into tab", false, 184, 73);
         toggle("share_access", "Share worn bag", false, 12, 94);
         button("Use my defaults", 184, 94, 164, () -> send("defaults_use", 0, ""));
-        displaySlot = field("Displayed storage slot", 12, 127, 46, Integer.toString(menu.bag().settings().getIntOr("display_slot", -1) + 1), 3);
+        displaySlot = field("Displayed storage slot", 12, 127, 46, Integer.toString(NbtAccess.getIntOr(menu.bag().settings(), "display_slot", -1) + 1), 3);
         button("Display slot", 62, 127, 77, () -> {
             try { send("display_slot", Integer.parseInt(displaySlot.getValue()) - 1, ""); }
             catch (NumberFormatException ignored) { displaySlot.setValue("0"); }
@@ -78,31 +79,33 @@ public final class BackpackSettingsScreen extends Screen {
     }
     private void send(String action, int value, String text) { ClientPlayNetworking.send(new MenuAction(menu.containerId, action, 0, value, text)); }
     private void cycleTemplate(int offset) {
-        var names = menu.bag().settings().getListOrEmpty("template_names");
+        var names = NbtAccess.getListOrEmpty(menu.bag().settings(), "template_names");
         if (names.isEmpty()) return;
         List<String> values = new ArrayList<>();
-        for (int index = 0; index < names.size(); index++) names.getString(index).ifPresent(values::add);
+        for (int index = 0; index < names.size(); index++) values.add(names.getString(index));
         if (values.isEmpty()) return;
         int current = values.indexOf(templateName.getValue());
         templateName.setValue(values.get(Math.floorMod(current + offset, values.size())));
     }
     @Override public void tick() {
-        if (minecraft.player == null || minecraft.player.containerMenu != menu || !minecraft.player.isAlive()) { minecraft.gui.setScreen(null); return; }
+        if (minecraft.player == null || minecraft.player.containerMenu != menu || !minecraft.player.isAlive()) { minecraft.setScreen(null); return; }
         var settings = menu.bag().settings();
-        for (Toggle toggle : toggles) toggle.button().setMessage(Component.literal(toggle.label() + ": " + (settings.getBooleanOr(toggle.setting(), toggle.initial()) ? "On" : "Off")));
+        for (Toggle toggle : toggles) toggle.button().setMessage(Component.literal(toggle.label() + ": " + (NbtAccess.getBooleanOr(settings, toggle.setting(), toggle.initial()) ? "On" : "Off")));
     }
-    @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    // This screen paints its own backdrop before its native widgets.
+    @Override public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {}
+
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         graphics.fill(left, top, left + 360, top + 244, 0xffccb996);
-        graphics.outline(left, top, 360, 244, 0xff493326);
-        graphics.text(font, title, left + 12, top + 9, 0xff302a21, false);
-        graphics.text(font, "Exterior item (slot0 disables). Rotation " + menu.bag().settings().getIntOr("display_rotation", 0)
-                + "°; depth " + menu.bag().settings().getIntOr("display_depth", 0), left + 12, top + 115, 0xff302a21, false);
-        graphics.text(font, "Settings templates — no items or resources are copied", left + 12, top + 150, 0xff302a21, false);
-        graphics.text(font, font.plainSubstrByWidth(menu.bag().settings().getStringOr("template_preview",
+        graphics.renderOutline(left, top, 360, 244, 0xff493326);
+        graphics.drawString(font, title, left + 12, top + 9, 0xff302a21, false);
+        graphics.drawString(font, "Exterior item (slot0 disables). Rotation " + NbtAccess.getIntOr(menu.bag().settings(), "display_rotation", 0)
+                + "°; depth " + NbtAccess.getIntOr(menu.bag().settings(), "display_depth", 0), left + 12, top + 115, 0xff302a21, false);
+        graphics.drawString(font, "Settings templates — no items or resources are copied", left + 12, top + 150, 0xff302a21, false);
+        graphics.drawString(font, font.plainSubstrByWidth(NbtAccess.getStringOr(menu.bag().settings(), "template_preview",
                 "Named saves; data packs use namespace:name"), 336), left + 12, top + 234, 0xff493326, false);
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
+        super.render(graphics, mouseX, mouseY, delta);
     }
-    @Override public void onClose() { minecraft.gui.setScreen(minecraft.player != null && minecraft.player.containerMenu == menu ? previous : null); }
+    @Override public void onClose() { minecraft.setScreen(minecraft.player != null && minecraft.player.containerMenu == menu ? previous : null); }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public boolean isInGameUi() { return true; }
 }

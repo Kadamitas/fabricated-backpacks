@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.upgrade;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal;
@@ -21,7 +22,7 @@ public final class UpgradeFilters {
     private UpgradeFilters() { }
 
     public static boolean enabled(BagInventory bag, InstalledUpgrade upgrade) {
-        return bag.settings(upgrade).getBooleanOr("enabled", true);
+        return NbtAccess.getBooleanOr(bag.settings(upgrade), "enabled", true);
     }
 
     public static boolean matches(BagInventory bag, InstalledUpgrade upgrade, ItemStack candidate) {
@@ -33,12 +34,12 @@ public final class UpgradeFilters {
         if (candidate.isEmpty()) return false;
         CompoundTag settings = bag.settings(upgrade);
         String defaultMode = upgrade.kind().family().equals("void") || !prefix.isEmpty() ? "ALLOW" : "BLOCK";
-        String mode = settings.getStringOr(prefix + "filter_mode", defaultMode);
-        String match = settings.getStringOr(prefix + "filter_match", "ITEM");
+        String mode = NbtAccess.getStringOr(settings, prefix + "filter_mode", defaultMode);
+        String match = NbtAccess.getStringOr(settings, prefix + "filter_match", "ITEM");
         boolean advanced = upgrade.kind().advanced() || (upgrade.kind().family().equals("cooking") && prefix.equals("input_"));
         if (!advanced) match = "ITEM";
-        boolean damage = advanced && settings.getBooleanOr(prefix + "match_damage", false);
-        boolean components = advanced && settings.getBooleanOr(prefix + "match_components", false);
+        boolean damage = advanced && NbtAccess.getBooleanOr(settings, prefix + "match_damage", false);
+        boolean components = advanced && NbtAccess.getBooleanOr(settings, prefix + "match_components", false);
         List<ItemStack> entries = new ArrayList<>();
         for (int slot = first; slot < first + count; slot++) {
             ItemStack ghost = bag.ghost(upgrade, slot);
@@ -46,17 +47,21 @@ public final class UpgradeFilters {
         }
         if (mode.equals("CONTENTS")) {
             List<ItemStack> contents = new ArrayList<>();
-            for (ItemStack stack : contentsOverride == null ? BackpackTraversal.processingInventory(bag) : contentsOverride) if (!stack.isEmpty()) contents.add(stack);
+            Container storage = contentsOverride == null ? BackpackTraversal.processingInventory(bag) : contentsOverride;
+            for (int slot = 0; slot < storage.getContainerSize(); slot++) {
+                ItemStack stack = storage.getItem(slot);
+                if (!stack.isEmpty()) contents.add(stack);
+            }
             if (contentsOverride == null) for (var node : BackpackTraversal.inventoryBags(bag)) contents.addAll(node.inventory().memoryItems());
             String primary = match.equals("TAGS") ? "ITEM" : match;
             return contents.stream().anyMatch(item -> same(candidate, item, primary, damage, components));
         }
         boolean selected;
         if (match.equals("TAGS")) {
-            Set<String> selectedTags = Arrays.stream(settings.getStringOr(prefix + "tags", "").split(","))
+            Set<String> selectedTags = Arrays.stream(NbtAccess.getStringOr(settings, prefix + "tags", "").split(","))
                     .map(String::trim).filter(text -> !text.isEmpty()).collect(Collectors.toSet());
-            Set<String> tags = candidate.typeHolder().tags().map(tag -> tag.location().toString()).collect(Collectors.toSet());
-            selected = settings.getStringOr(prefix + "tag_match", "ANY").equals("ALL")
+            Set<String> tags = candidate.getTags().map(tag -> tag.location().toString()).collect(Collectors.toSet());
+            selected = NbtAccess.getStringOr(settings, prefix + "tag_match", "ANY").equals("ALL")
                     ? tags.containsAll(selectedTags) : selectedTags.stream().anyMatch(tags::contains);
             if (damage || components) selected &= entries.stream().anyMatch(item -> secondary(candidate, item, damage, components));
         } else {

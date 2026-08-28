@@ -14,12 +14,12 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.event.lifecycle.v1.CommonLifecycleEvents;
-import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
-import net.fabricmc.fabric.api.resource.v1.reloader.ResourceReloaderKeys;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 
@@ -53,12 +53,12 @@ public final class RecipeBrowserClient {
         ClientPlayNetworking.registerGlobalReceiver(BrowserCatalogPage.TYPE, (page, context) -> receive(page));
         ClientPlayNetworking.registerGlobalReceiver(BrowserCatalogInvalidated.TYPE, (notice, context) -> refresh());
         ClientPlayNetworking.registerGlobalReceiver(BrowserTransferResult.TYPE, (result, context) -> {
-            if (Minecraft.getInstance().gui.screen() instanceof RecipeBrowserScreen screen) screen.transferResult(result);
+            if (Minecraft.getInstance().screen instanceof RecipeBrowserScreen screen) screen.transferResult(result);
         });
         ClientPlayNetworking.registerGlobalReceiver(BrowserContext.TYPE, (result, context) -> {
             Minecraft client = Minecraft.getInstance();
             if (client.player != null && client.player.containerMenu.containerId == result.containerId()
-                    && client.gui.screen() instanceof RecipeBrowserScreen screen) {
+                    && client.screen instanceof RecipeBrowserScreen screen) {
                 menuContext = result;
                 screen.contextChanged();
             }
@@ -67,10 +67,11 @@ public final class RecipeBrowserClient {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> refresh());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> { refresh(); recipeBookCollections = null; });
         ClientTickEvents.END_CLIENT_TICK.register(RecipeBrowserClient::tick);
-        Identifier reload = BackpackRegistry.id("recipe_browser_cache");
-        ResourceLoader resources = ResourceLoader.get(PackType.CLIENT_RESOURCES);
-        resources.registerReloadListener(reload, (ResourceManagerReloadListener) manager -> refresh());
-        resources.addListenerOrdering(ResourceReloaderKeys.Client.LANGUAGES, reload);
+        ResourceLocation reload = BackpackRegistry.id("recipe_browser_cache");
+        ResourceManagerHelper.get(PackType.CLIENT_RESOURCES).registerReloadListener(new SimpleSynchronousResourceReloadListener() {
+            @Override public ResourceLocation getFabricId() { return reload; }
+            @Override public void onResourceManagerReload(net.minecraft.server.packs.resources.ResourceManager manager) { refresh(); }
+        });
         CommonLifecycleEvents.TAGS_LOADED.register((registries, client) -> {
             if (client) Minecraft.getInstance().execute(RecipeBrowserClient::refresh);
         });
@@ -78,41 +79,41 @@ public final class RecipeBrowserClient {
 
     public static void open(Screen previous) { openForGhost(previous, -1); }
 
-    public static void openItemPicker(Screen previous, BooleanSupplier valid, Consumer<Identifier> selected) {
+    public static void openItemPicker(Screen previous, BooleanSupplier valid, Consumer<ResourceLocation> selected) {
         openPicker(previous, RegistryPickerScreen.Kind.ITEM, valid, selected);
     }
 
-    public static void openFluidPicker(Screen previous, BooleanSupplier valid, Consumer<Identifier> selected) {
+    public static void openFluidPicker(Screen previous, BooleanSupplier valid, Consumer<ResourceLocation> selected) {
         openPicker(previous, RegistryPickerScreen.Kind.FLUID, valid, selected);
     }
 
-    private static void openPicker(Screen previous, RegistryPickerScreen.Kind kind, BooleanSupplier valid, Consumer<Identifier> selected) {
+    private static void openPicker(Screen previous, RegistryPickerScreen.Kind kind, BooleanSupplier valid, Consumer<ResourceLocation> selected) {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.level == null || !client.player.isAlive() || !valid.getAsBoolean()) return;
         if (!client.player.containerMenu.getCarried().isEmpty()) {
-            client.player.sendOverlayMessage(Component.translatable("browser.fabricated_backpacks.clear_cursor"));
+            client.gui.setOverlayMessage(Component.translatable("browser.fabricated_backpacks.clear_cursor"), false);
             return;
         }
         RegistryPickerScreen screen = new RegistryPickerScreen(previous, kind, valid, selected);
         screen.beginIndex(client);
-        client.gui.setScreen(screen);
+        client.setScreen(screen);
     }
 
     public static void openForGhost(Screen previous, int ghostSlot) {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.level == null || !client.player.isAlive()) return;
         if (!client.player.containerMenu.getCarried().isEmpty()) {
-            client.player.sendOverlayMessage(Component.translatable("browser.fabricated_backpacks.clear_cursor"));
+            client.gui.setOverlayMessage(Component.translatable("browser.fabricated_backpacks.clear_cursor"), false);
             return;
         }
         if (!ClientPlayNetworking.canSend(BrowserCatalogRequest.TYPE)) {
-            client.player.sendOverlayMessage(Component.translatable("browser.fabricated_backpacks.unavailable"));
+            client.gui.setOverlayMessage(Component.translatable("browser.fabricated_backpacks.unavailable"), false);
             return;
         }
         if (bookmarks == null) bookmarks = new BrowserBookmarks();
         index.begin(client);
         requestContext(client.player.containerMenu.containerId);
-        client.gui.setScreen(new RecipeBrowserScreen(previous, client.player.containerMenu.containerId, ghostSlot));
+        client.setScreen(new RecipeBrowserScreen(previous, client.player.containerMenu.containerId, ghostSlot));
     }
 
     static BrowserClientIndex index() { return index; }
@@ -127,7 +128,7 @@ public final class RecipeBrowserClient {
     static boolean canTransfer(int containerId) {
         return menuContext != null && menuContext.containerId() == containerId && menuContext.workstation() != BrowserWorkstation.NONE;
     }
-    static boolean canTransfer(int containerId, Identifier category) {
+    static boolean canTransfer(int containerId, ResourceLocation category) {
         return canTransfer(containerId) && menuContext.workstation().accepts(category);
     }
     static boolean limitedCrafting() { return menuContext != null && menuContext.limitedCrafting(); }
@@ -144,14 +145,14 @@ public final class RecipeBrowserClient {
         serverBuildNanos = 0;
         menuContext = null;
         Minecraft client = Minecraft.getInstance();
-        if (client.player != null && client.gui.screen() instanceof RecipeBrowserScreen) {
+        if (client.player != null && client.screen instanceof RecipeBrowserScreen) {
             index.begin(client);
             requestContext(client.player.containerMenu.containerId);
         }
-        if (client.gui.screen() instanceof RegistryPickerScreen picker) picker.beginIndex(client);
+        if (client.screen instanceof RegistryPickerScreen picker) picker.beginIndex(client);
     }
 
-    static long transfer(Identifier recipe, int containerId, boolean maximum) {
+    static long transfer(ResourceLocation recipe, int containerId, boolean maximum) {
         if (epoch <= 0 || !canTransfer(containerId)) return 0;
         long requestId = nextTransferId++;
         if (nextTransferId <= 0) nextTransferId = 1;
@@ -166,7 +167,7 @@ public final class RecipeBrowserClient {
         }
     }
 
-    static void selectGhost(Identifier item, int containerId, int slot) {
+    static void selectGhost(ResourceLocation item, int containerId, int slot) {
         if (slot < 0 || slot >= 64) return;
         ClientPlayNetworking.send(new MenuAction(containerId, "ghost_registry", slot, 0, item.toString()));
     }
@@ -201,7 +202,7 @@ public final class RecipeBrowserClient {
         }
         index.tick(client);
         fluids.tick(client);
-        if (!(client.gui.screen() instanceof RecipeBrowserScreen)) return;
+        if (!(client.screen instanceof RecipeBrowserScreen)) return;
         index.begin(client);
         if (requestInFlight && ticks - requestTick > 100) requestInFlight = false;
         if (!requestInFlight && (total < 0 || nextOffset < total) && ClientPlayNetworking.canSend(BrowserCatalogRequest.TYPE)) {

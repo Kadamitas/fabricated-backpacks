@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:brewing_stand",
-    "T": "minecraft:gold_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:glass_bottle"
+    "M": {
+      "item": "minecraft:brewing_stand"
+    },
+    "T": {
+      "item": "minecraft:gold_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:glass_bottle"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:alchemy_upgrade",

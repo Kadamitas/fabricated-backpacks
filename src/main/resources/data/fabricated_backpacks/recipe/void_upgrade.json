@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:lava_bucket",
-    "T": "minecraft:obsidian",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:redstone"
+    "M": {
+      "item": "minecraft:lava_bucket"
+    },
+    "T": {
+      "item": "minecraft:obsidian"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:redstone"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:void_upgrade",

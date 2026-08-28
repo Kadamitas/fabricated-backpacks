@@ -46,7 +46,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -1155,7 +1155,7 @@ final class ConfiguredClientAcceptance {
 
     private static void checkItemModels(ClientGameTestContext context) {
         context.runOnClient(client -> {
-            Identifier fixture = Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "energy_cell");
+            ResourceLocation fixture = ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "energy_cell");
             boolean foundFixture = false;
             for (var item : BuiltInRegistries.ITEM) {
                 var id = BuiltInRegistries.ITEM.getKey(item);

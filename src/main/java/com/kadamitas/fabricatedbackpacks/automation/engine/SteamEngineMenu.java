@@ -7,7 +7,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -48,7 +48,7 @@ public final class SteamEngineMenu extends AbstractContainerMenu {
         addMachineSlot(SteamEngineBlockEntity.WATER_INPUT, 44, 23);
         addMachineSlot(SteamEngineBlockEntity.FUEL_REMAINDER, 116, 55);
         addMachineSlot(SteamEngineBlockEntity.WATER_REMAINDER, 116, 23);
-        addStandardInventorySlots(playerInventory, 8, 94);
+        com.kadamitas.fabricatedbackpacks.menu.MenuSlots.addInventory(this::addSlot, playerInventory, 8, 94);
         addDataSlots(data);
     }
 
@@ -56,7 +56,7 @@ public final class SteamEngineMenu extends AbstractContainerMenu {
         addSlot(new Slot(inventory, index, x, y) {
             @Override public boolean mayPlace(ItemStack stack) {
                 if (stack.isEmpty()) return false;
-                return index == SteamEngineBlockEntity.FUEL ? owner.level().fuelValues().isFuel(stack)
+                return index == SteamEngineBlockEntity.FUEL ? net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.isFuel(stack)
                         : index == SteamEngineBlockEntity.WATER_INPUT && SteamEngineStorage.containsWater(stack);
             }
             @Override public boolean mayPickup(Player player) { return validInteraction(player); }
@@ -80,11 +80,11 @@ public final class SteamEngineMenu extends AbstractContainerMenu {
 
     @Override public boolean stillValid(Player player) {
         return player == owner && player.isAlive() && !player.isSpectator()
-                && (player.level().isClientSide() || engine != null && engine.stillValid(player));
+                && (player.level().isClientSide || engine != null && engine.stillValid(player));
     }
 
     private boolean validInteraction(Player player) {
-        return stillValid(player) && (player.level().isClientSide() || player.containerMenu == this);
+        return stillValid(player) && (player.level().isClientSide || player.containerMenu == this);
     }
 
     @Override public boolean clickMenuButton(Player player, int action) {
@@ -94,7 +94,7 @@ public final class SteamEngineMenu extends AbstractContainerMenu {
         return true;
     }
 
-    @Override public void clicked(int slot, int button, ContainerInput input, Player player) {
+    @Override public void clicked(int slot, int button, ClickType input, Player player) {
         if (slot != -999 && (slot < 0 || slot >= slots.size())) return;
         if (validInteraction(player)) super.clicked(slot, button, input, player);
     }
@@ -107,7 +107,7 @@ public final class SteamEngineMenu extends AbstractContainerMenu {
         if (index < SteamEngineBlockEntity.SLOT_COUNT) {
             if (!moveItemStackTo(slot.getItem(), SteamEngineBlockEntity.SLOT_COUNT, slots.size(), true)) return ItemStack.EMPTY;
         } else {
-            int destination = owner.level().fuelValues().isFuel(original) ? SteamEngineBlockEntity.FUEL
+            int destination = net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.isFuel(original) ? SteamEngineBlockEntity.FUEL
                     : SteamEngineStorage.containsWater(original) ? SteamEngineBlockEntity.WATER_INPUT : -1;
             if (destination < 0 || !moveItemStackTo(slot.getItem(), destination, destination + 1, false)) return ItemStack.EMPTY;
         }

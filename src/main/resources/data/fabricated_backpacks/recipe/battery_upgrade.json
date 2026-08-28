@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:lightning_rod",
-    "T": "minecraft:copper_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:redstone_block"
+    "M": {
+      "item": "minecraft:lightning_rod"
+    },
+    "T": {
+      "item": "minecraft:copper_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:redstone_block"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:battery_upgrade",

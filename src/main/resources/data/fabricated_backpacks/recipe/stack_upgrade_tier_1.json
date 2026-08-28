@@ -7,8 +7,12 @@
     "MMM"
   ],
   "key": {
-    "M": "minecraft:iron_ingot",
-    "U": "fabricated_backpacks:stack_upgrade_starter_tier"
+    "M": {
+      "item": "minecraft:iron_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:stack_upgrade_starter_tier"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:stack_upgrade_tier_1",

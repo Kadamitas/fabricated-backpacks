@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitBundleBlockEntity;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitKind;
@@ -46,15 +47,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.ClientboundContainerSetDataPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerButtonClickPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerLoadedPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.ItemContainerContents;
@@ -95,9 +95,9 @@ public final class SteamEngineGameTests {
 
     public static void registerFixtures() {
         if (receiverBlock != null) return;
-        Identifier id = Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "steam_energy_receiver");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "steam_energy_receiver");
         receiverBlock = Registry.register(BuiltInRegistries.BLOCK, id,
-                new Block(Block.Properties.of().setId(ResourceKey.create(Registries.BLOCK, id))));
+                new Block(Block.Properties.of()));
         EnergyStorage.SIDED.registerForBlocks((level, position, state, entity, side) -> {
             Receiver receiver = RECEIVERS.get(new Endpoint(level, position));
             if (receiver == null) return null;
@@ -112,7 +112,7 @@ public final class SteamEngineGameTests {
         long quantum = mb(rules.waterMbPerTick());
         var running = place(helper, new BlockPos(1, 1, 1), new SteamEngineState(quantum * 2, 0, 0, 0, true));
         running.setItem(SteamEngineBlockEntity.FUEL, new ItemStack(Items.COAL, 2));
-        int duration = level.fuelValues().burnDuration(new ItemStack(Items.COAL));
+        int duration = net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.getFuel().getOrDefault(Items.COAL, 0);
         tick(running, level);
         helper.assertTrue(running.active(), "ACTIVE starts only on an actual productive boiler tick");
         helper.assertValueEqual(running.snapshot(), new SteamEngineState(quantum, rules.energyPerTick(), duration - 1, duration, true),
@@ -170,7 +170,7 @@ public final class SteamEngineGameTests {
         helper.assertValueEqual(engine.snapshot().waterDroplets(), FluidConstants.BUCKET - mb(rules.waterMbPerTick()),
                 "The vanilla water bucket empties through the real item fluid API");
         helper.assertValueEqual(engine.snapshot().energy(), rules.energyPerTick(), "The accepted water powers one engine tick");
-        helper.assertValueEqual(engine.snapshot().burnRemaining(), level.fuelValues().burnDuration(new ItemStack(Items.LAVA_BUCKET)) - 1,
+        helper.assertValueEqual(engine.snapshot().burnRemaining(), net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.getFuel().getOrDefault(Items.LAVA_BUCKET, 0) - 1,
                 "The lava bucket uses the loaded vanilla fuel duration");
         helper.assertTrue(engine.getItem(0).isEmpty() && engine.getItem(1).isEmpty(), "Both consumed containers leave their input slots");
         assertStack(helper, engine.getItem(2), Items.BUCKET, 1, "Fuel keeps its vanilla bucket remainder");
@@ -296,8 +296,8 @@ public final class SteamEngineGameTests {
         }
         assertStack(helper, engine.getItem(2), Items.BUCKET, 1, "Remainder extraction changes exactly the owned output count");
         var publicTag = engine.getUpdateTag(level.registryAccess());
-        helper.assertValueEqual(publicTag.keySet(), Set.of("ports"), "Chunk data contains only side capability flags, never owned resource quantities");
-        helper.assertValueEqual(publicTag.getLongOr("ports", -1), engine.sideConfig().bits(), "Every public capability bit matches the live configuration");
+        helper.assertValueEqual(publicTag.getAllKeys(), Set.of("ports"), "Chunk data contains only side capability flags, never owned resource quantities");
+        helper.assertValueEqual(NbtAccess.getLongOr(publicTag, "ports", -1), engine.sideConfig().bits(), "Every public capability bit matches the live configuration");
         var retainedItemView = items.iterator().next();
         var retainedWaterView = water.iterator().next();
         var readyChunk = level.getChunkSource().getChunkNow(engine.getBlockPos().getX() >> 4, engine.getBlockPos().getZ() >> 4);
@@ -496,9 +496,9 @@ public final class SteamEngineGameTests {
             player.connection.handleContainerButtonClick(new ServerboundContainerButtonClickPacket(menu.containerId, 0));
             helper.assertTrue(engine.enabled(), "The valid native button toggles only the current server machine");
             helper.assertValueEqual(engine.snapshot().energy(), 712_345_678_901L, "Enabling does not create or delete stored energy");
-            menu.clicked(0, 0, ContainerInput.PICKUP, player);
+            menu.clicked(0, 0, ClickType.PICKUP, player);
             assertStack(helper, menu.getCarried(), Items.COAL, 3, "A valid native slot pickup removes the exact fuel stack");
-            menu.clicked(0, 0, ContainerInput.PICKUP, player);
+            menu.clicked(0, 0, ClickType.PICKUP, player);
             helper.assertTrue(menu.getCarried().isEmpty(), "Returning fuel clears the cursor");
             assertStack(helper, engine.getItem(0), Items.COAL, 3, "Returning fuel restores the exact physical input");
             player.getInventory().setItem(9, new ItemStack(Items.WATER_BUCKET));
@@ -508,7 +508,7 @@ public final class SteamEngineGameTests {
             player.setGameMode(GameType.SPECTATOR);
             var spectatorBefore = engine.dropStack();
             player.connection.handleContainerButtonClick(new ServerboundContainerButtonClickPacket(menu.containerId, 0));
-            menu.clicked(0, 0, ContainerInput.PICKUP, player);
+            menu.clicked(0, 0, ClickType.PICKUP, player);
             helper.assertTrue(menu.quickMoveStack(player, 0).isEmpty(), "Spectators cannot extract through direct shift actions");
             assertStack(helper, engine.dropStack(), spectatorBefore, "Spectator buttons and slot actions preserve the exact machine state");
             helper.assertTrue(menu.getCarried().isEmpty(), "Spectator interactions cannot put machine items on the cursor");
@@ -664,7 +664,7 @@ public final class SteamEngineGameTests {
         helper.assertValueEqual(internal.snapshot().waterDroplets(), FluidConstants.BUCKET - mb(rules.waterMbPerTick()),
                 "Closed external ports do not block the engine's own water-container operation");
         helper.assertValueEqual(internal.snapshot().energy(), rules.energyPerTick(), "Closed energy ports still allow internal finite generation");
-        helper.assertValueEqual(internal.snapshot().burnRemaining(), level.fuelValues().burnDuration(new ItemStack(Items.COAL)) - 1,
+        helper.assertValueEqual(internal.snapshot().burnRemaining(), net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.getFuel().getOrDefault(Items.COAL, 0) - 1,
                 "Closed item ports still use exactly one unit of vanilla fuel work");
         helper.assertTrue(internal.getItem(0).isEmpty() && internal.getItem(1).isEmpty(), "Internal work consumes only the actual input items");
         assertStack(helper, internal.getItem(3), Items.BUCKET, 1, "Internal water work preserves its real bucket remainder");
@@ -827,7 +827,6 @@ public final class SteamEngineGameTests {
         });
         helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
         player.setGameMode(GameType.SURVIVAL);
-        player.connection.handleAcceptPlayerLoad(new ServerboundPlayerLoadedPacket());
         return peer;
     }
     private static final class Peer implements AutoCloseable {

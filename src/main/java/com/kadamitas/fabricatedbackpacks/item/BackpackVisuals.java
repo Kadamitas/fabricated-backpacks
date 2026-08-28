@@ -7,7 +7,7 @@ import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
+import com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate;
 import net.minecraft.world.item.component.CustomData;
 
 import java.util.List;
@@ -33,7 +33,7 @@ public final class BackpackVisuals {
 
     private static ItemStack icon(ItemStack source) {
         ItemStack icon = new ItemStack(source.getItem());
-        copy(source, icon, DataComponents.ITEM_MODEL);
+        copy(source, icon, BagComponents.COLORS);
         copy(source, icon, DataComponents.CUSTOM_MODEL_DATA);
         copy(source, icon, DataComponents.DYED_COLOR);
         copy(source, icon, DataComponents.POTION_CONTENTS);

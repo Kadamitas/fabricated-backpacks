@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.upgrade;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
@@ -12,20 +13,14 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.monster.zombie.ZombieVillager;
-import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion;
+import net.minecraft.world.entity.monster.ZombieVillager;
+import net.minecraft.world.entity.projectile.ThrownPotion;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.PotionContents;
-import net.minecraft.world.item.component.Consumable;
-import net.minecraft.world.item.component.OminousBottleAmplifier;
-import net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect;
-import net.minecraft.world.item.consume_effects.ClearAllStatusEffectsConsumeEffect;
-import net.minecraft.world.item.consume_effects.ConsumeEffect;
-import net.minecraft.world.item.consume_effects.RemoveStatusEffectsConsumeEffect;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 
@@ -46,8 +41,8 @@ public final class AlchemyRuntime {
     public static boolean supported(ItemStack stack) {
         if (stack.isEmpty() || stack.is(Items.LINGERING_POTION)) return false;
         if (!effects(stack).isEmpty()) return true;
-        Consumable consumable = stack.get(DataComponents.CONSUMABLE);
-        return consumable != null && consumable.onConsumeEffects().stream().anyMatch(effect -> effect instanceof RemoveStatusEffectsConsumeEffect || effect instanceof ClearAllStatusEffectsConsumeEffect);
+        return stack.getItem() instanceof net.minecraft.world.item.MilkBucketItem
+                || stack.getItem() instanceof net.minecraft.world.item.HoneyBottleItem;
     }
 
     public static Condition defaultCondition(ItemStack stack) {
@@ -55,10 +50,10 @@ public final class AlchemyRuntime {
         if (!effects.isEmpty()) {
             var type = effects.getFirst().getEffect();
             if (type.equals(MobEffects.WATER_BREATHING)) return Condition.UNDER_WATER;
-            if (type.equals(MobEffects.INSTANT_HEALTH) || type.equals(MobEffects.REGENERATION)) return Condition.HURT;
+            if (type.equals(MobEffects.HEAL) || type.equals(MobEffects.REGENERATION)) return Condition.HURT;
             if (type.equals(MobEffects.FIRE_RESISTANCE)) return Condition.ON_FIRE;
-            if (type.equals(MobEffects.SPEED)) return Condition.SPRINTING;
-            if (type.equals(MobEffects.HASTE)) return Condition.MINING;
+            if (type.equals(MobEffects.MOVEMENT_SPEED)) return Condition.SPRINTING;
+            if (type.equals(MobEffects.DIG_SPEED)) return Condition.MINING;
             if (type.equals(MobEffects.SLOW_FALLING)) return Condition.FALLING;
             return Condition.ALWAYS;
         }
@@ -83,9 +78,10 @@ public final class AlchemyRuntime {
                 return;
             }
             PENDING.put(key, new Pending(pending.source(), pending.row(), pending.expected(), pending.target(), pending.finish(), pending.started(), level.getServer().getTickCount()));
-            Consumable consumable = current.get(DataComponents.CONSUMABLE);
             int elapsed = (int) (level.getGameTime() - pending.started());
-            if (consumable != null && consumable.shouldEmitParticlesAndSounds(elapsed)) consumable.emitParticlesAndSounds(level.getRandom(), target, current, 5);
+            int duration = Math.max(1, current.getUseDuration(target));
+            if (elapsed > (int) (duration * .21875F) && (duration - elapsed) % 4 == 0)
+                emitUseEffects(level, target, current);
             if (level.getGameTime() >= pending.finish()) {
                 PENDING.remove(key);
                 if (eligible(current, target, bag.settings(upgrade))) apply(bag, storage, source, level, target, carrier);
@@ -99,7 +95,7 @@ public final class AlchemyRuntime {
         CompoundTag settings = bag.settings(upgrade);
         List<LivingEntity> targets = carrier != null ? List.of(carrier)
                 : level.getEntitiesOfClass(LivingEntity.class, new AABB(position).inflate(rules.range()), target -> target.isAlive() && !target.isSpectator());
-        String selection = upgrade.kind().advanced() ? settings.getStringOr("alchemy_targets", "BOTH") : "BOTH";
+        String selection = upgrade.kind().advanced() ? NbtAccess.getStringOr(settings, "alchemy_targets", "BOTH") : "BOTH";
         for (LivingEntity target : targets) {
             if (target.isSpectator() || !target.isAlive() || (selection.equals("PLAYERS") && !(target instanceof ServerPlayer))
                     || (selection.equals("NONPLAYERS") && target instanceof ServerPlayer)) continue;
@@ -112,9 +108,9 @@ public final class AlchemyRuntime {
                     if (item.is(Items.SPLASH_POTION) || (item.is(Items.GOLDEN_APPLE) && canConvert(target))) {
                         apply(bag, storage, slot, level, target, carrier);
                     } else {
-                        Consumable consumable = item.get(DataComponents.CONSUMABLE);
-                        if (consumable == null) continue;
-                        long end = level.getGameTime() + Math.max(1, consumable.consumeTicks());
+                        int duration = item.getUseDuration(target);
+                        if (duration <= 0) continue;
+                        long end = level.getGameTime() + duration;
                         PENDING.put(key, new Pending(BackpackTraversal.address(storage, slot), row, item.copyWithCount(1), target.getUUID(), end, level.getGameTime(), level.getServer().getTickCount()));
                         int active = row;
                         bag.updateSettings(upgrade, tag -> { tag.putInt("alchemy_active_row", active); tag.putLong("alchemy_finish", end); });
@@ -127,7 +123,7 @@ public final class AlchemyRuntime {
 
     private static boolean condition(CompoundTag settings, int row, ItemStack ghost, LivingEntity target) {
         Condition condition;
-        try { condition = Condition.valueOf(settings.getStringOr("alchemy_condition_" + row, defaultCondition(ghost).name())); }
+        try { condition = Condition.valueOf(NbtAccess.getStringOr(settings, "alchemy_condition_" + row, defaultCondition(ghost).name())); }
         catch (IllegalArgumentException invalid) { condition = Condition.NEVER; }
         return switch (condition) {
             case NEVER -> false;
@@ -138,7 +134,7 @@ public final class AlchemyRuntime {
             case MINING -> target instanceof ServerPlayer player && player.gameMode instanceof UpgradeAccess.Mining mining && mining.fabricatedBackpacks$isDestroyingBlock();
             case SPRINTING -> target.isSprinting();
             case HURT -> target.getHealth() < target.getMaxHealth()
-                    && target.getHealth() / target.getMaxHealth() < Math.clamp(settings.getIntOr("alchemy_health_" + row, 75), 0, 100) / 100.0;
+                    && target.getHealth() / target.getMaxHealth() < Math.clamp(NbtAccess.getIntOr(settings, "alchemy_health_" + row, 75), 0, 100) / 100.0;
             case NEGATIVE_EFFECT -> target.getActiveEffects().stream().anyMatch(effect -> effect.getEffect().value().getCategory() == MobEffectCategory.HARMFUL);
         };
     }
@@ -147,20 +143,19 @@ public final class AlchemyRuntime {
         List<MobEffectInstance> effects = new ArrayList<>();
         PotionContents potion = item.get(DataComponents.POTION_CONTENTS);
         if (potion != null) potion.getAllEffects().forEach(effects::add);
-        Consumable consumable = item.get(DataComponents.CONSUMABLE);
-        if (consumable != null) for (ConsumeEffect effect : consumable.onConsumeEffects()) {
-            if (effect instanceof ApplyStatusEffectsConsumeEffect apply) effects.addAll(apply.effects());
-        }
-        OminousBottleAmplifier omen = item.get(DataComponents.OMINOUS_BOTTLE_AMPLIFIER);
-        if (omen != null) effects.add(new MobEffectInstance(MobEffects.BAD_OMEN, OminousBottleAmplifier.EFFECT_DURATION, omen.value()));
+        var food = item.get(DataComponents.FOOD);
+        if (food != null) food.effects().stream().filter(effect -> effect.probability() > 0)
+                .map(net.minecraft.world.food.FoodProperties.PossibleEffect::effect).forEach(effects::add);
+        Integer omen = item.get(DataComponents.OMINOUS_BOTTLE_AMPLIFIER);
+        if (omen != null) effects.add(new MobEffectInstance(MobEffects.BAD_OMEN, net.minecraft.world.item.OminousBottleItem.EFFECT_DURATION, omen));
         return effects;
     }
 
     private static boolean filterMatches(ItemStack item, ItemStack ghost, CompoundTag settings, boolean advanced) {
         if (!supported(item) || !ItemStack.isSameItem(item, ghost)) return false;
-        boolean duration = !advanced || settings.getBooleanOr("alchemy_match_duration", true);
-        boolean amplifier = !advanced || settings.getBooleanOr("alchemy_match_amplifier", true);
-        boolean all = !advanced || settings.getBooleanOr("alchemy_match_all", true);
+        boolean duration = !advanced || NbtAccess.getBooleanOr(settings, "alchemy_match_duration", true);
+        boolean amplifier = !advanced || NbtAccess.getBooleanOr(settings, "alchemy_match_amplifier", true);
+        boolean all = !advanced || NbtAccess.getBooleanOr(settings, "alchemy_match_all", true);
         if (duration && amplifier && all) return ItemStack.isSameItemSameComponents(item, ghost);
         List<MobEffectInstance> expected = effects(ghost);
         List<MobEffectInstance> actual = effects(item);
@@ -181,20 +176,15 @@ public final class AlchemyRuntime {
         if (item.is(Items.GOLDEN_APPLE) && canConvert(target)) return true;
         List<MobEffectInstance> offered = effects(item);
         java.util.function.Predicate<MobEffectInstance> missing = effect -> {
-            if (effect.getEffect().value().isInstantaneous()) return !effect.getEffect().equals(MobEffects.INSTANT_HEALTH) || target.getHealth() < target.getMaxHealth();
+            if (effect.getEffect().value().isInstantenous()) return !effect.getEffect().equals(MobEffects.HEAL) || target.getHealth() < target.getMaxHealth();
             MobEffectInstance active = target.getEffect(effect.getEffect());
             return active == null || active.getAmplifier() < effect.getAmplifier();
         };
-        boolean beneficial = !offered.isEmpty() && (settings.getBooleanOr("alchemy_all_missing", true)
+        boolean beneficial = !offered.isEmpty() && (NbtAccess.getBooleanOr(settings, "alchemy_all_missing", true)
                 ? offered.stream().allMatch(missing) : offered.stream().anyMatch(missing));
         if (beneficial) return true;
-        Consumable consumable = item.get(DataComponents.CONSUMABLE);
-        if (consumable != null) for (ConsumeEffect effect : consumable.onConsumeEffects()) {
-            if (effect instanceof ClearAllStatusEffectsConsumeEffect && !target.getActiveEffects().isEmpty()) return true;
-            if (effect instanceof RemoveStatusEffectsConsumeEffect remove
-                    && target.getActiveEffects().stream().anyMatch(active -> remove.effects().contains(active.getEffect()))) return true;
-        }
-        return false;
+        if (item.getItem() instanceof net.minecraft.world.item.MilkBucketItem && !target.getActiveEffects().isEmpty()) return true;
+        return item.getItem() instanceof net.minecraft.world.item.HoneyBottleItem && target.hasEffect(MobEffects.POISON);
     }
 
     private static void apply(BagInventory bag, Container storage, int source, ServerLevel level, LivingEntity target, LivingEntity carrier) {
@@ -207,17 +197,37 @@ public final class AlchemyRuntime {
         } else if (stack.is(Items.SPLASH_POTION)) {
             ItemStack dose = stack.copyWithCount(1);
             storage.setItem(source, stack.copyWithCount(stack.getCount() - 1));
-            ThrownSplashPotion splash = new ThrownSplashPotion(level, target.getX(), target.getY(), target.getZ(), dose);
+            SplashUse splash = new SplashUse(level, target, dose);
             if (carrier != null) splash.setOwner(carrier);
-            splash.onHitAsPotion(level, dose, new EntityHitResult(target));
-            level.levelEvent(2002, target.blockPosition(), dose.getOrDefault(DataComponents.POTION_CONTENTS, PotionContents.EMPTY).getColor());
-            splash.discard();
+            splash.impact(target); // Native radius, duration scaling, instant effects, particles and disposal.
         } else ConsumptionRuntime.consumeOne(bag, storage, source, level, target);
+    }
+
+    /** Calls the native protected impact without manufacturing a network-visible projectile. */
+    private static final class SplashUse extends ThrownPotion {
+        private SplashUse(ServerLevel level, LivingEntity target, ItemStack dose) {
+            super(level, target.getX(), target.getY(), target.getZ());
+            setItem(dose);
+        }
+        private void impact(LivingEntity target) { super.onHit(new EntityHitResult(target)); }
+    }
+
+    /** Storage consumption has no held-use state; send its native item effects without altering either hand. */
+    private static void emitUseEffects(ServerLevel level, LivingEntity target, ItemStack item) {
+        var random = level.getRandom();
+        if (item.getUseAnimation() == net.minecraft.world.item.UseAnim.DRINK) {
+            level.playSound(null, target.getX(), target.getY(), target.getZ(), item.getDrinkingSound(), target.getSoundSource(), .5F, random.nextFloat() * .1F + .9F);
+        } else if (item.getUseAnimation() == net.minecraft.world.item.UseAnim.EAT) {
+            level.playSound(null, target.getX(), target.getY(), target.getZ(), item.getEatingSound(), target.getSoundSource(), .5F + .5F * random.nextInt(2), (random.nextFloat() - random.nextFloat()) * .2F + 1);
+            var mouth = target.getEyePosition().add(target.getViewVector(1).scale(.4));
+            level.sendParticles(new net.minecraft.core.particles.ItemParticleOption(net.minecraft.core.particles.ParticleTypes.ITEM, item),
+                    mouth.x, mouth.y - .2, mouth.z, 5, .12, .1, .12, .03);
+        }
     }
 
     private static void clearProgress(BagInventory bag, InstalledUpgrade upgrade) {
         CompoundTag state = bag.settings(upgrade);
-        if (state.getIntOr("alchemy_active_row", -1) != -1 || state.getLongOr("alchemy_finish", 0) != 0) {
+        if (NbtAccess.getIntOr(state, "alchemy_active_row", -1) != -1 || NbtAccess.getLongOr(state, "alchemy_finish", 0) != 0) {
             bag.updateSettings(upgrade, tag -> { tag.putInt("alchemy_active_row", -1); tag.putLong("alchemy_finish", 0); });
         }
     }

@@ -1,8 +1,10 @@
 package com.kadamitas.fabricatedbackpacks.storage;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
+import com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate;
 import net.minecraft.world.item.component.CustomData;
 
 import java.util.List;
@@ -31,10 +33,10 @@ public final class BackpackCopies {
             copy.set(type, new InventorySnapshot(contents.size(), entries));
         }
         var settings = copy.getOrDefault(BagComponents.SETTINGS, CustomData.EMPTY).copyTag();
-        var captures = settings.getListOrEmpty("captured_entities");
+        var captures = NbtAccess.getListOrEmpty(settings, "captured_entities");
         if (!captures.isEmpty()) {
             for (int index = 0; index < captures.size(); index++) {
-                var entity = captures.getCompoundOrEmpty(index).getCompoundOrEmpty("entity");
+                var entity = NbtAccess.getCompoundOrEmpty(NbtAccess.getCompoundOrEmpty(captures, index), "entity");
                 // Captured entities cannot have passengers; each deliberate clone gets its own UUID.
                 entity.remove("UUID");
             }

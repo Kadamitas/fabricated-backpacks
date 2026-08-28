@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.client.automation;
 
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackStyle;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.core.Direction;
@@ -17,12 +17,12 @@ final class ConduitFaceButton extends Button {
         setTooltip(Tooltip.create(label));
     }
     void selected(boolean value) { selected = value; }
-    @Override protected void extractContents(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+    @Override protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         BackpackStyle.frame(g, getX(), getY(), getWidth(), getHeight(), BackpackStyle.Surface.PANEL);
-        if (selected || isHoveredOrFocused()) g.outline(getX(), getY(), getWidth(), getHeight(), selected ? 0xFFFFD56A : 0xFFEBD4A7);
+        if (selected || isHoveredOrFocused()) g.renderOutline(getX(), getY(), getWidth(), getHeight(), selected ? 0xFFFFD56A : 0xFFEBD4A7);
         paintGlyph(g, getX(), getY(), face);
     }
-    static void paintGlyph(GuiGraphicsExtractor g, int x, int y, Direction face) {
+    static void paintGlyph(GuiGraphics g, int x, int y, Direction face) {
         for (Direction ray : Direction.values()) {
             int[] end = endpoint(ray);
             line(g, x, y, 10, 10, end[0], end[1], 0xFF786A5A);
@@ -39,7 +39,7 @@ final class ConduitFaceButton extends Button {
             case WEST -> new int[]{5, 6}; case EAST -> new int[]{15, 14};
         };
     }
-    private static void line(GuiGraphicsExtractor g, int originX, int originY, int x0, int y0, int x1, int y1, int color) {
+    private static void line(GuiGraphics g, int originX, int originY, int x0, int y0, int x1, int y1, int color) {
         int dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
         int error = dx - dy;
         while (true) {

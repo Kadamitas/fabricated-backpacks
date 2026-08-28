@@ -60,12 +60,12 @@ public final class AutomationRegistry {
     }
 
     private static BlockBehaviour.Properties blockProperties(String path) {
-        return BlockBehaviour.Properties.of().setId(ResourceKey.create(Registries.BLOCK, BackpackRegistry.id(path)))
+        return BlockBehaviour.Properties.of()
                 .noOcclusion().sound(SoundType.METAL).mapColor(MapColor.METAL);
     }
 
     private static Item.Properties itemProperties(String path) {
-        return new Item.Properties().setId(ResourceKey.create(Registries.ITEM, BackpackRegistry.id(path)));
+        return new Item.Properties();
     }
 
     private static Item register(String path, Item item) {

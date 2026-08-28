@@ -3,7 +3,7 @@ package com.kadamitas.fabricatedbackpacks.client.tooltip;
 import com.kadamitas.fabricatedbackpacks.item.BackpackTooltip;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -27,7 +27,7 @@ final class BackpackContentsTooltip implements ClientTooltipComponent {
 
     BackpackContentsTooltip(BackpackTooltip snapshot) {
         Minecraft client = Minecraft.getInstance();
-        expanded = client.hasShiftDown();
+        expanded = net.minecraft.client.gui.screens.Screen.hasShiftDown();
         columns = snapshot.columns();
         rows = Math.ceilDiv(snapshot.contents().size(), columns);
         summary = Component.translatable("tooltip.fabricated_backpacks.contents_summary",
@@ -49,7 +49,8 @@ final class BackpackContentsTooltip implements ClientTooltipComponent {
         gridScale = rows == 0 ? 1F : Math.min(1F, room / (float) (rows * CELL));
     }
 
-    @Override public int getHeight(Font font) {
+    @Override public int getHeight() {
+        Font font = Minecraft.getInstance().font;
         if (!expanded) return font.lineHeight + 3;
         return font.lineHeight + 5 + (int) Math.ceil(rows * CELL * gridScale)
                 + (hasLargeCount ? font.lineHeight + 3 : 0);
@@ -61,44 +62,45 @@ final class BackpackContentsTooltip implements ClientTooltipComponent {
         return hasLargeCount ? Math.max(width, font.width(countHint)) : width;
     }
 
-    @Override public void extractText(GuiGraphicsExtractor graphics, Font font, int x, int y) {
-        graphics.text(font, expanded ? summary : hint, x, y, expanded ? 0xFFE0D7C8 : 0xFF9CABA7, false);
-        if (expanded && hasLargeCount) graphics.text(font, countHint, x,
+    private void drawText(GuiGraphics graphics, Font font, int x, int y) {
+        graphics.drawString(font, expanded ? summary : hint, x, y, expanded ? 0xFFE0D7C8 : 0xFF9CABA7, false);
+        if (expanded && hasLargeCount) graphics.drawString(font, countHint, x,
                 y + font.lineHeight + 5 + (int) Math.ceil(rows * CELL * gridScale), 0xFF9CABA7, false);
     }
 
-    @Override public void extractImage(Font font, int x, int y, int width, int height, GuiGraphicsExtractor graphics) {
+    @Override public void renderImage(Font font, int x, int y, GuiGraphics graphics) {
+        drawText(graphics, font, x, y);
         if (!expanded || items.length == 0) return;
-        graphics.pose().pushMatrix();
+        graphics.pose().pushPose();
         try {
-            graphics.pose().translate(x, y + font.lineHeight + 3);
-            graphics.pose().scale(gridScale);
+            graphics.pose().translate(x, y + font.lineHeight + 3, 0);
+            graphics.pose().scale(gridScale, gridScale, 1);
             for (int slot = 0; slot < items.length; slot++) {
                 int left = slot % columns * CELL;
                 int top = slot / columns * CELL;
                 graphics.fill(left, top, left + CELL - 1, top + CELL - 1, 0xFF283239);
-                graphics.outline(left, top, CELL - 1, CELL - 1, 0xFF53606A);
+                graphics.renderOutline(left, top, CELL - 1, CELL - 1, 0xFF53606A);
                 ItemStack stack = items[slot];
                 if (stack.isEmpty()) continue;
-                graphics.fakeItem(stack, left + 1, top + 1);
-                graphics.itemDecorations(font, stack, left + 1, top + 1, "");
+                graphics.renderFakeItem(stack, left + 1, top + 1);
+                graphics.renderItemDecorations(font, stack, left + 1, top + 1, "");
                 if (stack.getCount() > 1) drawCount(graphics, font, compactCount(stack.getCount()), left, top);
             }
         } finally {
-            graphics.pose().popMatrix();
+            graphics.pose().popPose();
         }
     }
 
-    private static void drawCount(GuiGraphicsExtractor graphics, Font font, String label, int x, int y) {
+    private static void drawCount(GuiGraphics graphics, Font font, String label, int x, int y) {
         int width = font.width(label);
         float scale = Math.min(1F, 15F / Math.max(1, width));
-        graphics.pose().pushMatrix();
+        graphics.pose().pushPose();
         try {
-            graphics.pose().translate(x + 17F - width * scale, y + 17F - font.lineHeight * scale);
-            graphics.pose().scale(scale);
-            graphics.text(font, label, 0, 0, 0xFFFFFFFF, true);
+            graphics.pose().translate(x + 17F - width * scale, y + 17F - font.lineHeight * scale, 200);
+            graphics.pose().scale(scale, scale, 1);
+            graphics.drawString(font, label, 0, 0, 0xFFFFFFFF, true);
         } finally {
-            graphics.pose().popMatrix();
+            graphics.pose().popPose();
         }
     }
 

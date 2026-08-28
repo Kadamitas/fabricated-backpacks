@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.menu;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
@@ -11,7 +13,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,9 +23,12 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AnvilMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.CraftingMenu;
+import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.world.inventory.ResultContainer;
+import com.kadamitas.fabricatedbackpacks.mixin.CraftingMenuAccess;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.SmithingMenu;
@@ -36,7 +41,6 @@ import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.item.crafting.StonecutterRecipe;
-import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,7 +56,7 @@ public final class WorkstationMenus {
     public static final int RECENT_RECIPE_BUTTON = 10_010;
     public static final int CHOICE_RECIPE_BUTTON = 11_000;
     public static final int MAX_CHOICES = 1_024;
-    private static final Identifier STONECUTTING = Identifier.withDefaultNamespace("stonecutting");
+    private static final ResourceLocation STONECUTTING = ResourceLocation.withDefaultNamespace("stonecutting");
     private static BiConsumer<ServerPlayer, CompoundTag> stateListener = (player, state) -> {};
     private WorkstationMenus() {}
     public static void setStateListener(BiConsumer<ServerPlayer, CompoundTag> listener) { stateListener = java.util.Objects.requireNonNull(listener); }
@@ -83,22 +87,21 @@ public final class WorkstationMenus {
     }
 
     /** Resolve the requested identity against the current input and registry, never a stale client index. */
-    public static boolean selectRecipe(ServerPlayer player, Identifier recipeId) {
+    public static boolean selectRecipe(ServerPlayer player, ResourceLocation recipeId) {
         Session session = session(player.containerMenu);
         if (recipeId == null || session == null || !session.valid(player)) return false;
         if (player.containerMenu instanceof PortableCrafting crafting) {
             crafting.refreshResult();
-            if (crafting.matches.stream().noneMatch(recipe -> recipe.id().identifier().equals(recipeId))) return false;
+            if (crafting.matches.stream().noneMatch(recipe -> recipe.id().equals(recipeId))) return false;
             session.bag().updateSettings(session.upgrade, state -> state.putString("selected_recipe_id", recipeId.toString()));
             crafting.refreshResult();
             session.persist(crafting.grid());
             return true;
         }
         if (player.containerMenu instanceof PortableStonecutter stonecutter) {
-            if (stonecutter.choices().stream().noneMatch(recipe -> recipe.id().identifier().equals(recipeId))) return false;
-            for (int index = 0; index < stonecutter.getNumberOfVisibleRecipes(); index++) {
-                if (stonecutter.getVisibleRecipes().entries().get(index).recipe().recipe()
-                        .map(recipe -> recipe.id().identifier().equals(recipeId)).orElse(false)) {
+            if (stonecutter.choices().stream().noneMatch(recipe -> recipe.id().equals(recipeId))) return false;
+            for (int index = 0; index < stonecutter.getNumRecipes(); index++) {
+                if (stonecutter.getRecipes().get(index).id().equals(recipeId)) {
                     // Vanilla reports no change for a repeated button; the validated identity is still selected.
                     return stonecutter.getSelectedRecipeIndex() == index || stonecutter.clickMenuButton(player, index);
                 }
@@ -132,21 +135,21 @@ public final class WorkstationMenus {
         if (session == null || !session.valid(player)) return state;
         CompoundTag settings = session.bag().settings(session.upgrade);
         state.putString("family", session.upgrade.kind().family());
-        state.putString("result_destination", settings.getStringOr("result_destination", "STORAGE"));
-        state.putBoolean("grid_refill", settings.getBooleanOr("grid_refill", false));
-        state.putString("selected_recipe_id", settings.getStringOr("selected_recipe_id", ""));
+        state.putString("result_destination", NbtAccess.getStringOr(settings, "result_destination", "STORAGE"));
+        state.putBoolean("grid_refill", NbtAccess.getBooleanOr(settings, "grid_refill", false));
+        state.putString("selected_recipe_id", NbtAccess.getStringOr(settings, "selected_recipe_id", ""));
         List<ItemStack> results = new ArrayList<>();
         if (player.containerMenu instanceof PortableCrafting crafting) {
             var choices = crafting.matches.stream().limit(MAX_CHOICES).toList();
-            state.putString("choices", String.join(",", choices.stream().map(recipe -> recipe.id().identifier().toString()).toList()));
+            state.putString("choices", String.join(",", choices.stream().map(recipe -> recipe.id().toString()).toList()));
             CraftingInput input = crafting.currentInput();
-            choices.forEach(recipe -> results.add(recipe.value().assemble(input)));
+            choices.forEach(recipe -> results.add(recipe.value().assemble(input, player.registryAccess())));
         } else if (player.containerMenu instanceof PortableStonecutter stonecutter) {
             var choices = stonecutter.choices();
-            state.putString("choices", String.join(",", choices.stream().map(recipe -> recipe.id().identifier().toString()).toList()));
+            state.putString("choices", String.join(",", choices.stream().map(recipe -> recipe.id().toString()).toList()));
             SingleRecipeInput input = new SingleRecipeInput(session.inputs.getItem(0));
-            choices.forEach(recipe -> results.add(recipe.value().assemble(input)));
-            state.putString("recent_recipes", String.join(",", stonecutter.recents(player).stream().map(Identifier::toString).toList()));
+            choices.forEach(recipe -> results.add(recipe.value().assemble(input, player.registryAccess())));
+            state.putString("recent_recipes", String.join(",", stonecutter.recents(player).stream().map(ResourceLocation::toString).toList()));
         }
         ListTag encoded = new ListTag();
         var ops = RegistryOps.create(NbtOps.INSTANCE, player.level().registryAccess());
@@ -188,10 +191,10 @@ public final class WorkstationMenus {
             for (int slot = 0; slot < saved.getContainerSize(); slot++) saved.setItem(slot, inputs.getItem(slot).copy());
             origin.persist();
         }
-        boolean mayClick(AbstractContainerMenu menu, int slot, int button, ContainerInput input, Player player) {
+        boolean mayClick(AbstractContainerMenu menu, int slot, int button, ClickType input, Player player) {
             if (!valid(player) || slot >= menu.slots.size() || slot < -999) return false;
             if (slot >= 0 && slot < menu.slots.size() && isOpenBag(menu.slots.get(slot).getItem())) return false;
-            return input != ContainerInput.SWAP || button < 0 || button >= player.getInventory().getContainerSize()
+            return input != ClickType.SWAP || button < 0 || button >= player.getInventory().getContainerSize()
                     || !isOpenBag(player.getInventory().getItem(button));
         }
         boolean isOpenBag(ItemStack stack) { return bag().identity().equals(stack.getOrDefault(BagComponents.IDENTITY, "")); }
@@ -199,10 +202,10 @@ public final class WorkstationMenus {
         boolean button(Player player, int button) {
             if (!valid(player)) return false;
             if (button == DESTINATION_BUTTON) {
-                boolean storage = bag().settings(upgrade).getStringOr("result_destination", "STORAGE").equals("STORAGE");
+                boolean storage = NbtAccess.getStringOr(bag().settings(upgrade), "result_destination", "STORAGE").equals("STORAGE");
                 bag().updateSettings(upgrade, state -> state.putString("result_destination", storage ? "PLAYER" : "STORAGE"));
             } else if (button == REFILL_BUTTON && (upgrade.kind().family().equals("crafting") || upgrade.kind().family().equals("stonecutter"))) {
-                boolean refill = bag().settings(upgrade).getBooleanOr("grid_refill", false);
+                boolean refill = NbtAccess.getBooleanOr(bag().settings(upgrade), "grid_refill", false);
                 bag().updateSettings(upgrade, state -> state.putBoolean("grid_refill", !refill));
             } else return false;
             origin.persist();
@@ -215,7 +218,7 @@ public final class WorkstationMenus {
             Slot resultSlot = menu.slots.get(resultIndex);
             if (!resultSlot.hasItem() || !resultSlot.mayPickup(player)) return ItemStack.EMPTY;
             ItemStack output = resultSlot.getItem().copy();
-            Container destination = bag().settings(upgrade).getStringOr("result_destination", "STORAGE").equals("PLAYER")
+            Container destination = NbtAccess.getStringOr(bag().settings(upgrade), "result_destination", "STORAGE").equals("PLAYER")
                     ? player.getInventory() : BackpackTraversal.processingInventory(bag(), player);
             if (!InventoryMoves.insert(destination, output, true).isEmpty()) return ItemStack.EMPTY;
             ItemStack taken = resultSlot.remove(output.getCount());
@@ -239,7 +242,7 @@ public final class WorkstationMenus {
 
         /** Exact component refill; an obstructing remainder is stashed only after a full plan succeeds. */
         void refill(Container inputs, List<ItemStack> before, Player player) {
-            if (!bag().settings(upgrade).getBooleanOr("grid_refill", false)) return;
+            if (!NbtAccess.getBooleanOr(bag().settings(upgrade), "grid_refill", false)) return;
             Container processing = BackpackTraversal.processingInventory(bag(), player);
             List<ItemStack> storage = snapshot(processing);
             List<ItemStack> inventory = snapshot(player.getInventory());
@@ -291,6 +294,8 @@ public final class WorkstationMenus {
     }
 
     public static final class PortableCrafting extends CraftingMenu implements BackpackSessionMenu {
+        private CraftingContainer craftSlots() { return ((CraftingMenuAccess) (Object) this).fabricated$craftSlots(); }
+        private ResultContainer resultSlots() { return ((CraftingMenuAccess) (Object) this).fabricated$resultSlots(); }
         private final Session session;
         private final Player owner;
         private boolean bulk;
@@ -299,65 +304,67 @@ public final class WorkstationMenus {
             super(id, inventory, ContainerLevelAccess.NULL);
             this.session = session;
             owner = inventory.player;
-            session.load(craftSlots);
-            slotsChanged(craftSlots);
+            session.load(craftSlots());
+            slotsChanged(craftSlots());
         }
         @Override public BagInventory backpack() { return session.bag(); }
-        public Container grid() { return craftSlots; }
-        private CraftingInput currentInput() { return craftSlots.asCraftInput(); }
+        public Container grid() { return craftSlots(); }
+        private CraftingInput currentInput() { return craftSlots().asCraftInput(); }
         @Override public boolean stillValid(Player player) { return session.valid(player); }
         @Override public void slotsChanged(Container container) {
             if (session == null || session.loading || bulk) return;
             refreshResult();
-            session.persist(craftSlots);
+            session.persist(craftSlots());
         }
         private void refreshResult() {
             if (!(owner instanceof ServerPlayer player)) return;
-            CraftingInput input = craftSlots.asCraftInput();
+            CraftingInput input = craftSlots().asCraftInput();
             List<RecipeHolder<CraftingRecipe>> available = new ArrayList<>();
-            for (RecipeHolder<?> entry : player.level().recipeAccess().getRecipes()) {
+            for (RecipeHolder<?> entry : player.level().getRecipeManager().getRecipes()) {
                 if (entry.value() instanceof CraftingRecipe recipe && recipe.matches(input, player.level())
-                        && recipe.assemble(input).isItemEnabled(player.level().enabledFeatures())
-                        && (recipe.isSpecial() || !player.level().getGameRules().get(net.minecraft.world.level.gamerules.GameRules.LIMITED_CRAFTING)
+                        && recipe.assemble(input, player.registryAccess()).isItemEnabled(player.level().enabledFeatures())
+                        && (recipe.isSpecial() || !player.level().getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_LIMITED_CRAFTING)
                         || player.getRecipeBook().contains(entry.id()))) {
                     @SuppressWarnings("unchecked") RecipeHolder<CraftingRecipe> typed = (RecipeHolder<CraftingRecipe>) (RecipeHolder<?>) entry;
                     available.add(typed);
                 }
             }
-            available.sort(Comparator.comparing(recipe -> recipe.id().identifier().toString()));
+            available.sort(Comparator.comparing(recipe -> recipe.id().toString()));
             matches = List.copyOf(available);
-            String preferred = session.bag().settings(session.upgrade).getStringOr("selected_recipe_id", "");
-            RecipeHolder<CraftingRecipe> selected = matches.stream().filter(recipe -> recipe.id().identifier().toString().equals(preferred))
+            String preferred = NbtAccess.getStringOr(session.bag().settings(session.upgrade), "selected_recipe_id", "");
+            RecipeHolder<CraftingRecipe> selected = matches.stream().filter(recipe -> recipe.id().toString().equals(preferred))
                     .findFirst().orElse(matches.isEmpty() ? null : matches.getFirst());
-            if (selected != null && !selected.id().identifier().toString().equals(preferred)) {
-                session.bag().updateSettings(session.upgrade, state -> state.putString("selected_recipe_id", selected.id().identifier().toString()));
+            if (selected != null && !selected.id().toString().equals(preferred)) {
+                session.bag().updateSettings(session.upgrade, state -> state.putString("selected_recipe_id", selected.id().toString()));
             }
-            slotChangedCraftingGrid(this, player.level(), player, craftSlots, resultSlots, selected);
+            slotChangedCraftingGrid(this, player.level(), player, craftSlots(), resultSlots(), selected);
             publish(player);
         }
         private RecipeHolder<CraftingRecipe> chosenRecipe() {
             if (!(owner instanceof ServerPlayer player)) return null;
-            Identifier id = Identifier.tryParse(session.bag().settings(session.upgrade).getStringOr("selected_recipe_id", ""));
+            ResourceLocation id = ResourceLocation.tryParse(NbtAccess.getStringOr(session.bag().settings(session.upgrade), "selected_recipe_id", ""));
             if (id == null) return null;
-            RecipeHolder<?> entry = player.level().recipeAccess().byKey(ResourceKey.create(Registries.RECIPE, id)).orElse(null);
-            if (entry == null || !(entry.value() instanceof CraftingRecipe recipe) || !recipe.matches(craftSlots.asCraftInput(), player.level())
-                    || !recipe.isSpecial() && player.level().getGameRules().get(net.minecraft.world.level.gamerules.GameRules.LIMITED_CRAFTING)
+            RecipeHolder<?> entry = player.level().getRecipeManager().byKey(id).orElse(null);
+            if (entry == null || !(entry.value() instanceof CraftingRecipe recipe) || !recipe.matches(craftSlots().asCraftInput(), player.level())
+                    || !recipe.isSpecial() && player.level().getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_LIMITED_CRAFTING)
                     && !player.getRecipeBook().contains(entry.id())) return null;
             @SuppressWarnings("unchecked") RecipeHolder<CraftingRecipe> typed = (RecipeHolder<CraftingRecipe>) (RecipeHolder<?>) entry;
             return typed;
         }
-        @Override protected Slot addResultSlot(Player player, int x, int y) {
-            return addSlot(new ResultSlot(player, craftSlots, resultSlots, 0, x, y) {
+        @Override protected Slot addSlot(Slot original) {
+            if (!slots.isEmpty() || !(original instanceof ResultSlot)) return super.addSlot(original);
+            Player player = ((CraftingMenuAccess) (Object) this).fabricated$player();
+            return super.addSlot(new ResultSlot(player, craftSlots(), resultSlots(), 0, original.x, original.y) {
                 @Override public boolean mayPickup(Player actor) {
                     RecipeHolder<CraftingRecipe> recipe = session == null ? null : chosenRecipe();
                     return session != null && session.valid(actor) && recipe != null
-                            && ItemStack.matches(getItem(), recipe.value().assemble(craftSlots.asCraftInput()));
+                            && ItemStack.matches(getItem(), recipe.value().assemble(craftSlots().asCraftInput(), actor.registryAccess()));
                 }
                 @Override public void onTake(Player actor, ItemStack carried) {
                     RecipeHolder<CraftingRecipe> recipe = chosenRecipe();
                     if (recipe == null) throw new IllegalStateException("A crafting result lost its validated recipe during a synchronous take");
-                    List<ItemStack> before = snapshot(craftSlots);
-                    var positioned = craftSlots.asPositionedCraftInput();
+                    List<ItemStack> before = snapshot(craftSlots());
+                    var positioned = craftSlots().asPositionedCraftInput();
                     CraftingInput input = positioned.input();
                     NonNullList<ItemStack> remainders = recipe.value().getRemainingItems(input);
                     List<ItemStack> grid = copy(before);
@@ -380,21 +387,21 @@ public final class WorkstationMenus {
                     bulk = true;
                     try {
                         InventoryMoves.commit(actor.getInventory(), inventory);
-                        InventoryMoves.commit(craftSlots, grid);
-                        session.refill(craftSlots, before, actor);
+                        InventoryMoves.commit(craftSlots(), grid);
+                        session.refill(craftSlots(), before, actor);
                     } finally { bulk = false; }
-                    slotsChanged(craftSlots);
+                    slotsChanged(craftSlots());
                     for (ItemStack drop : drops) actor.drop(drop, false);
                     publish(actor);
                 }
             });
         }
         @Override public void beginPlacingRecipe() { bulk = true; super.beginPlacingRecipe(); }
-        @Override public void finishPlacingRecipe(net.minecraft.server.level.ServerLevel level, RecipeHolder<CraftingRecipe> recipe) {
+        @Override public void finishPlacingRecipe(RecipeHolder<CraftingRecipe> recipe) {
             bulk = false;
-            super.finishPlacingRecipe(level, recipe);
-            session.bag().updateSettings(session.upgrade, state -> state.putString("selected_recipe_id", recipe.id().identifier().toString()));
-            slotsChanged(craftSlots);
+            super.finishPlacingRecipe(recipe);
+            session.bag().updateSettings(session.upgrade, state -> state.putString("selected_recipe_id", recipe.id().toString()));
+            slotsChanged(craftSlots());
         }
         @Override public boolean clickMenuButton(Player player, int button) {
             if (!session.valid(player)) return false;
@@ -403,37 +410,37 @@ public final class WorkstationMenus {
                 refreshResult();
                 int index = button - CHOICE_RECIPE_BUTTON;
                 if (index >= matches.size()) return false;
-                String selected = matches.get(index).id().identifier().toString();
+                String selected = matches.get(index).id().toString();
                 session.bag().updateSettings(session.upgrade, state -> state.putString("selected_recipe_id", selected));
                 refreshResult();
-                session.persist(craftSlots);
+                session.persist(craftSlots());
                 return true;
             }
             if (button != PREVIOUS_RECIPE_BUTTON && button != NEXT_RECIPE_BUTTON) return false;
             refreshResult();
             if (matches.size() < 2) return false;
-            String selected = session.bag().settings(session.upgrade).getStringOr("selected_recipe_id", "");
+            String selected = NbtAccess.getStringOr(session.bag().settings(session.upgrade), "selected_recipe_id", "");
             int current = 0;
-            for (int index = 0; index < matches.size(); index++) if (matches.get(index).id().identifier().toString().equals(selected)) current = index;
+            for (int index = 0; index < matches.size(); index++) if (matches.get(index).id().toString().equals(selected)) current = index;
             int next = Math.floorMod(current + (button == NEXT_RECIPE_BUTTON ? 1 : -1), matches.size());
-            session.bag().updateSettings(session.upgrade, state -> state.putString("selected_recipe_id", matches.get(next).id().identifier().toString()));
+            session.bag().updateSettings(session.upgrade, state -> state.putString("selected_recipe_id", matches.get(next).id().toString()));
             refreshResult();
-            session.persist(craftSlots);
+            session.persist(craftSlots());
             return true;
         }
-        @Override public void clicked(int slot, int button, ContainerInput input, Player player) {
+        @Override public void clicked(int slot, int button, ClickType input, Player player) {
             if (!session.mayClick(this, slot, button, input, player)) return;
-            if (slot == RESULT_SLOT && input == ContainerInput.QUICK_MOVE) session.shiftBatches(this, RESULT_SLOT, player);
+            if (slot == RESULT_SLOT && input == ClickType.QUICK_MOVE) session.shiftBatches(this, RESULT_SLOT, player);
             else super.clicked(slot, button, input, player);
-            session.persist(craftSlots);
+            session.persist(craftSlots());
         }
         @Override public ItemStack quickMoveStack(Player player, int slot) {
             if (!session.valid(player) || slot < 0 || slot >= slots.size() || session.isOpenBag(slots.get(slot).getItem())) return ItemStack.EMPTY;
             ItemStack result = slot == RESULT_SLOT ? session.shiftResult(this, RESULT_SLOT, player) : super.quickMoveStack(player, slot);
-            session.persist(craftSlots);
+            session.persist(craftSlots());
             return result;
         }
-        @Override public void removed(Player player) { session.close(craftSlots); super.removed(player); }
+        @Override public void removed(Player player) { session.close(craftSlots()); super.removed(player); }
     }
 
     private static final class PortableStonecutter extends StonecutterMenu implements BackpackSessionMenu {
@@ -446,8 +453,8 @@ public final class WorkstationMenus {
             owner = inventory.player;
             session.load(container);
             if (!restoreSelection()) {
-                int selected = session.bag().settings(session.upgrade).getIntOr("selected_recipe", -1);
-                if (session.bag().settings(session.upgrade).getStringOr("selected_recipe_id", "").isEmpty() && selected >= 0) clickMenuButton(inventory.player, selected);
+                int selected = NbtAccess.getIntOr(session.bag().settings(session.upgrade), "selected_recipe", -1);
+                if (NbtAccess.getStringOr(session.bag().settings(session.upgrade), "selected_recipe_id", "").isEmpty() && selected >= 0) clickMenuButton(inventory.player, selected);
             }
         }
         @Override public BagInventory backpack() { return session.bag(); }
@@ -459,7 +466,7 @@ public final class WorkstationMenus {
                 @Override public boolean mayPickup(Player player) { return session != null && session.valid(player) && original.mayPickup(player); }
                 @Override public void onTake(Player player, ItemStack output) {
                     List<ItemStack> before = snapshot(PortableStonecutter.this.container);
-                    Identifier selected = selectedId();
+                    ResourceLocation selected = selectedId();
                     original.onTake(player, output);
                     refilling = true;
                     try { session.refill(PortableStonecutter.this.container, before, player); }
@@ -481,29 +488,29 @@ public final class WorkstationMenus {
                 publish(owner);
             }
         }
-        private Identifier selectedId() {
+        private ResourceLocation selectedId() {
             int index = getSelectedRecipeIndex();
-            if (index < 0 || index >= getNumberOfVisibleRecipes()) return null;
-            return getVisibleRecipes().entries().get(index).recipe().recipe().map(recipe -> recipe.id().identifier()).orElse(null);
+            if (index < 0 || index >= getNumRecipes()) return null;
+            return getRecipes().get(index).id();
         }
-        private List<Identifier> recents(ServerPlayer player) {
+        private List<ResourceLocation> recents(ServerPlayer player) {
             return WorkstationHistory.get(player).recipes(player, STONECUTTING, container.getItem(0)).stream()
-                    .filter(id -> getVisibleRecipes().entries().stream().anyMatch(entry -> entry.recipe().recipe().map(recipe -> recipe.id().identifier().equals(id)).orElse(false)))
+                    .filter(id -> getRecipes().stream().anyMatch(entry -> entry.id().equals(id)))
                     .toList();
         }
         private List<RecipeHolder<StonecutterRecipe>> choices() {
             if (!(owner instanceof ServerPlayer player)) return List.of();
             SingleRecipeInput input = new SingleRecipeInput(container.getItem(0));
-            return getVisibleRecipes().entries().stream().flatMap(entry -> entry.recipe().recipe().stream())
-                    .filter(recipe -> player.level().recipeAccess().byKey(recipe.id()).map(current -> current.value() == recipe.value()).orElse(false))
-                    .filter(recipe -> recipe.value().matches(input, player.level()) && recipe.value().assemble(input).isItemEnabled(player.level().enabledFeatures()))
+            return getRecipes().stream()
+                    .filter(recipe -> player.level().getRecipeManager().byKey(recipe.id()).map(current -> current.value() == recipe.value()).orElse(false))
+                    .filter(recipe -> recipe.value().matches(input, player.level()) && recipe.value().assemble(input, player.registryAccess()).isItemEnabled(player.level().enabledFeatures()))
                     .limit(MAX_CHOICES).toList();
         }
         private boolean restoreSelection() {
-            String selected = session.bag().settings(session.upgrade).getStringOr("selected_recipe_id", "");
-            for (int index = 0; index < getNumberOfVisibleRecipes(); index++) {
-                var recipe = getVisibleRecipes().entries().get(index).recipe().recipe();
-                if (recipe.isPresent() && recipe.get().id().identifier().toString().equals(selected)) {
+            String selected = NbtAccess.getStringOr(session.bag().settings(session.upgrade), "selected_recipe_id", "");
+            for (int index = 0; index < getNumRecipes(); index++) {
+                var recipe = getRecipes().get(index);
+                if (recipe.id().toString().equals(selected)) {
                     if (getSelectedRecipeIndex() != index) super.clickMenuButton(owner, index);
                     return true;
                 }
@@ -517,29 +524,29 @@ public final class WorkstationMenus {
                 List<RecipeHolder<StonecutterRecipe>> choices = choices();
                 int chosen = button - CHOICE_RECIPE_BUTTON;
                 if (chosen >= choices.size()) return false;
-                Identifier wanted = choices.get(chosen).id().identifier();
-                for (int index = 0; index < getNumberOfVisibleRecipes(); index++) {
-                    if (getVisibleRecipes().entries().get(index).recipe().recipe().map(recipe -> recipe.id().identifier().equals(wanted)).orElse(false)) {
+                ResourceLocation wanted = choices.get(chosen).id();
+                for (int index = 0; index < getNumRecipes(); index++) {
+                    if (getRecipes().get(index).id().equals(wanted)) {
                         return clickMenuButton(player, index);
                     }
                 }
                 return false;
             }
             if (button >= RECENT_RECIPE_BUTTON && button < RECENT_RECIPE_BUTTON + 4 && player instanceof ServerPlayer serverPlayer) {
-                List<Identifier> recent = recents(serverPlayer);
+                List<ResourceLocation> recent = recents(serverPlayer);
                 int chosen = button - RECENT_RECIPE_BUTTON;
                 if (chosen >= recent.size()) return false;
-                Identifier wanted = recent.get(chosen);
-                for (int index = 0; index < getNumberOfVisibleRecipes(); index++) {
-                    if (getVisibleRecipes().entries().get(index).recipe().recipe().map(recipe -> recipe.id().identifier().equals(wanted)).orElse(false)) {
+                ResourceLocation wanted = recent.get(chosen);
+                for (int index = 0; index < getNumRecipes(); index++) {
+                    if (getRecipes().get(index).id().equals(wanted)) {
                         return clickMenuButton(player, index);
                     }
                 }
                 return false;
             }
-            if (button < 0 || button >= getNumberOfVisibleRecipes()) return false;
+            if (button < 0 || button >= getNumRecipes()) return false;
             boolean result = super.clickMenuButton(player, button);
-            Identifier selected = selectedId();
+            ResourceLocation selected = selectedId();
             if (session != null && selected != null) session.bag().updateSettings(session.upgrade, tag -> {
                 tag.putInt("selected_recipe", getSelectedRecipeIndex());
                 tag.putString("selected_recipe_id", selected.toString());
@@ -547,9 +554,9 @@ public final class WorkstationMenus {
             publish(player);
             return result;
         }
-        @Override public void clicked(int slot, int button, ContainerInput input, Player player) {
+        @Override public void clicked(int slot, int button, ClickType input, Player player) {
             if (!session.mayClick(this, slot, button, input, player)) return;
-            if (slot == RESULT_SLOT && input == ContainerInput.QUICK_MOVE) session.shiftBatches(this, RESULT_SLOT, player);
+            if (slot == RESULT_SLOT && input == ClickType.QUICK_MOVE) session.shiftBatches(this, RESULT_SLOT, player);
             else super.clicked(slot, button, input, player);
             session.persist(container);
         }
@@ -570,9 +577,9 @@ public final class WorkstationMenus {
         @Override public boolean stillValid(Player player) { return session.valid(player); }
         @Override public boolean clickMenuButton(Player player, int button) { return session.button(player, button); }
         @Override public void slotsChanged(Container changed) { super.slotsChanged(changed); if (session != null) session.persist(inputSlots); }
-        @Override public void clicked(int slot, int button, ContainerInput input, Player player) {
+        @Override public void clicked(int slot, int button, ClickType input, Player player) {
             if (!session.mayClick(this, slot, button, input, player)) return;
-            if (slot == RESULT_SLOT && input == ContainerInput.QUICK_MOVE) session.shiftBatches(this, RESULT_SLOT, player);
+            if (slot == RESULT_SLOT && input == ClickType.QUICK_MOVE) session.shiftBatches(this, RESULT_SLOT, player);
             else super.clicked(slot, button, input, player);
             session.persist(inputSlots);
         }
@@ -593,9 +600,9 @@ public final class WorkstationMenus {
         @Override public boolean stillValid(Player player) { return session.valid(player); }
         @Override public boolean clickMenuButton(Player player, int button) { return session.button(player, button); }
         @Override public void slotsChanged(Container changed) { super.slotsChanged(changed); if (session != null) session.persist(inputSlots); }
-        @Override public void clicked(int slot, int button, ContainerInput input, Player player) {
+        @Override public void clicked(int slot, int button, ClickType input, Player player) {
             if (!session.mayClick(this, slot, button, input, player)) return;
-            if (slot == RESULT_SLOT && input == ContainerInput.QUICK_MOVE) session.shiftBatches(this, RESULT_SLOT, player);
+            if (slot == RESULT_SLOT && input == ClickType.QUICK_MOVE) session.shiftBatches(this, RESULT_SLOT, player);
             else super.clicked(slot, button, input, player);
             session.persist(inputSlots);
         }
@@ -612,8 +619,8 @@ public final class WorkstationMenus {
     }
 
     /** Plans every source and input before mutation; one set is the default for older callers. */
-    public static boolean transfer(ServerPlayer player, Identifier recipeId) { return transfer(player, recipeId, false); }
-    public static boolean transfer(ServerPlayer player, Identifier recipeId, boolean maximum) {
+    public static boolean transfer(ServerPlayer player, ResourceLocation recipeId) { return transfer(player, recipeId, false); }
+    public static boolean transfer(ServerPlayer player, ResourceLocation recipeId, boolean maximum) {
         return WorkstationTransfer.transfer(player, recipeId, maximum);
     }
 
@@ -621,12 +628,11 @@ public final class WorkstationMenus {
     static void finishTransfer(ServerPlayer player, RecipeHolder<?> recipe) {
         AbstractContainerMenu menu = player.containerMenu;
         if (menu instanceof CraftingMenu crafting) {
-            crafting.finishPlacingRecipe(player.level(), (RecipeHolder<CraftingRecipe>) recipe);
+            crafting.finishPlacingRecipe((RecipeHolder<CraftingRecipe>) recipe);
         } else if (menu instanceof StonecutterMenu stonecutter) {
             stonecutter.slotsChanged(stonecutter.getSlot(0).container);
-            for (int index = 0; index < stonecutter.getNumberOfVisibleRecipes(); index++) {
-                if (stonecutter.getVisibleRecipes().entries().get(index).recipe().recipe()
-                        .map(choice -> choice.id().equals(recipe.id())).orElse(false)) {
+            for (int index = 0; index < stonecutter.getNumRecipes(); index++) {
+                if (stonecutter.getRecipes().get(index).id().equals(recipe.id())) {
                     stonecutter.clickMenuButton(player, index);
                     break;
                 }

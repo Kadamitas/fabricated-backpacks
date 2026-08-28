@@ -8,16 +8,13 @@ import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
-import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.geom.builders.CubeListBuilder;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
 import net.minecraft.client.model.geom.builders.MeshDefinition;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.util.Unit;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -31,7 +28,7 @@ import java.util.Set;
 
 /** Bakes original named cuboids into Minecraft-native geometry on resource reload. */
 final class NativeBackpackModel {
-    private static final Identifier PROFILES = BackpackRegistry.id("backpack_profiles.json");
+    private static final ResourceLocation PROFILES = BackpackRegistry.id("backpack_profiles.json");
     private static final Set<String> MATERIALS = Set.of("body", "trim", "lining", "pocket", "fittings");
     private final List<MaterialGroup> groups;
     private final WearTransform wearTransform;
@@ -163,10 +160,10 @@ final class NativeBackpackModel {
             if (tint < -1 || tint > 1) throw new IllegalArgumentException("Invalid backpack material tint");
             String texture = material.equals("fittings") ? profile.get("fittings_texture").getAsString()
                     : document.getAsJsonObject("material_textures").get(material).getAsString();
-            Identifier resource = Identifier.parse(texture);
-            Identifier path = Identifier.fromNamespaceAndPath(resource.getNamespace(), "textures/" + resource.getPath() + ".png");
+            ResourceLocation resource = ResourceLocation.parse(texture);
+            ResourceLocation path = ResourceLocation.fromNamespaceAndPath(resource.getNamespace(), "textures/" + resource.getPath() + ".png");
             ModelPart root = LayerDefinition.create(entry.getValue(), 64, 64).bakeRoot();
-            groups.add(new MaterialGroup(new StaticMaterialModel(root), path, tint));
+            groups.add(new MaterialGroup(root, path, tint));
         }
         JsonObject transform = document.getAsJsonObject("wear_transform");
         float[] translate = vector(transform.getAsJsonArray("translation_pixels"));
@@ -197,7 +194,7 @@ final class NativeBackpackModel {
         return vector;
     }
 
-    record MaterialGroup(Model<Unit> model, Identifier texture, int tintIndex) {
+    record MaterialGroup(ModelPart model, ResourceLocation texture, int tintIndex) {
         int color(BackpackVisualState state) {
             return switch (tintIndex) {
                 case 0 -> state.bodyColor();
@@ -210,9 +207,4 @@ final class NativeBackpackModel {
     private record WearTransform(float x, float y, float z, float scaleX, float scaleY, float scaleZ, float armorClearance) {}
     private record FlapTransform(float x, float y, float z, float closedAngle, float openAngle) {}
 
-    private static final class StaticMaterialModel extends Model<Unit> {
-        StaticMaterialModel(ModelPart root) {
-            super(root, RenderTypes::entityCutout);
-        }
-    }
 }

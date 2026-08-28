@@ -28,14 +28,14 @@ public final class ConduitItem extends AutomationBlockItem {
             if (player == null || player.isSpectator() || !context.getLevel().mayInteract(player, context.getClickedPos())
                     || !player.mayUseItemAt(context.getClickedPos(), context.getClickedFace(), context.getItemInHand())) return InteractionResult.FAIL;
             if (bundle.has(kind)) return super.useOn(context);
-            if (!context.getLevel().isClientSide() && bundle.install(kind) && !player.getAbilities().instabuild) context.getItemInHand().shrink(1);
+            if (!context.getLevel().isClientSide && bundle.install(kind) && !player.getAbilities().instabuild) context.getItemInHand().shrink(1);
             return InteractionResult.SUCCESS;
         }
         return super.useOn(context);
     }
     @Override protected boolean placeBlock(BlockPlaceContext context, BlockState state) {
         if (!super.placeBlock(context, state)) return false;
-        if (!context.getLevel().isClientSide() && context.getLevel().getBlockEntity(context.getClickedPos()) instanceof ConduitBundleBlockEntity bundle)
+        if (!context.getLevel().isClientSide && context.getLevel().getBlockEntity(context.getClickedPos()) instanceof ConduitBundleBlockEntity bundle)
             bundle.install(kind);
         return true;
     }

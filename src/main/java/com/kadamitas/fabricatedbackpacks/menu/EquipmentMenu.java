@@ -17,22 +17,22 @@ public final class EquipmentMenu extends AbstractContainerMenu {
         player = inventory.player;
         equipment = new SimpleContainer(1) {
             @Override public ItemStack getItem(int slot) {
-                return slot != 0 ? ItemStack.EMPTY : player.level().isClientSide() ? super.getItem(0) : BackpackEquipment.get(player);
+                return slot != 0 ? ItemStack.EMPTY : player.level().isClientSide ? super.getItem(0) : BackpackEquipment.get(player);
             }
             @Override public void setItem(int slot, ItemStack stack) {
                 if (slot != 0) return;
-                if (player.level().isClientSide()) super.setItem(0, stack);
+                if (player.level().isClientSide) super.setItem(0, stack);
                 else BackpackEquipment.set(player, stack);
             }
             @Override public ItemStack removeItem(int slot, int amount) {
-                if (player.level().isClientSide()) return super.removeItem(slot, amount);
+                if (player.level().isClientSide) return super.removeItem(slot, amount);
                 if (slot != 0 || amount <= 0) return ItemStack.EMPTY;
                 ItemStack result = getItem(0).split(amount);
                 setChanged();
                 return result;
             }
             @Override public ItemStack removeItemNoUpdate(int slot) {
-                if (player.level().isClientSide()) return super.removeItemNoUpdate(slot);
+                if (player.level().isClientSide) return super.removeItemNoUpdate(slot);
                 if (slot != 0) return ItemStack.EMPTY;
                 ItemStack result = getItem(0);
                 BackpackEquipment.set(player, ItemStack.EMPTY);
@@ -42,15 +42,15 @@ public final class EquipmentMenu extends AbstractContainerMenu {
             @Override public void clearContent() { setItem(0, ItemStack.EMPTY); }
             @Override public void setChanged() {
                 super.setChanged();
-                if (!player.level().isClientSide()) BackpackEquipment.set(player, getItem(0));
+                if (!player.level().isClientSide) BackpackEquipment.set(player, getItem(0));
             }
         };
-        if (player.level().isClientSide()) equipment.setItem(0, BackpackEquipment.get(player).copy());
+        if (player.level().isClientSide) equipment.setItem(0, BackpackEquipment.get(player).copy());
         addSlot(new Slot(equipment, 0, 80, 35) {
             @Override public boolean mayPlace(ItemStack stack) { return BackpackRegistry.isBackpack(stack); }
             @Override public int getMaxStackSize() { return 1; }
         });
-        addStandardInventorySlots(inventory, 8, 84);
+        MenuSlots.addInventory(this::addSlot, inventory, 8, 84);
     }
     @Override public boolean stillValid(Player viewer) { return viewer == player && player.isAlive(); }
     @Override public ItemStack quickMoveStack(Player viewer, int index) {

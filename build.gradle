@@ -1,5 +1,6 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version '1.17.20'
+    id 'net.fabricmc.fabric-loom-remap' version '1.17.20'
+    id 'org.jetbrains.kotlin.jvm' version '2.4.10' apply false
     id 'maven-publish'
 }
 
@@ -14,6 +15,17 @@ repositories {
         url = 'https://maven.blamejared.com/'
         content { includeGroup 'mezz.jei' }
     }
+    maven {
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+}
+
+def withCobblemon = providers.gradleProperty('withCobblemon').map { it.toBoolean() }.getOrElse(false)
+if (withCobblemon) {
+    // Loom needs this plugin to remap Kotlin metadata in external development
+    // mods. Our production sources and distributable remain Java-only.
+    apply plugin: 'org.jetbrains.kotlin.jvm'
 }
 
 configurations {
@@ -38,26 +50,49 @@ fabricApi {
         createSourceSet = true
         modId = 'fabricated_backpacks_tests'
         enableGameTests = true
-        enableClientGameTests = true
+        enableClientGameTests = false
         eula = true
         // Multiplayer preparation must never clear another running client's directory.
         clearRunDirectory = !providers.gradleProperty('multiplayerRunId').isPresent()
     }
 }
 
+// These scenarios use Fabric's newer client GameTest API. Keep the source as a
+// porting reference, but do not register it or report it as executed on 1.21.1.
+sourceSets.gametest.java {
+    [
+        'AutomationClientAcceptance', 'BrowserClientAcceptance', 'BackpackClientGameTests',
+        'ClientAcceptanceFiles', 'ClientAudioProbe', 'ConduitFilterClientAcceptance',
+        'ConfiguredClientAcceptance', 'JeiConduitClientAcceptance', 'PlacedAppearanceAcceptance',
+        'MultiplayerClientAcceptance', 'RulesClientAcceptance', 'StorageClientAcceptance'
+    ].each { exclude "**/${it}.java" }
+    exclude '**/gametest/mixin/**'
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
     productionMods "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
-    implementation include('teamreborn:energy:5.0.0')
+    modImplementation include('teamreborn:energy:4.1.0')
     // Optional client integration. JEI is neither required nor embedded in the mod JAR.
-    clientCompileOnly "mezz.jei:jei-${minecraft_version}-fabric-api:${jei_version}"
-    gametestCompileOnly "mezz.jei:jei-${minecraft_version}-fabric-api:${jei_version}"
+    modClientCompileOnly "mezz.jei:jei-${minecraft_version}-fabric-api:${jei_version}"
+    modGametestCompileOnly "mezz.jei:jei-${minecraft_version}-fabric-api:${jei_version}"
     if (providers.gradleProperty('withJei').map { it.toBoolean() }.getOrElse(false)) {
-        clientRuntimeOnly "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
-        gametestRuntimeOnly "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
+        modClientRuntimeOnly "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
+        modGametestRuntimeOnly "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
         productionMods "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
+    }
+    if (withCobblemon) {
+        // Exact official Fabric 1.7.3 release ID; never embedded in our artifact.
+        modRuntimeOnly 'maven.modrinth:cobblemon:kF7CvxTo'
+        modGametestRuntimeOnly 'maven.modrinth:cobblemon:kF7CvxTo'
+        // Loom removes nested JARs from remapped development mods. Match the
+        // Kotlin runtime bundled by this exact Cobblemon release in dev only.
+        modRuntimeOnly 'net.fabricmc:fabric-language-kotlin:1.13.6+kotlin.2.2.20'
+        modGametestRuntimeOnly 'net.fabricmc:fabric-language-kotlin:1.13.6+kotlin.2.2.20'
+        productionMods 'maven.modrinth:cobblemon:kF7CvxTo'
     }
     testImplementation "net.fabricmc:fabric-loader-junit:${loader_version}"
     testImplementation platform('org.junit:junit-bom:6.1.0')
@@ -66,19 +101,31 @@ dependencies {
 }
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
     withSourcesJar()
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 25
+    options.release = 21
     options.encoding = 'UTF-8'
-    options.compilerArgs.addAll(['-Xlint:unchecked', '-Xlint:deprecation'])
+    options.compilerArgs.addAll(['-Xlint:unchecked', '-Xlint:deprecation', '-Xmaxerrs', '1000'])
 }
 
 tasks.named('processResources') {
     inputs.property 'version', project.version
     filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+tasks.named('processGametestResources') {
+    inputs.property 'withCobblemon', withCobblemon
+    doLast {
+        def metadataFile = new File(destinationDir, 'fabric.mod.json')
+        def metadata = new groovy.json.JsonSlurper().parse(metadataFile)
+        if (withCobblemon) {
+            metadata.entrypoints['fabric-gametest'].add('com.kadamitas.fabricatedbackpacks.gametest.CobblemonCompatibilityGameTests')
+        }
+        metadataFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(metadata)) + '\n', 'UTF-8')
+    }
 }
 
 tasks.withType(Test).configureEach {
@@ -89,21 +136,22 @@ tasks.withType(Test).configureEach {
 
 tasks.named('runGameTest') {
     systemProperty 'fabric-api.gametest.report-file', layout.buildDirectory.file('gametest-results.xml').get().asFile.absolutePath
+    systemProperty 'fabricated.backpacks.compatibilityEvidence', layout.buildDirectory.file('verification/compatibility-runtime.json').get().asFile.absolutePath
+    jvmArgs '-Xmx4G'
 }
 
-tasks.named('runClientGameTest') {
-    systemProperty 'fabricated.backpacks.clientScenario', providers.gradleProperty('clientScenario').getOrElse('full')
-    systemProperty 'fabricated.backpacks.evidenceRoot', layout.projectDirectory.dir('.codex-local/client-evidence').asFile.absolutePath
+// Fabric's client GameTest API was introduced after 1.21.1. Its 26.2 scenarios
+// remain source references until the target-specific client harness is ready.
+tasks.register('runClientGameTest') {
+    doLast { throw new GradleException('The 26.2 client GameTest harness is unavailable on 1.21.1; use target-specific client acceptance. No client pass is claimed.') }
 }
-
-apply from: 'tools/multiplayer.gradle'
 
 tasks.register('runProductionClient', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
     group = 'verification'
     description = 'Open an isolated real Minecraft instance using the built release JAR, without the test mod.'
-    mods.from(tasks.named('jar').flatMap { it.archiveFile }, configurations.productionMods)
+    mods.from(tasks.named('remapJar').flatMap { it.archiveFile }, configurations.productionMods)
     runDir = layout.projectDirectory.dir('.codex-local/manual-client')
-    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
     useXVFB = false
     jvmArgs.add('-Xmx3G')
     programArgs.addAll('--username', 'BackpackQA', '--width', '1280', '--height', '800')
@@ -122,6 +170,9 @@ tasks.register('verifyReleaseEvidence', Exec) {
     group = 'verification'
     description = 'Require fresh build, server, real-client and manual evidence before bundling a release.'
     dependsOn tasks.named('build')
+    doFirst {
+        throw new GradleException('The 1.21.1 client/restart/multiplayer acceptance harness is not ready. Compatibility unit/server evidence cannot authorize a release bundle.')
+    }
     commandLine 'python', 'tools/verify_evidence.py', 'check', '--release'
 }
 
@@ -132,7 +183,7 @@ tasks.register('releaseBundle') {
     doLast {
         def destination = layout.projectDirectory.dir("release/${project.version}").asFile.toPath()
         java.nio.file.Files.createDirectories(destination)
-        ['jar', 'sourcesJar'].each { taskName ->
+        ['remapJar', 'remapSourcesJar'].each { taskName ->
             def artifact = tasks.named(taskName).get().archiveFile.get().asFile.toPath()
             def target = destination.resolve(artifact.fileName)
             java.nio.file.Files.copy(artifact, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING)

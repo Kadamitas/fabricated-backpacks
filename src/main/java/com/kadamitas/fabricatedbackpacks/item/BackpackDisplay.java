@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.item;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
@@ -20,7 +21,7 @@ public record BackpackDisplay(ItemStack icon, int rotation, int depth) {
     public static Optional<BackpackDisplay> from(ItemStack backpack) {
         if (!BackpackConfig.get().storage().displayItems() || !BackpackRegistry.isBackpack(backpack)) return Optional.empty();
         var settings = backpack.getOrDefault(BagComponents.SETTINGS, CustomData.EMPTY).copyTag();
-        int slot = settings.getIntOr("display_slot", -1);
+        int slot = NbtAccess.getIntOr(settings, "display_slot", -1);
         InventorySnapshot contents = backpack.getOrDefault(BagComponents.CONTENTS, InventorySnapshot.EMPTY);
         int slots = Math.clamp(Math.max(contents.size(),
                 BackpackConfig.get().capacity(BackpackRegistry.tier(backpack).orElseThrow()).slots()), 1, InventorySnapshot.MAX_SLOTS);
@@ -28,7 +29,7 @@ public record BackpackDisplay(ItemStack icon, int rotation, int depth) {
         ItemStack selected = itemAt(contents, slot);
         if (selected.isEmpty()) selected = itemAt(backpack.getOrDefault(BagComponents.MEMORY, InventorySnapshot.EMPTY), slot);
         return selected.isEmpty() ? Optional.empty()
-                : Optional.of(new BackpackDisplay(selected, settings.getIntOr("display_rotation", 0), settings.getIntOr("display_depth", 0)));
+                : Optional.of(new BackpackDisplay(selected, NbtAccess.getIntOr(settings, "display_rotation", 0), NbtAccess.getIntOr(settings, "display_depth", 0)));
     }
 
     private static ItemStack itemAt(InventorySnapshot snapshot, int slot) {

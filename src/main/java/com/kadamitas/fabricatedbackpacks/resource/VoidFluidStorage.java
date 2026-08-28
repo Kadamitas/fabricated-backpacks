@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
@@ -34,7 +36,7 @@ final class VoidFluidStorage implements Storage<FluidVariant> {
         for (InstalledUpgrade upgrade : bag.installedUpgrades()) {
             if (!upgrade.kind().family().equals("void") || !UpgradeFilters.enabled(bag, upgrade)) continue;
             String policy = UpgradeEngine.voidMode(bag.settings(upgrade));
-            String filter = bag.settings(upgrade).getStringOr("filter_mode", "ALLOW");
+            String filter = NbtAccess.getStringOr(bag.settings(upgrade), "filter_mode", "ALLOW");
             if (policy.equals("SLOT_OVERFLOW") || filter.equals("CONTENTS")) {
                 // Slot overflow requires a stored representation, even when the filter names a fluid.
                 for (var view : storage) if (view.getAmount() > 0 && !view.isResourceBlank()
@@ -78,7 +80,7 @@ final class VoidFluidStorage implements Storage<FluidVariant> {
     }
 
     private boolean matches(InstalledUpgrade upgrade, FluidVariant fluid) {
-        String mode = bag.settings(upgrade).getStringOr("filter_mode", "ALLOW");
+        String mode = NbtAccess.getStringOr(bag.settings(upgrade), "filter_mode", "ALLOW");
         if (mode.equals("CONTENTS")) {
             for (var view : storage) if (view.getAmount() > 0 && view.getResource().equals(fluid)) return true;
             return false;

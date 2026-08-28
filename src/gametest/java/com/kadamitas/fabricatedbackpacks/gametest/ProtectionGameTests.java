@@ -34,13 +34,13 @@ final class ProtectionGameTests {
         helper.assertFalse(protectedItem.isRemoved(), "Everlasting resets actual ItemEntity age before the despawn threshold");
         helper.assertTrue(ordinary.isRemoved(), "The identical natural age threshold still despawns an ordinary backpack");
         for (var damage : java.util.List.of(level.damageSources().inFire(), level.damageSources().lava(), level.damageSources().generic(), level.damageSources().explosion(null, null))) {
-            helper.assertFalse(protectedItem.hurtServer(level, damage, 1000), "Real ItemEntity damage is rejected for " + damage);
+            helper.assertFalse(protectedItem.hurt(damage, 1000), "Real ItemEntity damage is rejected for " + damage);
             helper.assertFalse(protectedItem.isRemoved(), "Protection cannot be bypassed by a damage source");
         }
-        protectedItem.setPos(origin.x, level.getMinY() - 40, origin.z);
+        protectedItem.setPos(origin.x, level.getMinBuildHeight() - 40, origin.z);
         protectedItem.setDeltaMovement(0, -10, 0);
         protectedItem.tick();
-        helper.assertTrue(protectedItem.getY() > level.getMinY() && !protectedItem.isRemoved(), "Void recovery moves the real dropped item to a safe height before removal");
+        helper.assertTrue(protectedItem.getY() > level.getMinBuildHeight() && !protectedItem.isRemoved(), "Void recovery moves the real dropped item to a safe height before removal");
         helper.assertValueEqual(count(com.kadamitas.fabricatedbackpacks.storage.BagInventory.of(protectedItem.getItem()), Items.DIAMOND), 17, "Despawn, damage and void handling preserve the exact filled backpack");
         protectedItem.discard();
         helper.succeed();

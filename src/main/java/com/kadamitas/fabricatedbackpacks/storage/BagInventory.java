@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.storage;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.StackCapacity;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
@@ -8,13 +10,12 @@ import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.permissions.Permissions;
+import com.kadamitas.fabricatedbackpacks.item.BackpackColors;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
+import com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate;
 import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.item.component.CustomModelData;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,14 +76,14 @@ public final class BagInventory extends ComponentInventory {
         if (!memory.entries().isEmpty()) owner.set(BagComponents.MEMORY, new InventorySnapshot(getContainerSize(),
                 memory.entries().stream().map(entry -> new InventorySnapshot.Entry(widenedSlot(entry.slot()), entry.item(), entry.count())).toList()));
         CustomData.update(BagComponents.SETTINGS, owner, tag -> {
-            int displayed = tag.getIntOr("display_slot", -1);
+            int displayed = NbtAccess.getIntOr(tag, "display_slot", -1);
             if (displayed >= 0) tag.putInt("display_slot", widenedSlot(displayed));
-            for (String key : List.of("no_sort", "captured_slots")) tag.getIntArray(key)
+            for (String key : List.of("no_sort", "captured_slots")) NbtAccess.getIntArray(tag, key)
                     .ifPresent(values -> tag.putIntArray(key, Arrays.stream(values).map(BagInventory::widenedSlot).toArray()));
-            var captures = tag.getListOrEmpty("captured_entities");
+            var captures = NbtAccess.getListOrEmpty(tag, "captured_entities");
             for (int index = 0; index < captures.size(); index++) {
-                CompoundTag capture = captures.getCompoundOrEmpty(index);
-                capture.getIntArray("slots").ifPresent(values -> capture.putIntArray("slots", Arrays.stream(values).map(BagInventory::widenedSlot).toArray()));
+                CompoundTag capture = NbtAccess.getCompoundOrEmpty(captures, index);
+                NbtAccess.getIntArray(capture, "slots").ifPresent(values -> capture.putIntArray("slots", Arrays.stream(values).map(BagInventory::widenedSlot).toArray()));
             }
             if (!captures.isEmpty()) tag.put("captured_entities", captures);
         });
@@ -137,7 +138,7 @@ public final class BagInventory extends ComponentInventory {
 
     private static boolean gameMaster(Player player) {
         // Clients may predict a placement; only the authoritative server grants this permission.
-        return player != null && (player.level().isClientSide() || player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER));
+        return player != null && (player.level().isClientSide || player.hasPermissions(2));
     }
 
     @Override public ItemStack getItem(int slot) {
@@ -219,14 +220,14 @@ public final class BagInventory extends ComponentInventory {
         if (upgrade.stack().getOrDefault(BagComponents.FILTERS, InventorySnapshot.EMPTY).size() == 0) {
             return BackpackConfig.get().upgrades().cooking().inputFilters();
         }
-        return Math.clamp(settings(upgrade).getIntOr("cooking_input_filter_slots", 8), 1, 32);
+        return Math.clamp(NbtAccess.getIntOr(settings(upgrade), "cooking_input_filter_slots", 8), 1, 32);
     }
     private int savedCookingFuelFilters(InstalledUpgrade upgrade) {
         refreshUpgrades();
         if (upgrade.stack().getOrDefault(BagComponents.FILTERS, InventorySnapshot.EMPTY).size() == 0) {
             return BackpackConfig.get().upgrades().cooking().fuelFilters();
         }
-        return Math.clamp(settings(upgrade).getIntOr("cooking_fuel_filter_slots", 4), 1, 32);
+        return Math.clamp(NbtAccess.getIntOr(settings(upgrade), "cooking_fuel_filter_slots", 4), 1, 32);
     }
     public int cookingInputFilters(InstalledUpgrade upgrade) {
         return Math.max(BackpackConfig.get().upgrades().cooking().inputFilters(), savedCookingInputFilters(upgrade));
@@ -317,7 +318,7 @@ public final class BagInventory extends ComponentInventory {
     public boolean blocked(int slot) {
         int column = slot % columns();
         if (column >= columns() - reservedColumns()) return true;
-        return Arrays.stream(settings().getIntArray("captured_slots").orElseGet(() -> new int[0])).anyMatch(index -> index == slot);
+        return Arrays.stream(NbtAccess.getIntArray(settings(), "captured_slots").orElseGet(() -> new int[0])).anyMatch(index -> index == slot);
     }
 
     @Override public boolean canPlaceItem(int slot, ItemStack item) { return canPlaceItem(slot, item, null); }
@@ -342,7 +343,7 @@ public final class BagInventory extends ComponentInventory {
             ItemStack memory = remembered.get().create();
             CompoundTag preferences = actor instanceof net.minecraft.server.level.ServerPlayer serverPlayer
                     ? com.kadamitas.fabricatedbackpacks.settings.SettingsRuntime.effective(this, serverPlayer) : settings();
-            if (preferences.getBooleanOr("memory_components", false)
+            if (NbtAccess.getBooleanOr(preferences, "memory_components", false)
                     ? !ItemStack.isSameItemSameComponents(memory, item) : !ItemStack.isSameItem(memory, item)) return false;
         }
         return UpgradeEngine.acceptsInput(this, item);
@@ -412,10 +413,10 @@ public final class BagInventory extends ComponentInventory {
                     || item.getCount() > itemCapacity(item, nextMultiplier))) return false;
         }
         for (InstalledUpgrade upgrade : after) {
-            long amount = settings(upgrade).getLongOr("amount", 0);
+            long amount = NbtAccess.getLongOr(settings(upgrade), "amount", 0);
             long limit = upgrade.kind() == UpgradeKind.TANK ? BackpackConfig.get().upgrades().tank().capacity(rows(), nextMultiplier)
                     : upgrade.kind() == UpgradeKind.BATTERY ? BackpackConfig.get().upgrades().battery().capacity(rows(), nextMultiplier) : Long.MAX_VALUE;
-            if (amount > limit || amount == limit && settings(upgrade).getLongOr("amount_droplets", 0) > 0) return false;
+            if (amount > limit || amount == limit && NbtAccess.getLongOr(settings(upgrade), "amount_droplets", 0) > 0) return false;
         }
         return true;
     }
@@ -434,7 +435,7 @@ public final class BagInventory extends ComponentInventory {
         if (slot < 0 || slot >= getContainerSize()) return;
         updateSettings(tag -> {
             Set<Integer> locked = new HashSet<>();
-            for (int old : tag.getIntArray("no_sort").orElseGet(() -> new int[0])) locked.add(old);
+            for (int old : NbtAccess.getIntArray(tag, "no_sort").orElseGet(() -> new int[0])) locked.add(old);
             if (!locked.add(slot)) locked.remove(slot);
             tag.putIntArray("no_sort", locked.stream().sorted().mapToInt(Integer::intValue).toArray());
         });
@@ -445,14 +446,14 @@ public final class BagInventory extends ComponentInventory {
     public void sort(String order, Player actor) {
         if (infinityKind() != null) return;
         Set<Integer> excluded = new HashSet<>();
-        for (int slot : settings().getIntArray("no_sort").orElseGet(() -> new int[0])) excluded.add(slot);
+        for (int slot : NbtAccess.getIntArray(settings(), "no_sort").orElseGet(() -> new int[0])) excluded.add(slot);
         Map<Integer, ItemStack> memories = new HashMap<>();
         for (var entry : owner.getOrDefault(BagComponents.MEMORY, InventorySnapshot.EMPTY).entries()) {
             if (entry.slot() >= 0 && entry.slot() < getContainerSize()) memories.putIfAbsent(entry.slot(), entry.create());
         }
-        boolean components = (actor instanceof net.minecraft.server.level.ServerPlayer player
+        boolean components = NbtAccess.getBooleanOr((actor instanceof net.minecraft.server.level.ServerPlayer player
                 ? com.kadamitas.fabricatedbackpacks.settings.SettingsRuntime.effective(this, player) : settings())
-                .getBooleanOr("memory_components", false);
+                , "memory_components", false);
         List<Integer> memorySlots = new ArrayList<>();
         List<Integer> ordinarySlots = new ArrayList<>();
         List<Integer> mutableSlots = new ArrayList<>();
@@ -469,7 +470,7 @@ public final class BagInventory extends ComponentInventory {
         Comparator<ItemStack> comparator = switch (order) {
             case "count" -> Comparator.<ItemStack>comparingInt(ItemStack::getCount).reversed();
             case "mod" -> Comparator.comparing(item -> net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item.getItem()).toString());
-            case "tags" -> Comparator.comparing(item -> item.typeHolder().tags().map(tag -> tag.location().toString()).sorted().findFirst().orElse(""));
+            case "tags" -> Comparator.comparing(item -> item.getTags().map(tag -> tag.location().toString()).sorted().findFirst().orElse(""));
             default -> Comparator.comparing(item -> item.getHoverName().getString(), String.CASE_INSENSITIVE_ORDER);
         };
         comparator = comparator.thenComparing(item -> net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item.getItem()).toString());
@@ -534,8 +535,7 @@ public final class BagInventory extends ComponentInventory {
     }
 
     public void dye(int body, int trim) {
-        CustomModelData old = owner.getOrDefault(DataComponents.CUSTOM_MODEL_DATA, CustomModelData.EMPTY);
-        owner.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(old.floats(), old.flags(), old.strings(), List.of(body & 0xffffff, trim & 0xffffff)));
+        BackpackColors.set(owner, body & 0xffffff, trim & 0xffffff);
         save();
     }
     public void save() { setChanged(); upgrades.setChanged(); }

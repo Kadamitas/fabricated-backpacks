@@ -19,13 +19,13 @@ import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.mojang.authlib.GameProfile;
 import io.netty.buffer.Unpooled;
-import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.impl.networking.RegistrationPayload;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -37,34 +37,37 @@ import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.network.protocol.game.ServerboundPlayerLoadedPacket;
-import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
+import net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.Container;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.SmithingMenu;
 import net.minecraft.world.inventory.StonecutterMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.armortrim.TrimMaterials;
+import net.minecraft.world.item.armortrim.TrimPatterns;
+import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
-import net.minecraft.world.item.crafting.RecipeMap;
+import net.minecraft.world.item.crafting.SmithingRecipeInput;
+import net.minecraft.world.item.crafting.SmithingTrimRecipe;
 import net.minecraft.world.item.crafting.StonecutterRecipe;
-import net.minecraft.world.item.crafting.display.SlotDisplayContext;
-import net.minecraft.world.item.crafting.display.RecipeDisplay;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -75,8 +78,8 @@ import static com.kadamitas.fabricatedbackpacks.gametest.BackpackTestSupport.*;
 
 /** Live server-receiver tests. Embedded connections are not claims of actual client UI coverage. */
 public final class BrowserGameTests {
-    private static final Identifier TABLE = Identifier.withDefaultNamespace("crafting_table");
-    private static final Identifier DIAMOND_BLOCK = Identifier.withDefaultNamespace("diamond_block");
+    private static final ResourceLocation TABLE = ResourceLocation.withDefaultNamespace("crafting_table");
+    private static final ResourceLocation DIAMOND_BLOCK = ResourceLocation.withDefaultNamespace("diamond_block");
 
     private BrowserGameTests() {}
 
@@ -108,18 +111,22 @@ public final class BrowserGameTests {
                 BrowserCatalogPage.STREAM_CODEC.encode(encoded, page);
                 helper.assertTrue(encoded.readableBytes() < 1_048_576, "The actual encoded catalog page fits the custom-payload bound");
                 BrowserCatalogPage decoded = BrowserCatalogPage.STREAM_CODEC.decode(encoded);
-                helper.assertValueEqual(decoded.nextOffset(), page.nextOffset(), "Native recipe-display codecs preserve page boundaries");
+                helper.assertValueEqual(decoded.nextOffset(), page.nextOffset(), "Native item-stack codecs preserve page boundaries");
                 helper.assertValueEqual(decoded.entries().stream().map(BrowserRecipeEntry::recipe).toList(),
                         page.entries().stream().map(BrowserRecipeEntry::recipe).toList(), "Native codecs preserve recipe identities");
+                RegistryFriendlyByteBuf reencoded = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
+                try {
+                    BrowserCatalogPage.STREAM_CODEC.encode(reencoded, decoded);
+                    encoded.readerIndex(0);
+                    helper.assertTrue(io.netty.buffer.ByteBufUtil.equals(encoded, reencoded),
+                            "Recipe presentation wire round trips preserve every ingredient, component, layout and flag");
+                } finally { reencoded.release(); }
             } finally { encoded.release(); }
             var manager = helper.getLevel().getServer().getRecipeManager();
-            var context = SlotDisplayContext.fromLevel(helper.getLevel());
             for (BrowserRecipeEntry entry : page.entries()) {
-                var holder = manager.byKey(ResourceKey.create(Registries.RECIPE, entry.recipe())).orElseThrow();
-                byte[] advertised = displayBytes(helper, entry.display());
-                helper.assertTrue(holder.value().display().stream().anyMatch(display -> Arrays.equals(displayBytes(helper, display), advertised)),
-                        "Every advertised display encodes exactly an authoritative RecipeManager display");
-                helper.assertFalse(entry.display().result().resolveForStacks(context).isEmpty(), "Each advertised static result resolves against real registries");
+                var holder = manager.byKey(entry.recipe()).orElseThrow();
+                assertPresentation(helper, entry, holder.value(), audit.fuels);
+                helper.assertFalse(entry.results().isEmpty(), "Every advertised recipe has a real registered result");
                 helper.assertValueEqual(entry.unlocked(), holder.value().isSpecial() || fixture.player.getRecipeBook().contains(holder.id()),
                         "Unlock indicators are derived from the requesting player's recipe book");
                 audit.recipeIds.add(entry.recipe());
@@ -130,12 +137,12 @@ public final class BrowserGameTests {
                 readCatalog(helper, fixture, audit);
                 return;
             }
-            long enabledDisplays = manager.getRecipes().stream().flatMap(holder -> holder.value().display().stream())
-                    .filter(display -> display.isEnabled(helper.getLevel().enabledFeatures())).count();
-            helper.assertValueEqual((long) audit.entries.size(), enabledDisplays, "No bounded production recipe display silently disappears");
-            helper.assertTrue(audit.recipeIds.contains(Identifier.fromNamespaceAndPath("fabricated_backpacks", "backpack")), "The base backpack is discoverable");
-            helper.assertTrue(audit.recipeIds.contains(Identifier.fromNamespaceAndPath("fabricated_backpacks", "netherite_backpack")), "Preserving smithing recipes are discoverable");
-            helper.assertFalse(audit.recipeIds.contains(Identifier.fromNamespaceAndPath("fabricated_backpacks", "infinity_upgrade")), "Creative infinity has no fabricated survival recipe");
+            helper.assertValueEqual(audit.entries.size() + page.undisplayedRecipes(), manager.getRecipes().size(),
+                    "Every native recipe is either advertised or explicitly counted as lacking a bounded static presentation");
+            helper.assertTrue(audit.recipeIds.contains(ResourceLocation.fromNamespaceAndPath("fabricated_backpacks", "backpack")), "The base backpack is discoverable");
+            helper.assertTrue(audit.recipeIds.contains(ResourceLocation.fromNamespaceAndPath("fabricated_backpacks", "netherite_backpack")), "Preserving smithing recipes are discoverable");
+            helper.assertFalse(audit.recipeIds.contains(ResourceLocation.fromNamespaceAndPath("fabricated_backpacks", "infinity_upgrade")), "Creative infinity has no fabricated survival recipe");
+            assertFuelAndTrimDiscoverability(helper, audit, manager);
             helper.assertTrue(fixture.player.getInventory().isEmpty(), "Catalog browsing grants no inventory items");
             fixture.send(new BrowserCatalogRequest(page.epoch(), page.total()));
             later(helper, fixture, () -> {
@@ -181,7 +188,7 @@ public final class BrowserGameTests {
                     fixture.send(new BrowserTransferRequest(page.epoch(), menu.containerId, DIAMOND_BLOCK, 2));
                     fixture.send(new BrowserTransferRequest(Long.MAX_VALUE, menu.containerId, TABLE, 3));
                     fixture.send(new BrowserTransferRequest(page.epoch(), menu.containerId + 1, TABLE, 4));
-                    fixture.send(new BrowserTransferRequest(page.epoch(), menu.containerId, Identifier.withDefaultNamespace("not_a_real_recipe"), 5));
+                    fixture.send(new BrowserTransferRequest(page.epoch(), menu.containerId, ResourceLocation.withDefaultNamespace("not_a_real_recipe"), 5));
                     later(helper, fixture, () -> {
                         Set<Long> rejected = new HashSet<>();
                         for (int index = 0; index < 4; index++) {
@@ -256,15 +263,15 @@ public final class BrowserGameTests {
         ready(helper, fixture, () -> {
             WorkstationMenus.PortableCrafting menu = crafting(helper, fixture.player);
             menu.backpack().setItem(0, new ItemStack(Items.OAK_PLANKS, 4));
-            var recipe = helper.getLevel().getServer().getRecipeManager().byKey(ResourceKey.create(Registries.RECIPE, TABLE)).orElseThrow();
+            var recipe = helper.getLevel().getServer().getRecipeManager().byKey(TABLE).orElseThrow();
             fixture.player.resetRecipes(List.of(recipe));
             fixture.send(new BrowserCatalogRequest(0, 0));
             later(helper, fixture, () -> {
                 BrowserCatalogPage page = fixture.take(BrowserCatalogPage.class);
                 Snapshot before = Snapshot.of(fixture.player, menu);
-                boolean prior = helper.getLevel().getGameRules().get(GameRules.LIMITED_CRAFTING);
-                fixture.cleanup = () -> helper.getLevel().getGameRules().set(GameRules.LIMITED_CRAFTING, prior, helper.getLevel().getServer());
-                helper.getLevel().getGameRules().set(GameRules.LIMITED_CRAFTING, true, helper.getLevel().getServer());
+                boolean prior = helper.getLevel().getGameRules().getBoolean(GameRules.RULE_LIMITED_CRAFTING);
+                fixture.cleanup = () -> helper.getLevel().getGameRules().getRule(GameRules.RULE_LIMITED_CRAFTING).set(prior, helper.getLevel().getServer());
+                helper.getLevel().getGameRules().getRule(GameRules.RULE_LIMITED_CRAFTING).set(true, helper.getLevel().getServer());
                 fixture.send(new BrowserContextRequest(menu.containerId));
                 fixture.send(new BrowserTransferRequest(page.epoch(), menu.containerId, TABLE, 1));
                 later(helper, fixture, () -> {
@@ -300,13 +307,13 @@ public final class BrowserGameTests {
         fixture.player.getInventory().clearContent();
         var menu = crafting(helper, fixture.player);
         BagInventory bag = menu.backpack();
-        Identifier recipe;
+        ResourceLocation recipe;
         if (step == 0) {
-            recipe = Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "browser_ambiguous_logs");
+            recipe = ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "browser_ambiguous_logs");
             bag.setItem(0, new ItemStack(Items.OAK_LOG, 8));
             bag.setItem(1, new ItemStack(Items.BIRCH_LOG, 8));
         } else if (step == 1) {
-            recipe = Identifier.withDefaultNamespace("oak_planks");
+            recipe = ResourceLocation.withDefaultNamespace("oak_planks");
             ItemStack named = new ItemStack(Items.OAK_LOG, 3);
             named.set(DataComponents.CUSTOM_NAME, Component.literal("Keep this ingredient's components"));
             bag.setItem(0, named);
@@ -321,7 +328,7 @@ public final class BrowserGameTests {
             bag.setItem(0, new ItemStack(Items.OAK_PLANKS, 64));
             for (int slot = 0; slot < 9; slot++) menu.grid().setItem(slot, new ItemStack(Items.DIRT));
         } else if (step == 4) {
-            recipe = Identifier.withDefaultNamespace("cake");
+            recipe = ResourceLocation.withDefaultNamespace("cake");
             for (int slot = 0; slot < 3; slot++) bag.setItem(slot, new ItemStack(Items.MILK_BUCKET));
             bag.setItem(3, new ItemStack(Items.WHEAT, 10));
             bag.setItem(4, new ItemStack(Items.SUGAR, 10));
@@ -333,7 +340,7 @@ public final class BrowserGameTests {
             bag.updateSettings(upgrade(bag, 1), state -> { state.putString("filter_mode", "ALLOW"); state.putString("filter_direction", "OUTPUT"); });
             bag.setItem(0, new ItemStack(Items.OAK_PLANKS, 4));
         } else {
-            recipe = Identifier.withDefaultNamespace("oak_planks");
+            recipe = ResourceLocation.withDefaultNamespace("oak_planks");
             bag.upgrades().setItem(1, new ItemStack(BackpackRegistry.item(UpgradeKind.STACK_UPGRADE_TIER_1)));
             for (int slot = 0; slot < bag.getContainerSize(); slot++) bag.setItem(slot, new ItemStack(Items.COBBLESTONE, 128));
             for (int slot = 1; slot < 36; slot++) fixture.player.getInventory().setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
@@ -366,7 +373,7 @@ public final class BrowserGameTests {
                 helper.assertValueEqual(count(bag, Items.COBBLESTONE), (bag.getContainerSize() - 1) * 64, "Unrelated full storage remains unchanged");
             } else if (step == 4) {
                 helper.assertValueEqual(count(menu.grid(), Items.MILK_BUCKET), 3, "Unstackable ingredients bound a maximum cake transfer to one set");
-                menu.clicked(0, 0, ContainerInput.PICKUP, fixture.player);
+                menu.clicked(0, 0, ClickType.PICKUP, fixture.player);
                 helper.assertTrue(menu.getCarried().is(Items.CAKE), "The transferred inputs support a real vanilla result take");
                 helper.assertValueEqual(count(menu.grid(), Items.BUCKET), 3, "Vanilla cake returns all three container remainders");
                 helper.assertValueEqual(count(bag, Items.WHEAT), 7, "Only the three declared wheat were used");
@@ -420,7 +427,7 @@ public final class BrowserGameTests {
         var upgrade = upgrade(bag, 0);
         Container saved = bag.upgradeInventory(upgrade);
         BrowserWorkstation context = station(kind);
-        Identifier recipe = stationRecipe(context);
+        ResourceLocation recipe = stationRecipe(context);
         ItemStack sword = new ItemStack(Items.DIAMOND_SWORD);
         sword.setDamageValue(17);
         sword.set(DataComponents.CUSTOM_NAME, Component.literal("Retained smithing base"));
@@ -467,7 +474,7 @@ public final class BrowserGameTests {
                 helper.assertValueEqual(saved.getItem(0).getCount(), 8, "Cooking transfers all eight matching input sets");
                 helper.assertValueEqual(saved.getItem(1).getCount(), 3, "Cooking transfer leaves actual fuel untouched");
                 helper.assertTrue(saved.getItem(2).is(Items.GOLD_NUGGET) && saved.getItem(2).getCount() == 5, "Cooking transfer cannot consume or overwrite an existing result");
-                helper.assertValueEqual(bag.settings(upgrade).getDoubleOr("experience", 0), 3.5, "Input transfer does not claim or invent cooking XP");
+                helper.assertValueEqual(com.kadamitas.fabricatedbackpacks.compat.NbtAccess.getDoubleOr(bag.settings(upgrade), "experience", 0), 3.5, "Input transfer does not claim or invent cooking XP");
                 helper.assertValueEqual(count(fixture.player.getInventory(), context == BrowserWorkstation.SMOKING ? Items.POTATO : Items.RAW_COPPER), 2,
                         "Previous cooking inputs return intact");
             }
@@ -510,7 +517,7 @@ public final class BrowserGameTests {
         helper.assertTrue(provider != null && fixture.player.openMenu(provider).isPresent(), "An actual placed vanilla workstation opens its own menu");
         AbstractContainerMenu menu = fixture.player.containerMenu;
         BrowserWorkstation context = contexts[step];
-        Identifier recipe = context == BrowserWorkstation.CRAFTING ? TABLE : stationRecipe(context);
+        ResourceLocation recipe = context == BrowserWorkstation.CRAFTING ? TABLE : stationRecipe(context);
         if (context == BrowserWorkstation.CRAFTING) fixture.player.getInventory().setItem(9, new ItemStack(Items.OAK_PLANKS, 8));
         else if (context == BrowserWorkstation.STONECUTTER) fixture.player.getInventory().setItem(9, new ItemStack(Items.STONE, 8));
         else if (context == BrowserWorkstation.SMITHING) {
@@ -582,33 +589,31 @@ public final class BrowserGameTests {
             BlockPos position = helper.absolutePos(local);
             fixture.player.openMenu(helper.getLevel().getBlockState(position).getMenuProvider(helper.getLevel(), position));
             StonecutterMenu menu = (StonecutterMenu) fixture.player.containerMenu;
-            Identifier recipeId = stationRecipe(BrowserWorkstation.STONECUTTER);
+            ResourceLocation recipeId = stationRecipe(BrowserWorkstation.STONECUTTER);
             teach(fixture.player, recipeId);
             menu.getSlot(0).set(new ItemStack(Items.STONE, 8));
-            for (int index = 0; index < menu.getNumberOfVisibleRecipes(); index++) {
-                if (menu.getVisibleRecipes().entries().get(index).recipe().recipe()
-                        .map(recipe -> recipe.id().identifier().equals(recipeId)).orElse(false)) menu.clickMenuButton(fixture.player, index);
+            for (int index = 0; index < menu.getNumRecipes(); index++) {
+                if (menu.getRecipes().get(index).id().equals(recipeId)) menu.clickMenuButton(fixture.player, index);
             }
             helper.assertTrue(menu.getSlot(1).getItem().is(Items.STONE_SLAB), "The live native menu first caches the original recipe");
             RecipeManager manager = helper.getLevel().getServer().getRecipeManager();
             List<RecipeHolder<?>> originals = new ArrayList<>(manager.getRecipes());
-            RecipeHolder<?> original = manager.byKey(ResourceKey.create(Registries.RECIPE, recipeId)).orElseThrow();
-            var replacement = new RecipeHolder<>(original.id(), new StonecutterRecipe(new Recipe.CommonInfo(false),
-                    ((StonecutterRecipe) original.value()).input(), new ItemStackTemplate(Items.COPPER_INGOT, 3)));
+            RecipeHolder<?> original = manager.byKey(recipeId).orElseThrow();
+            var replacement = new RecipeHolder<>(original.id(), new StonecutterRecipe(original.value().getGroup(),
+                    original.value().getIngredients().getFirst(), new ItemStack(Items.COPPER_INGOT, 3)));
             List<RecipeHolder<?>> changed = new ArrayList<>(originals);
             changed.set(changed.indexOf(original), replacement);
-            // Exercise vanilla's actual apply/finalize reload phase without yielding. Restoring the identical
-            // original holders in finally prevents this focused cache fixture from invalidating other live tests.
+            // Replace the real 1.21.1 recipe maps through vanilla's public API without yielding.
+            // Restore the identical holders in finally so other live fixtures retain their identities.
             try {
-                applyRecipes(helper, manager, RecipeMap.create(changed));
+                manager.replaceRecipes(changed);
                 helper.assertTrue(menu.getSlot(1).getItem().is(Items.STONE_SLAB), "Same input keeps vanilla's old preview until the cache is refreshed");
                 helper.assertTrue(WorkstationMenus.transfer(fixture.player, recipeId, true), "A current recipe transfer refreshes a same-item native stonecutter cache");
                 helper.assertTrue(menu.getSlot(1).getItem().is(Items.COPPER_INGOT) && menu.getSlot(1).getItem().getCount() == 3,
                         "The refreshed result comes from the replacement holder, not the stale output");
-                helper.assertTrue(menu.getVisibleRecipes().entries().get(menu.getSelectedRecipeIndex()).recipe().recipe()
-                        .map(recipe -> recipe.value() == replacement.value()).orElse(false), "The selected cache entry is the current server recipe object");
+                helper.assertTrue(menu.getRecipes().get(menu.getSelectedRecipeIndex()).value() == replacement.value(), "The selected cache entry is the current server recipe object");
                 helper.assertValueEqual(menu.getSlot(0).getItem().getCount(), 8, "Refreshing a same-count transfer does not consume its inputs");
-                menu.clicked(1, 0, ContainerInput.PICKUP, fixture.player);
+                menu.clicked(1, 0, ClickType.PICKUP, fixture.player);
                 helper.assertTrue(menu.getCarried().is(Items.COPPER_INGOT) && menu.getCarried().getCount() == 3, "A real result take uses the updated output");
                 helper.assertValueEqual(menu.getSlot(0).getItem().getCount(), 7, "The updated recipe consumes one owned input");
                 ItemStack produced = menu.getCarried();
@@ -616,28 +621,16 @@ public final class BrowserGameTests {
                 fixture.player.getInventory().placeItemBackInInventory(produced);
                 List<ItemStack> before = snapshot(fixture.player.getInventory());
                 changed.remove(replacement);
-                applyRecipes(helper, manager, RecipeMap.create(changed));
-                helper.assertFalse(WorkstationMenus.transfer(fixture.player, recipeId, true), "A recipe removed by the apply phase cannot transfer from an old cache");
+                manager.replaceRecipes(changed);
+                helper.assertFalse(WorkstationMenus.transfer(fixture.player, recipeId, true), "A recipe removed from the native manager cannot transfer from an old cache");
                 helper.assertValueEqual(menu.getSlot(0).getItem().getCount(), 7, "Removed-recipe rejection preserves the current input");
                 for (int slot = 0; slot < before.size(); slot++) assertStack(helper, fixture.player.getInventory().getItem(slot), before.get(slot), "Removed recipe preserves player slot " + slot);
             } finally {
-                applyRecipes(helper, manager, RecipeMap.create(originals));
+                manager.replaceRecipes(originals);
                 fixture.close();
             }
             helper.succeed();
         });
-    }
-
-    private static void applyRecipes(GameTestHelper helper, RecipeManager manager, RecipeMap recipes) {
-        try {
-            var apply = RecipeManager.class.getDeclaredMethod("apply", RecipeMap.class,
-                    net.minecraft.server.packs.resources.ResourceManager.class, net.minecraft.util.profiling.ProfilerFiller.class);
-            apply.setAccessible(true);
-            apply.invoke(manager, recipes, helper.getLevel().getServer().getResourceManager(), net.minecraft.util.profiling.InactiveProfiler.INSTANCE);
-            manager.finalizeRecipeLoading(helper.getLevel().enabledFeatures());
-        } catch (ReflectiveOperationException invalidFixture) {
-            throw new AssertionError("Cannot exercise the actual vanilla recipe apply phase", invalidFixture);
-        }
     }
 
     private static BrowserWorkstation station(UpgradeKind kind) {
@@ -650,8 +643,8 @@ public final class BrowserGameTests {
         };
     }
 
-    private static Identifier stationRecipe(BrowserWorkstation context) {
-        return Identifier.withDefaultNamespace(switch (context) {
+    private static ResourceLocation stationRecipe(BrowserWorkstation context) {
+        return ResourceLocation.withDefaultNamespace(switch (context) {
             case STONECUTTER -> "stone_slab_from_stone_stonecutting";
             case SMITHING -> "netherite_sword_smithing";
             case SMOKING -> "cooked_beef_from_smoking";
@@ -661,7 +654,7 @@ public final class BrowserGameTests {
         });
     }
 
-    private static void requestTransfer(GameTestHelper helper, ClientFixture fixture, long epoch, Identifier recipe, boolean maximum,
+    private static void requestTransfer(GameTestHelper helper, ClientFixture fixture, long epoch, ResourceLocation recipe, boolean maximum,
                                         BrowserWorkstation expected, Consumer<BrowserTransferResult> next) {
         int menu = fixture.player.containerMenu.containerId;
         long correlation = fixture.nextRequest++;
@@ -686,8 +679,8 @@ public final class BrowserGameTests {
         return (WorkstationMenus.PortableCrafting) player.containerMenu;
     }
 
-    private static void teach(ServerPlayer player, Identifier recipe) {
-        player.awardRecipesByKey(List.of(ResourceKey.create(Registries.RECIPE, recipe)));
+    private static void teach(ServerPlayer player, ResourceLocation recipe) {
+        player.awardRecipesByKey(List.of(recipe));
     }
 
     private static ClientFixture client(GameTestHelper helper) {
@@ -705,8 +698,14 @@ public final class BrowserGameTests {
         });
         helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
         player.setGameMode(GameType.SURVIVAL);
-        player.connection.handleAcceptPlayerLoad(new ServerboundPlayerLoadedPacket());
-        player.setPos(helper.absoluteVec(new Vec3(3.5, 1, 3.5)));
+        Vec3 position = helper.absoluteVec(new Vec3(3.5, 1, 3.5));
+        player.connection.teleport(position.x, position.y, position.z, 0, 0);
+        Object outbound;
+        while ((outbound = channel.readOutbound()) != null) {
+            if (outbound instanceof ClientboundPlayerPositionPacket teleport) {
+                player.connection.handleAcceptTeleportPacket(new ServerboundAcceptTeleportationPacket(teleport.getId()));
+            }
+        }
         return fixture;
     }
 
@@ -739,12 +738,113 @@ public final class BrowserGameTests {
         return result;
     }
 
-    private static byte[] displayBytes(GameTestHelper helper, RecipeDisplay display) {
-        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
-        try {
-            RecipeDisplay.STREAM_CODEC.encode(buffer, display);
-            return ByteBufUtil.getBytes(buffer);
-        } finally { buffer.release(); }
+    private static void assertPresentation(GameTestHelper helper, BrowserRecipeEntry entry, Recipe<?> recipe, List<ItemStack> fuels) {
+        helper.assertValueEqual(entry.category(), net.minecraft.core.registries.BuiltInRegistries.RECIPE_TYPE.getKey(recipe.getType()),
+                "The advertised category is the native recipe type");
+        List<List<ItemStack>> expected;
+        if (recipe instanceof net.minecraft.world.item.crafting.SmithingRecipe smithing) {
+            expected = List.of(smithingExamples(smithing::isTemplateIngredient),
+                    smithingExamples(smithing::isBaseIngredient), smithingExamples(smithing::isAdditionIngredient));
+            helper.assertValueEqual(entry.layout(), BrowserRecipeEntry.Layout.SMITHING, "Smithing retains all three ingredient positions");
+        } else {
+            expected = recipe.getIngredients().stream().map(ingredient -> Arrays.asList(ingredient.getItems())).toList();
+        }
+        helper.assertValueEqual(entry.ingredients().size(), expected.size(), "No authoritative ingredient position is lost");
+        for (int slot = 0; slot < expected.size(); slot++) {
+            List<ItemStack> actual = entry.ingredients().get(slot), options = expected.get(slot);
+            helper.assertValueEqual(actual.size(), options.size(), "Every native ingredient alternative is advertised");
+            for (int option = 0; option < options.size(); option++) {
+                assertStack(helper, actual.get(option), options.get(option), "Ingredient alternatives preserve actual stack components");
+            }
+        }
+        if (recipe instanceof SmithingTrimRecipe trim) {
+            assertTrimResults(helper, entry, trim, expected);
+        } else {
+            ItemStack result = recipe.getResultItem(helper.getLevel().registryAccess());
+            helper.assertTrue(entry.results().size() == 1 && ItemStack.matches(entry.results().getFirst(), result),
+                    "Every static result exactly matches its authoritative RecipeManager item and components");
+        }
+        if (recipe instanceof net.minecraft.world.item.crafting.ShapedRecipe shaped) {
+            helper.assertValueEqual(entry.columns(), shaped.getWidth(), "Shaped recipe width comes from the live recipe");
+            helper.assertValueEqual(entry.rows(), shaped.getHeight(), "Shaped recipe height comes from the live recipe");
+        }
+        if (recipe instanceof AbstractCookingRecipe cooking) {
+            helper.assertValueEqual(entry.duration(), cooking.getCookingTime(), "Cooking duration is authoritative");
+            helper.assertValueEqual(entry.experience(), cooking.getExperience(), "Cooking experience is authoritative");
+            helper.assertValueEqual(entry.fuel().size(), fuels.size(), "Cooking advertises every registered native/Fabric fuel without truncation");
+            for (int index = 0; index < fuels.size(); index++) {
+                assertStack(helper, entry.fuel().get(index), fuels.get(index), "Registered fuel examples retain deterministic registry order");
+            }
+        }
+    }
+
+    private static List<ItemStack> smithingExamples(java.util.function.Predicate<ItemStack> accepts) {
+        return BuiltInRegistries.ITEM.stream().map(ItemStack::new).filter(accepts)
+                .sorted(Comparator.comparing(stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())).toList();
+    }
+
+    private static void assertTrimResults(GameTestHelper helper, BrowserRecipeEntry entry, SmithingTrimRecipe recipe,
+                                          List<List<ItemStack>> ingredients) {
+        var registries = helper.getLevel().registryAccess();
+        List<ItemStack> templates = ingredients.get(0).stream()
+                .filter(stack -> TrimPatterns.getFromTemplate(registries, stack).isPresent()).toList();
+        List<ItemStack> materials = ingredients.get(2).stream()
+                .filter(stack -> TrimMaterials.getFromIngredient(registries, stack).isPresent()).toList();
+        List<Item> validBases = new ArrayList<>();
+        nextBase: for (ItemStack base : ingredients.get(1)) {
+            for (ItemStack template : templates) for (ItemStack material : materials) {
+                SmithingRecipeInput input = new SmithingRecipeInput(template.copy(), base.copy(), material.copy());
+                if (recipe.matches(input, helper.getLevel()) && !recipe.assemble(input, registries).isEmpty()) {
+                    validBases.add(base.getItem());
+                    continue nextBase;
+                }
+            }
+        }
+        helper.assertValueEqual(entry.results().stream().map(ItemStack::getItem).toList(), validBases,
+                "Every valid trim base has one result example in deterministic order for client result-item indexing");
+        for (ItemStack result : entry.results()) {
+            var trim = result.get(DataComponents.TRIM);
+            helper.assertTrue(trim != null, "Every advertised trim result carries actual trim components");
+            ItemStack template = templates.stream()
+                    .filter(stack -> TrimPatterns.getFromTemplate(registries, stack).map(trim.pattern()::equals).orElse(false))
+                    .findFirst().orElseThrow(() -> new AssertionError("A displayed trim pattern is not produced by this recipe's template"));
+            ItemStack material = materials.stream()
+                    .filter(stack -> TrimMaterials.getFromIngredient(registries, stack).map(trim.material()::equals).orElse(false))
+                    .findFirst().orElseThrow(() -> new AssertionError("A displayed trim material is not accepted by this recipe"));
+            ItemStack base = ingredients.get(1).stream().filter(stack -> stack.is(result.getItem())).findFirst().orElseThrow();
+            SmithingRecipeInput input = new SmithingRecipeInput(template.copy(), base.copy(), material.copy());
+            helper.assertTrue(recipe.matches(input, helper.getLevel()), "A displayed trim example is a real matching smithing input");
+            assertStack(helper, result, recipe.assemble(input, registries),
+                    "Trim results preserve the real assembly's base item and pattern/material components");
+        }
+    }
+
+    private static void assertFuelAndTrimDiscoverability(GameTestHelper helper, CatalogAudit audit, RecipeManager manager) {
+        List<ResourceLocation> cooking = manager.getRecipes().stream()
+                .filter(holder -> holder.id().getNamespace().equals("minecraft") && holder.value() instanceof AbstractCookingRecipe)
+                .map(RecipeHolder::id).toList();
+        helper.assertFalse(cooking.isEmpty(), "The live catalog fixture includes vanilla cooking recipes");
+        helper.assertTrue(audit.recipeIds.containsAll(cooking),
+                "The complete fuel set does not make ordinary cooking recipes disappear behind an ingredient-option cap");
+        for (Item item : List.of(Items.LAVA_BUCKET, Items.BLAZE_ROD, Items.BAMBOO)) {
+            helper.assertTrue(audit.entries.stream().filter(entry -> entry.layout() == BrowserRecipeEntry.Layout.FURNACE)
+                            .allMatch(entry -> entry.fuel().stream().anyMatch(stack -> stack.is(item))),
+                    "Non-coal registered fuels remain discoverable as cooking uses: " + BuiltInRegistries.ITEM.getKey(item));
+        }
+        List<ResourceLocation> trims = List.of(ResourceLocation.withDefaultNamespace("sentry_armor_trim_smithing_template_smithing_trim"),
+                ResourceLocation.withDefaultNamespace("vex_armor_trim_smithing_template_smithing_trim"));
+        for (int index = 0; index < trims.size(); index++) {
+            ResourceLocation id = trims.get(index);
+            BrowserRecipeEntry entry = audit.entries.stream().filter(candidate -> candidate.recipe().equals(id)).findFirst()
+                    .orElseThrow(() -> new AssertionError("The real armor trim recipe must remain discoverable: " + id));
+            var pattern = index == 0 ? TrimPatterns.SENTRY : TrimPatterns.VEX;
+            helper.assertTrue(entry.results().stream().allMatch(result -> result.get(DataComponents.TRIM).pattern().is(pattern)),
+                    "Sentry and Vex retain their own distinct template patterns, not the registry's first pattern");
+            for (Item item : List.of(Items.DIAMOND_HELMET, Items.DIAMOND_BOOTS, Items.IRON_HELMET, Items.NETHERITE_BOOTS)) {
+                helper.assertTrue(entry.results().stream().anyMatch(result -> result.is(item)),
+                        "Helmet and boots result searches retain armor trim recipes: " + id + " / " + BuiltInRegistries.ITEM.getKey(item));
+            }
+        }
     }
 
     private record Snapshot(ItemStack bag, List<ItemStack> inventory, List<ItemStack> grid) {
@@ -762,7 +862,9 @@ public final class BrowserGameTests {
         long epoch;
         int total;
         final List<BrowserRecipeEntry> entries = new ArrayList<>();
-        final Set<Identifier> recipeIds = new HashSet<>();
+        final Set<ResourceLocation> recipeIds = new HashSet<>();
+        final List<ItemStack> fuels = AbstractFurnaceBlockEntity.getFuel().keySet().stream()
+                .sorted(Comparator.comparing(item -> BuiltInRegistries.ITEM.getKey(item).toString())).map(ItemStack::new).toList();
     }
 
     private static final class ClientFixture implements AutoCloseable {

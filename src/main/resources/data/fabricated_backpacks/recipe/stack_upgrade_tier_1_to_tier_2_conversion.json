@@ -7,8 +7,12 @@
     "MMM"
   ],
   "key": {
-    "M": "minecraft:gold_ingot",
-    "U": "fabricated_backpacks:upgrade_base"
+    "M": {
+      "item": "minecraft:gold_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:stack_upgrade_tier_1_to_tier_2_conversion",

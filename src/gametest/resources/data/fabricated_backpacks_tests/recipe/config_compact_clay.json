@@ -1,7 +1,17 @@
 {
   "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "pattern": ["CC", "C "],
-  "key": {"C": "minecraft:clay_ball"},
-  "result": {"id": "minecraft:clay", "count": 1}
+  "pattern": [
+    "CC",
+    "C "
+  ],
+  "key": {
+    "C": {
+      "item": "minecraft:clay_ball"
+    }
+  },
+  "result": {
+    "id": "minecraft:clay",
+    "count": 1
+  }
 }

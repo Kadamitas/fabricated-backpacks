@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
@@ -25,20 +26,18 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.AreaEffectCloud;
-import net.minecraft.world.entity.ConversionParams;
-import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -48,7 +47,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.enchantment.Enchantments;
-import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
@@ -77,7 +76,7 @@ public final class WorldGameTests {
     }
 
     private static Mob zombie(GameTestHelper helper) {
-        var mob = helper.spawn(EntityTypes.ZOMBIE, new BlockPos(3, 1, 3));
+        var mob = helper.spawn(EntityType.ZOMBIE, new BlockPos(3, 1, 3));
         mob.setNoAi(true);
         mob.setItemSlot(EquipmentSlot.CHEST, ItemStack.EMPTY);
         return mob;
@@ -95,11 +94,11 @@ public final class WorldGameTests {
         helper.assertFalse(WorldBackpacks.evaluate(armored, 0, enabled, RandomSource.create(1)), "Ordinary chest equipment is never overwritten");
         helper.assertTrue(armored.getItemBySlot(EquipmentSlot.CHEST) == chest, "Refusing a carrier preserves the physical armor stack");
         armored.discard();
-        var raider = helper.spawn(EntityTypes.PILLAGER, new BlockPos(3, 1, 3));
-        raider.setCurrentRaid(new Raid(raider.blockPosition(), Difficulty.NORMAL));
+        var raider = helper.spawn(EntityType.PILLAGER, new BlockPos(3, 1, 3));
+        raider.setCurrentRaid(new Raid(1234567, helper.getLevel(), raider.blockPosition()));
         helper.assertFalse(WorldBackpacks.evaluate(raider, 0, enabled, RandomSource.create(1)), "Active raid participants never get backpacks");
         raider.discard();
-        var cow = helper.spawn(EntityTypes.COW, new BlockPos(3, 1, 3));
+        var cow = helper.spawn(EntityType.COW, new BlockPos(3, 1, 3));
         helper.assertFalse(WorldBackpacks.evaluate(cow, 0, enabled, RandomSource.create(1)), "Ordinary passive mobs are not carrier candidates");
         cow.discard();
 
@@ -107,7 +106,7 @@ public final class WorldGameTests {
         try {
             BackpackConfig.configure(rules("{}"));
             Mob natural = zombie(helper);
-            natural.finalizeSpawn(helper.getLevel(), new DifficultyInstance(Difficulty.NORMAL, 0, 0, 0), EntitySpawnReason.NATURAL, null);
+            natural.finalizeSpawn(helper.getLevel(), new DifficultyInstance(Difficulty.NORMAL, 0, 0, 0), MobSpawnType.NATURAL, null);
             natural.setItemSlot(EquipmentSlot.CHEST, ItemStack.EMPTY);
             helper.assertFalse(WorldBackpacks.isCarrier(natural), "The finalize hook defers assignment until vanilla equipment is finalized");
             natural.tick();
@@ -115,7 +114,9 @@ public final class WorldGameTests {
             String identity = BagInventory.of(natural.getItemBySlot(EquipmentSlot.CHEST)).identity();
             natural.tick();
             helper.assertValueEqual(BagInventory.of(natural.getItemBySlot(EquipmentSlot.CHEST)).identity(), identity, "Subsequent ticks retain one carrier identity");
-            helper.assertValueEqual(natural.getDropChances().byEquipment(EquipmentSlot.CHEST), 0f, "Vanilla chest-drop probability is suppressed");
+            var dropChances = natural.saveWithoutId(new CompoundTag()).getList("ArmorDropChances", net.minecraft.nbt.Tag.TAG_FLOAT);
+            helper.assertValueEqual(dropChances.size(), 4, "Vanilla serializes every real armor-drop probability");
+            helper.assertValueEqual(dropChances.getFloat(EquipmentSlot.CHEST.getIndex()), 0f, "Vanilla chest-drop probability is suppressed");
             natural.discard();
         } finally { BackpackConfig.configure(previous); }
         helper.succeed();
@@ -124,11 +125,11 @@ public final class WorldGameTests {
     public static void carrierBuffsAndLootMappings(GameTestHelper helper) {
         var lootRules = rules("{\"loot\":true}").carriers();
         for (var mapping : lootRules.lootTables().entrySet()) {
-            var type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse(mapping.getKey()));
-            var created = type.create(helper.getLevel(), EntitySpawnReason.COMMAND);
+            var type = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(mapping.getKey()));
+            var created = type.create(helper.getLevel());
             helper.assertTrue(created instanceof Mob, "Mapped type is a real mob: " + mapping.getKey());
             Mob mob = (Mob)created;
-            mob.snapTo(Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(3, 1, 3))), 0, 0);
+            mob.moveTo(Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(3, 1, 3))), 0, 0);
             helper.getLevel().addFreshEntity(mob);
             helper.assertTrue(WorldBackpacks.evaluate(mob, 0, lootRules, RandomSource.create(7)), "A mapped eligible monster receives its bag: " + mapping.getKey());
             BagInventory bag = BagInventory.of(mob.getItemBySlot(EquipmentSlot.CHEST));
@@ -149,7 +150,7 @@ public final class WorldGameTests {
             helper.assertTrue(Math.abs(mob.getMaxHealth() - before - 5 * (tier.ordinal() + 1)) < .0001, "Health scales once with the chosen tier");
             helper.assertTrue(mob.getItemBySlot(EquipmentSlot.HEAD) == existing, "Carrier armor does not replace existing equipment");
             helper.assertTrue(!mob.getItemBySlot(EquipmentSlot.FEET).isEmpty() && !mob.getItemBySlot(EquipmentSlot.LEGS).isEmpty(), "Enabled armor fills free slots");
-            helper.assertValueEqual(mob.hasEffect(MobEffects.SPEED), tier.ordinal() >= 1, "Potion buffs follow tier thresholds");
+            helper.assertValueEqual(mob.hasEffect(MobEffects.MOVEMENT_SPEED), tier.ordinal() >= 1, "Potion buffs follow tier thresholds");
             helper.assertTrue(mob.getItemBySlot(EquipmentSlot.HEAD).isEnchanted(), "Enabled enchantments use real vanilla enchantment data");
             mob.discard();
         }
@@ -171,7 +172,7 @@ public final class WorldGameTests {
             Mob playerKilled = zombie(helper);
             WorldBackpacks.evaluate(playerKilled, 0, BackpackConfig.get().carriers(), RandomSource.create(1));
             var bounds = playerKilled.getBoundingBox().inflate(2);
-            playerKilled.hurtServer(helper.getLevel(), helper.getLevel().damageSources().playerAttack(player), 1000);
+            playerKilled.hurt(helper.getLevel().damageSources().playerAttack(player), 1000);
             List<ItemEntity> bags = bagDrops(helper, bounds);
             helper.assertValueEqual(bags.size(), 1, "One real player kill yields exactly one guaranteed bag");
             ItemStack reward = bags.getFirst().getItem();
@@ -183,19 +184,19 @@ public final class WorldGameTests {
 
             Mob environmental = zombie(helper);
             WorldBackpacks.evaluate(environmental, 0, BackpackConfig.get().carriers(), RandomSource.create(1));
-            environmental.hurtServer(helper.getLevel(), helper.getLevel().damageSources().genericKill(), 1000);
+            environmental.hurt(helper.getLevel().damageSources().genericKill(), 1000);
             helper.assertTrue(bagDrops(helper, bounds).isEmpty(), "Environmental kills do not roll carrier backpacks");
             environmental.discard();
             FakePlayer fake = FakePlayer.get(helper.getLevel(), new GameProfile(UUID.randomUUID(), "BackpackLootTest"));
             Mob fakeKilled = zombie(helper);
             WorldBackpacks.evaluate(fakeKilled, 0, BackpackConfig.get().carriers(), RandomSource.create(1));
-            fakeKilled.hurtServer(helper.getLevel(), helper.getLevel().damageSources().playerAttack(fake), 1000);
+            fakeKilled.hurt(helper.getLevel().damageSources().playerAttack(fake), 1000);
             helper.assertTrue(bagDrops(helper, bounds).isEmpty(), "Fake-player carrier drops are disabled by default");
             fakeKilled.discard();
             BackpackConfig.configure(rules("{\"fakePlayerDrops\":true}"));
             Mob allowedFake = zombie(helper);
             WorldBackpacks.evaluate(allowedFake, 0, BackpackConfig.get().carriers(), RandomSource.create(1));
-            allowedFake.hurtServer(helper.getLevel(), helper.getLevel().damageSources().playerAttack(fake), 1000);
+            allowedFake.hurt(helper.getLevel().damageSources().playerAttack(fake), 1000);
             helper.assertValueEqual(bagDrops(helper, bounds).size(), 1, "Explicit fake-player opt-in enables one bag drop");
             bagDrops(helper, bounds).forEach(ItemEntity::discard); allowedFake.discard();
 
@@ -205,16 +206,16 @@ public final class WorldGameTests {
             player.setItemSlot(EquipmentSlot.MAINHAND, sword);
             Mob looted = zombie(helper);
             WorldBackpacks.evaluate(looted, 0, BackpackConfig.get().carriers(), RandomSource.create(1));
-            looted.hurtServer(helper.getLevel(), helper.getLevel().damageSources().playerAttack(player), 1000);
+            looted.hurt(helper.getLevel().damageSources().playerAttack(player), 1000);
             helper.assertValueEqual(bagDrops(helper, bounds).size(), 1, "The actual killer's Looting enchantment contributes to the drop roll");
             bagDrops(helper, bounds).forEach(ItemEntity::discard); looted.discard();
 
             BackpackConfig.configure(rules("{\"tierWeights\":[0,0,0,0,0,1]}"));
             Mob netherite = zombie(helper);
             WorldBackpacks.evaluate(netherite, 0, BackpackConfig.get().carriers(), RandomSource.create(1));
-            netherite.hurtServer(helper.getLevel(), helper.getLevel().damageSources().playerAttack(player), 1000);
+            netherite.hurt(helper.getLevel().damageSources().playerAttack(player), 1000);
             ItemEntity resistant = bagDrops(helper, bounds).getFirst();
-            helper.assertFalse(resistant.hurtServer(helper.getLevel(), helper.getLevel().damageSources().lava(), 100), "A real dropped netherite carrier bag resists fire damage");
+            helper.assertFalse(resistant.hurt(helper.getLevel().damageSources().lava(), 100), "A real dropped netherite carrier bag resists fire damage");
             helper.assertFalse(resistant.isRemoved(), "Fire resistance retains the actual item entity");
             resistant.discard(); netherite.discard();
         } finally { BackpackConfig.configure(previous); }
@@ -238,13 +239,11 @@ public final class WorldGameTests {
                 helper.assertTrue(originals.size() >= 1 && originals.size() <= 4, "Advanced carrier music contains one to four discs");
                 helper.assertValueEqual(new HashSet<>(originals.stream().map(ItemVariant::of).toList()).size(), originals.size(), "Carrier discs are distinct");
                 WorldBackpacks.tick(source);
-                helper.assertTrue(before.settings(music).getBooleanOr("playing", false), "Carrier ticks start the real moving jukebox session");
+                helper.assertTrue(NbtAccess.getBooleanOr(before.settings(music), "playing", false), "Carrier ticks start the real moving jukebox session");
                 String identity = before.identity();
                 var lootPlan = before.stack().get(WorldComponents.DEFERRED_LOOT);
                 source.setHealth(source.getMaxHealth() / 2);
-                Mob converted = source.convertTo(EntityTypes.DROWNED, ConversionParams.single(source, keepEquipment, true), replacement -> {
-                    if (!keepEquipment) replacement.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
-                });
+                Mob converted = convertWithDestinationArmor(source, keepEquipment);
                 helper.assertTrue(converted != null && source.isRemoved(), "Vanilla conversion replaces the source entity");
                 BagInventory after = BagInventory.of(converted.getItemBySlot(EquipmentSlot.CHEST));
                 helper.assertValueEqual(after.identity(), identity, "Conversion retains the bag's identity");
@@ -255,9 +254,9 @@ public final class WorldGameTests {
                         "A generated destination chestplate is preserved instead of overwritten");
                 WorldBackpacks.tick(converted);
                 var currentMusic = after.installedUpgrades().getFirst();
-                helper.assertTrue(after.settings(currentMusic).getBooleanOr("playing", false), "Music restarts against the converted carrier");
+                helper.assertTrue(NbtAccess.getBooleanOr(after.settings(currentMusic), "playing", false), "Music restarts against the converted carrier");
                 var bounds = converted.getBoundingBox().inflate(2);
-                converted.hurtServer(helper.getLevel(), helper.getLevel().damageSources().playerAttack(player), 1000);
+                converted.hurt(helper.getLevel().damageSources().playerAttack(player), 1000);
                 ItemEntity drop = bagDrops(helper, bounds).getFirst();
                 List<ItemStack> extras = drop.getItem().getOrDefault(WorldComponents.EXTRA_ITEMS, InventorySnapshot.EMPTY).items();
                 helper.assertValueEqual(extras.stream().filter(JukeboxRuntime::isDisc).mapToInt(ItemStack::getCount).sum(), originals.size(), "Death preserves every generated disc exactly once");
@@ -278,7 +277,7 @@ public final class WorldGameTests {
             BackpackConfig.configure(ConfigFile.decode("{\"capacities\":{\"backpack\":{\"slots\":1,\"upgrades\":0}}}"));
             BagInventory full = BagInventory.of(new ItemStack(BackpackRegistry.item(BackpackTier.LEATHER)));
             full.setItem(0, new ItemStack(Items.STONE, 64));
-            var plan = new WorldComponents.DeferredLoot(Identifier.withDefaultNamespace("chests/spawn_bonus_chest"), 132459L, 2, 0);
+            var plan = new WorldComponents.DeferredLoot(ResourceLocation.withDefaultNamespace("chests/spawn_bonus_chest"), 132459L, 2, 0);
             full.stack().set(WorldComponents.DEFERRED_LOOT, plan);
             BagInventory control = BagInventory.of(new ItemStack(BackpackRegistry.item(BackpackTier.NETHERITE)));
             control.stack().set(WorldComponents.DEFERRED_LOOT, plan);
@@ -304,34 +303,34 @@ public final class WorldGameTests {
     }
 
     public static void creeperCloudProtection(GameTestHelper helper) {
-        var carrier = helper.spawn(EntityTypes.CREEPER, new BlockPos(2, 1, 2));
+        var carrier = helper.spawn(EntityType.CREEPER, new BlockPos(2, 1, 2));
         carrier.setNoAi(true); carrier.setInvulnerable(true);
         helper.assertTrue(WorldBackpacks.evaluate(carrier, 0, rules("{}").carriers(), RandomSource.create(2)), "The test creeper wears a real carrier bag");
-        carrier.addEffect(new MobEffectInstance(MobEffects.SPEED, 200, 0));
+        carrier.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 200, 0));
         carrier.addEffect(new MobEffectInstance(MobEffects.POISON, 200, 0));
-        var ordinary = helper.spawn(EntityTypes.CREEPER, new BlockPos(6, 1, 6));
+        var ordinary = helper.spawn(EntityType.CREEPER, new BlockPos(6, 1, 6));
         ordinary.setNoAi(true); ordinary.setInvulnerable(true);
         WorldBackpacks.evaluate(ordinary, 0, rules("{\"spawnChance\":0}").carriers(), RandomSource.create(2));
-        ordinary.addEffect(new MobEffectInstance(MobEffects.SPEED, 200, 0));
+        ordinary.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 200, 0));
         carrier.ignite(); ordinary.ignite();
         helper.runAtTickTime(38, () -> {
             List<AreaEffectCloud> clouds = helper.getLevel().getEntitiesOfClass(AreaEffectCloud.class,
                     carrier.getBoundingBox().inflate(8));
             AreaEffectCloud protectedCloud = clouds.stream().filter(cloud -> cloud.position().distanceToSqr(carrier.position()) < 1).findFirst().orElseThrow();
             AreaEffectCloud vanillaCloud = clouds.stream().filter(cloud -> cloud.position().distanceToSqr(ordinary.position()) < 1).findFirst().orElseThrow();
-            var output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+            var output = new CompoundTag();
             protectedCloud.save(output);
             PotionContents protectedEffects = PotionContents.CODEC.parse(RegistryOps.create(NbtOps.INSTANCE, helper.getLevel().registryAccess()),
-                    output.buildResult().getCompoundOrEmpty("potion_contents")).getOrThrow();
+                    NbtAccess.getCompoundOrEmpty(output, "potion_contents")).getOrThrow();
             helper.assertTrue(java.util.stream.StreamSupport.stream(protectedEffects.getAllEffects().spliterator(), false).anyMatch(effect -> effect.getEffect().equals(MobEffects.POISON)),
                     "A carrier creeper retains harmful effects in its real explosion cloud");
-            helper.assertFalse(java.util.stream.StreamSupport.stream(protectedEffects.getAllEffects().spliterator(), false).anyMatch(effect -> effect.getEffect().equals(MobEffects.SPEED)),
+            helper.assertFalse(java.util.stream.StreamSupport.stream(protectedEffects.getAllEffects().spliterator(), false).anyMatch(effect -> effect.getEffect().equals(MobEffects.MOVEMENT_SPEED)),
                     "Carrier bonuses do not become beneficial area-cloud rewards");
-            var vanillaOutput = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+            var vanillaOutput = new CompoundTag();
             vanillaCloud.save(vanillaOutput);
             PotionContents vanillaEffects = PotionContents.CODEC.parse(RegistryOps.create(NbtOps.INSTANCE, helper.getLevel().registryAccess()),
-                    vanillaOutput.buildResult().getCompoundOrEmpty("potion_contents")).getOrThrow();
-            helper.assertTrue(java.util.stream.StreamSupport.stream(vanillaEffects.getAllEffects().spliterator(), false).anyMatch(effect -> effect.getEffect().equals(MobEffects.SPEED)),
+                    NbtAccess.getCompoundOrEmpty(vanillaOutput, "potion_contents")).getOrThrow();
+            helper.assertTrue(java.util.stream.StreamSupport.stream(vanillaEffects.getAllEffects().spliterator(), false).anyMatch(effect -> effect.getEffect().equals(MobEffects.MOVEMENT_SPEED)),
                     "An ordinary creeper's vanilla beneficial cloud is unchanged");
             clouds.forEach(AreaEffectCloud::discard);
             helper.succeed();
@@ -341,6 +340,27 @@ public final class WorldGameTests {
     public static void chestLootTables(GameTestHelper helper) {
         ChestLootAcceptance.verify(helper.getLevel(), helper.absolutePos(new BlockPos(3, 1, 3)), false);
         helper.succeed();
+    }
+
+    private static Mob destinationArmorSource;
+    private static boolean conversionFixtureRegistered;
+
+    private static Mob convertWithDestinationArmor(Mob source, boolean keepEquipment) {
+        // 1.21.1 has no postprocessor argument on Mob.convertTo. This scoped test-only
+        // Fabric phase supplies native destination armor before the mod's normal conversion listener.
+        if (!conversionFixtureRegistered) {
+            var event = net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.MOB_CONVERSION;
+            ResourceLocation phase = ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "destination_armor");
+            event.addPhaseOrdering(phase, net.fabricmc.fabric.api.event.Event.DEFAULT_PHASE);
+            event.register(phase, (previous, converted, retainedEquipment) -> {
+                if (previous == destinationArmorSource && !retainedEquipment)
+                    converted.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+            });
+            conversionFixtureRegistered = true;
+        }
+        destinationArmorSource = source;
+        try { return source.convertTo(EntityType.DROWNED, keepEquipment); }
+        finally { destinationArmorSource = null; }
     }
 
     private static List<ItemEntity> bagDrops(GameTestHelper helper, net.minecraft.world.phys.AABB bounds) {

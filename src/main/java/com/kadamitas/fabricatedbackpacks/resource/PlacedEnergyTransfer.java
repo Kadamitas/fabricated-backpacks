@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
@@ -30,7 +32,7 @@ public final class PlacedEnergyTransfer {
     public void contentsReplaced() { previousSupport = -1; }
 
     public EnergyStorage storage(Direction side) {
-        if (entity.getLevel() != null && entity.getLevel().isClientSide()) return new EnergyStorage() {
+        if (entity.getLevel() != null && entity.getLevel().isClientSide) return new EnergyStorage() {
             private int flags() { return entity.isRemoved() ? 0 : entity.clientEnergySupport() >>> ((side == null ? 6 : side.ordinal()) * 2); }
             @Override public boolean supportsInsertion() { return (flags() & 1) != 0; }
             @Override public boolean supportsExtraction() { return (flags() & 2) != 0; }
@@ -90,7 +92,7 @@ public final class PlacedEnergyTransfer {
     }
 
     private static boolean outputEnabled(Node node, InstalledUpgrade upgrade) {
-        return node.attached() && node.inventory().settings(upgrade).getBooleanOr("external_output", true);
+        return node.attached() && NbtAccess.getBooleanOr(node.inventory().settings(upgrade), "external_output", true);
     }
 
     /** Called only by the placed block tick. Carried and equipped batteries never push to the world. */

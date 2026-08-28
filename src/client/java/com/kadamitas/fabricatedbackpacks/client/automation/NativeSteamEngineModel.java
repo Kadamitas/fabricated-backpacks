@@ -5,16 +5,13 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
-import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.geom.builders.CubeListBuilder;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
 import net.minecraft.client.model.geom.builders.MeshDefinition;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.util.Unit;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -27,8 +24,8 @@ import java.util.Set;
 
 /** Original cuboids baked once per resource reload; per-engine motion uses pose transforms. */
 final class NativeSteamEngineModel {
-    private static final Identifier PROFILE = BackpackRegistry.id("steam_engine_profiles.json");
-    record MaterialGroup(Model<Unit> model, Identifier texture) {}
+    private static final ResourceLocation PROFILE = BackpackRegistry.id("steam_engine_profiles.json");
+    record MaterialGroup(ModelPart model, ResourceLocation texture) {}
     final List<MaterialGroup> wheel, rod, piston;
     final float wheelX, wheelY, wheelZ, radius, rodLength, rodZ;
 
@@ -93,9 +90,9 @@ final class NativeSteamEngineModel {
         }
         List<MaterialGroup> result = new ArrayList<>();
         for (var entry : meshes.entrySet()) {
-            Identifier texture = Identifier.parse(materials.get(entry.getKey()).getAsString());
-            result.add(new MaterialGroup(new StaticModel(LayerDefinition.create(entry.getValue(), 64, 64).bakeRoot()),
-                    Identifier.fromNamespaceAndPath(texture.getNamespace(), "textures/" + texture.getPath() + ".png")));
+            ResourceLocation texture = ResourceLocation.parse(materials.get(entry.getKey()).getAsString());
+            result.add(new MaterialGroup(LayerDefinition.create(entry.getValue(), 64, 64).bakeRoot(),
+                    ResourceLocation.fromNamespaceAndPath(texture.getNamespace(), "textures/" + texture.getPath() + ".png")));
         }
         return List.copyOf(result);
     }
@@ -113,8 +110,5 @@ final class NativeSteamEngineModel {
             if (!Float.isFinite(result[i])) throw new IllegalArgumentException("Non-finite engine vector");
         }
         return result;
-    }
-    private static final class StaticModel extends Model<Unit> {
-        StaticModel(ModelPart root) { super(root, RenderTypes::entityCutout); }
     }
 }

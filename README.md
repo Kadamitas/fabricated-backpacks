@@ -2,17 +2,19 @@
 
 <img src="docs/media/project-icon.png" alt="Original gold backpack model" width="144" height="144">
 
-Modular backpacks for **Minecraft Java Edition 26.2 on Fabric**.
+Modular backpacks for **Minecraft Java Edition 1.21.1 on Fabric**.
 
-**0.5.0-alpha is a development build.** Back up worlds before testing it.
+**0.5.0-alpha+mc1.21.1 is a development port for Cobblemon 1.7.3.**
+This separate branch is `codex/minecraft-1.21.1-cobblemon`; the 26.2 line is kept separately.
+Use a new or backed-up **1.21.1** world. Never open a 26.2 world in this older game.
 The feature list describes the current implementation, not a claim that every
 interaction or multiplayer scenario has passed acceptance testing. Release
-evidence belongs in [Verification](docs/VERIFICATION.md).
+evidence belongs in [1.21.1 compatibility](docs/COMPATIBILITY_1_21_1.md).
 
-The working branch also contains an **unreleased interface, worn-model and
-automation revision**. See the [UI revision record](docs/UI_REVISION.md) and
-[automation verification record](docs/AUTOMATION_VERIFICATION.md) for their separate
-test status; the existing alpha download is unchanged.
+The port includes the interface, worn-model and conduit/filter changes from the
+26.2 working branch. Its older 26.2 verification records do not certify this port.
+The existing published alpha download is unchanged. Cobblemon is optional and
+is not bundled in this mod.
 
 ## What is included
 
@@ -41,18 +43,19 @@ workstation behavior and remaining alpha work.
 
 | Component | Target |
 | --- | --- |
-| Minecraft Java Edition | 26.2 |
-| Java | 25 |
+| Minecraft Java Edition | 1.21.1 |
+| Java | 21 |
 | Fabric Loader | 0.19.3 or newer |
-| Fabric API | 0.158.0+26.2 or newer compatible 26.2 build |
-| Team Reborn Energy API | 5.0.0, included in the built mod JAR |
+| Fabric API | 0.116.15+1.21.1 or newer compatible 1.21.1 build |
+| Team Reborn Energy API | 4.1.0, included in the built mod JAR |
+| Cobblemon (optional) | 1.7.3 for Fabric 1.21.1 |
 
 Install the same mod build and compatible Fabric API on the client and server.
 The native equipment slot and recipe browser do not require separate equipment
 or recipe-viewer mods. Only the target listed above is supported by this build;
 other Minecraft versions and loaders need separate ports.
 
-The working branch optionally integrates with JEI for Fabric 26.2. Its built-in
+The working branch optionally integrates with JEI 19.44.0.413 for Fabric 1.21.1. Its built-in
 filter search remains available without JEI; the mod does not bundle JEI.
 
 When a verified release is available, place its main JAR in the instance's
@@ -86,10 +89,13 @@ These defaults can be changed in Minecraft's Controls screen.
 | --- | --- |
 | Open backpack | B |
 | Open equipment panel | G |
-| Open recipe browser | O |
+| Open recipe browser | V |
 | Tool selection action | K |
 | Use deposit / restock upgrade | C |
 | Force deposit / force restock | Unbound |
+
+V avoids Cobblemon's O party-display binding. Existing saved key choices are
+preserved; change an old O assignment in Controls if needed.
 
 Point at a container and press C to use the first enabled deposit/restock
 upgrade on the first carried backpack. Equipment takes priority. The action
@@ -119,7 +125,7 @@ or grant missing ingredients. Other recipe categories remain viewable.
 - [Item, fluid and energy integration](docs/INTEGRATION.md)
 - [Native conduits and steam engine](docs/AUTOMATION.md)
 - [Building and testing](docs/BUILDING.md)
-- [Verification](docs/VERIFICATION.md)
+- [1.21.1 compatibility and verification](docs/COMPATIBILITY_1_21_1.md)
 - [Changelog](CHANGELOG.md)
 - [Original asset pipeline](tools/ASSET_PIPELINE.md)
 

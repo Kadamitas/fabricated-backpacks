@@ -7,7 +7,7 @@ import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenus;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
+import net.fabricmc.fabric.api.transfer.v1.item.InventoryStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
@@ -19,10 +19,8 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.LevelBasedPermissionSet;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -31,7 +29,6 @@ import net.minecraft.world.level.block.HopperBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import java.util.List;
-import java.util.Optional;
 
 /** Infinity is an explicit source of generated items; its finite seed must never be consumed or replaced. */
 public final class InfinityGameTests {
@@ -40,9 +37,12 @@ public final class InfinityGameTests {
     private static BagInventory plain() { return BackpackTestSupport.bag(BackpackTier.NETHERITE); }
     private static ItemStack upgrade(UpgradeKind kind) { return new ItemStack(BackpackRegistry.item(kind)); }
     private static void gameMaster(ServerPlayer player) {
-        player.level().getServer().getPlayerList().op(player.nameAndId(), Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.of(false));
+        // The native 1.21 GameTestServer gives ordinary /op entries permission level zero.
+        var players = player.level().getServer().getPlayerList();
+        players.getOps().add(new net.minecraft.server.players.ServerOpListEntry(player.getGameProfile(), 2, false));
+        players.sendPlayerPermissionLevel(player);
     }
-    private static void ordinary(ServerPlayer player) { player.level().getServer().getPlayerList().deop(player.nameAndId()); }
+    private static void ordinary(ServerPlayer player) { player.level().getServer().getPlayerList().deop(player.getGameProfile()); }
     private static BagInventory seededFixture(UpgradeKind infinity) {
         BagInventory bag = plain();
         // Fixture setup is trusted; player permission is exercised through actual menus below.
@@ -54,7 +54,7 @@ public final class InfinityGameTests {
         ServerPlayer operator = BackpackTestSupport.player(helper);
         gameMaster(operator);
         try {
-            helper.assertTrue(operator.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER), "Fixture has the actual game-master permission");
+            helper.assertTrue(operator.hasPermissions(2), "Fixture has the actual game-master permission");
             for (UpgradeKind infinity : List.of(UpgradeKind.INFINITY, UpgradeKind.SURVIVAL_INFINITY)) {
                 BagInventory bag = seededFixture(infinity);
                 ItemStack seed = new ItemStack(Items.DIAMOND, 3);
@@ -100,53 +100,53 @@ public final class InfinityGameTests {
         BackpackMenu menu = (BackpackMenu) player.containerMenu;
         int upgradeSlot = bag.getContainerSize();
         try {
-            helper.assertFalse(player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER), "Ordinary fixture has no operator permission");
+            helper.assertFalse(player.hasPermissions(2), "Ordinary fixture has no operator permission");
             menu.setCarried(upgrade(UpgradeKind.INFINITY));
-            menu.clicked(upgradeSlot, 0, ContainerInput.PICKUP, player);
+            menu.clicked(upgradeSlot, 0, ClickType.PICKUP, player);
             helper.assertTrue(bag.upgrades().getItem(0).isEmpty(), "Nonoperator cannot install administrator infinity");
             helper.assertTrue(menu.getCarried().is(BackpackRegistry.item(UpgradeKind.INFINITY)), "Denied installation leaves the actual cursor upgrade intact");
             player.setGameMode(GameType.CREATIVE);
-            menu.clicked(upgradeSlot, 0, ContainerInput.PICKUP, player);
+            menu.clicked(upgradeSlot, 0, ClickType.PICKUP, player);
             helper.assertTrue(bag.upgrades().getItem(0).isEmpty(), "Creative mode alone does not confer game-master permission");
             player.setGameMode(GameType.SURVIVAL);
             gameMaster(player);
-            menu.clicked(upgradeSlot, 0, ContainerInput.PICKUP, player);
+            menu.clicked(upgradeSlot, 0, ClickType.PICKUP, player);
             helper.assertTrue(bag.has(UpgradeKind.INFINITY) && menu.getCarried().isEmpty(), "Game-master permission works while the operator is in survival mode");
             menu.setCarried(new ItemStack(Items.EMERALD, 5));
-            menu.clicked(0, 0, ContainerInput.PICKUP, player);
+            menu.clicked(0, 0, ClickType.PICKUP, player);
             helper.assertValueEqual(bag.getItem(0).getCount(), 5, "Operator seeds the slot through the real menu");
             helper.assertTrue(menu.getCarried().isEmpty(), "Seeding consumes only the actual finite cursor supply");
             ordinary(player);
             menu.setCarried(new ItemStack(Items.DIAMOND, 2));
-            menu.clicked(1, 0, ContainerInput.PICKUP, player);
+            menu.clicked(1, 0, ClickType.PICKUP, player);
             helper.assertTrue(bag.getItem(1).isEmpty(), "A nonoperator cannot seed another admin-infinity slot");
             helper.assertValueEqual(menu.getCarried().getCount(), 2, "Denied seeding preserves the cursor quantity");
-            menu.clicked(0, 0, ContainerInput.PICKUP, player);
+            menu.clicked(0, 0, ClickType.PICKUP, player);
             helper.assertTrue(bag.getItem(0).is(Items.EMERALD) && menu.getCarried().is(Items.DIAMOND), "Different cursor item cannot replace an established seed");
             menu.setCarried(ItemStack.EMPTY);
-            menu.clicked(upgradeSlot, 0, ContainerInput.PICKUP, player);
+            menu.clicked(upgradeSlot, 0, ClickType.PICKUP, player);
             helper.assertTrue(bag.has(UpgradeKind.INFINITY), "An ordinary player cannot remove administrator infinity");
-            menu.clicked(0, 0, ContainerInput.PICKUP, player);
+            menu.clicked(0, 0, ClickType.PICKUP, player);
             helper.assertValueEqual(menu.getCarried().getCount(), 64, "Any player can extract a normal full cursor stack from an authorized seed");
             menu.setCarried(new ItemStack(Items.EMERALD, 63));
-            menu.clicked(0, 1, ContainerInput.PICKUP, player);
+            menu.clicked(0, 1, ClickType.PICKUP, player);
             helper.assertValueEqual(menu.getCarried().getCount(), 64, "Right-click adds one without exceeding the item's normal limit");
             menu.setCarried(new ItemStack(Items.EMERALD, 65));
-            menu.clicked(0, 0, ContainerInput.PICKUP, player);
+            menu.clicked(0, 0, ClickType.PICKUP, player);
             helper.assertValueEqual(menu.getCarried().getCount(), 65, "An already oversized cursor is never silently clamped or discarded");
             menu.setCarried(ItemStack.EMPTY);
             int before = BackpackTestSupport.count(player.getInventory(), Items.EMERALD);
-            menu.clicked(0, 0, ContainerInput.QUICK_MOVE, player);
+            menu.clicked(0, 0, ClickType.QUICK_MOVE, player);
             helper.assertValueEqual(BackpackTestSupport.count(player.getInventory(), Items.EMERALD) - before, 64, "One shift-click generates one bounded batch");
             player.getInventory().setItem(1, ItemStack.EMPTY);
-            menu.clicked(0, 1, ContainerInput.SWAP, player);
+            menu.clicked(0, 1, ClickType.SWAP, player);
             helper.assertValueEqual(player.getInventory().getItem(1).getCount(), 64, "Hotbar extraction uses a normal stack limit");
             player.getInventory().setItem(1, new ItemStack(Items.DIAMOND, 3));
-            menu.clicked(0, 1, ContainerInput.SWAP, player);
+            menu.clicked(0, 1, ClickType.SWAP, player);
             helper.assertTrue(player.getInventory().getItem(1).is(Items.DIAMOND), "Hotbar replacement never discards a different item");
             helper.assertValueEqual(bag.getItem(0).getCount(), 5, "All cursor, shift and hotbar operations leave the finite seed untouched");
             gameMaster(player);
-            menu.clicked(upgradeSlot, 0, ContainerInput.PICKUP, player);
+            menu.clicked(upgradeSlot, 0, ClickType.PICKUP, player);
             helper.assertTrue(bag.infinityKind() == null, "Authorized operator can remove the infinity upgrade");
             helper.assertValueEqual(bag.getItem(0).getCount(), 5, "Removing infinity reveals only the original five emeralds");
             ordinary(player);
@@ -157,12 +157,12 @@ public final class InfinityGameTests {
             BackpackMenus.openInventory(player, 0);
             BackpackMenu survivalMenu = (BackpackMenu) player.containerMenu;
             survivalMenu.setCarried(upgrade(UpgradeKind.SURVIVAL_INFINITY));
-            survivalMenu.clicked(survival.getContainerSize(), 0, ContainerInput.PICKUP, player);
+            survivalMenu.clicked(survival.getContainerSize(), 0, ClickType.PICKUP, player);
             helper.assertTrue(survival.has(UpgradeKind.SURVIVAL_INFINITY), "Survival infinity permits ordinary-player installation");
             survivalMenu.setCarried(new ItemStack(Items.DIAMOND));
-            survivalMenu.clicked(0, 0, ContainerInput.PICKUP, player);
+            survivalMenu.clicked(0, 0, ClickType.PICKUP, player);
             helper.assertTrue(survival.isInfiniteSlot(0), "Ordinary player can seed survival infinity");
-            survivalMenu.clicked(survival.getContainerSize(), 0, ContainerInput.PICKUP, player);
+            survivalMenu.clicked(survival.getContainerSize(), 0, ClickType.PICKUP, player);
             helper.assertTrue(survival.infinityKind() == null, "Ordinary player can remove survival infinity");
             ItemStack replacement = survival.stack().copy();
             player.getInventory().setItem(0, replacement);
@@ -198,11 +198,11 @@ public final class InfinityGameTests {
         }
         SimpleContainer destination = new SimpleContainer(1);
         try (Transaction transaction = Transaction.openOuter()) {
-            helper.assertValueEqual(StorageUtil.move(storage, ContainerStorage.of(destination, null), item -> true, 100, transaction), 64L, "Actual destination capacity constrains infinite output");
+            helper.assertValueEqual(StorageUtil.move(storage, InventoryStorage.of(destination, null), item -> true, 100, transaction), 64L, "Actual destination capacity constrains infinite output");
         }
         helper.assertTrue(destination.isEmpty(), "Aborting a generated transfer rolls back its destination");
         try (Transaction transaction = Transaction.openOuter()) {
-            helper.assertValueEqual(StorageUtil.move(storage, ContainerStorage.of(destination, null), item -> true, 100, transaction), 64L, "Committed destination receives exactly its accepted quantity");
+            helper.assertValueEqual(StorageUtil.move(storage, InventoryStorage.of(destination, null), item -> true, 100, transaction), 64L, "Committed destination receives exactly its accepted quantity");
             transaction.commit();
         }
         helper.assertValueEqual(destination.getItem(0).getCount(), 64, "Generated stack respects the destination's physical limit");

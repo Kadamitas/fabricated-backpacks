@@ -8,7 +8,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraft.world.level.saveddata.SavedDataType;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.resources.RegistryOps;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -25,8 +28,9 @@ public final class AdminSavedData extends SavedData {
             Codec.unboundedMap(Codec.STRING, BackpackArchive.CODEC).optionalFieldOf("archives", Map.of()).forGetter(value -> value.archives),
             Codec.unboundedMap(Codec.STRING, WholeBagTemplate.CODEC).optionalFieldOf("templates", Map.of()).forGetter(value -> value.templates))
             .apply(instance, AdminSavedData::new)).validate(AdminSavedData::validate);
-    public static final SavedDataType<AdminSavedData> TYPE = new SavedDataType<>(BackpackRegistry.id("administration"),
-            AdminSavedData::new, CODEC, DataFixTypes.SAVED_DATA_COMMAND_STORAGE);
+    public static final SavedData.Factory<AdminSavedData> TYPE = new SavedData.Factory<>(AdminSavedData::new,
+            (tag, registries) -> CODEC.parse(RegistryOps.create(NbtOps.INSTANCE, registries), tag).getOrThrow(),
+            DataFixTypes.SAVED_DATA_COMMAND_STORAGE);
 
     private final Map<String, BackpackArchive> archives;
     private final Map<String, WholeBagTemplate> templates;
@@ -36,7 +40,10 @@ public final class AdminSavedData extends SavedData {
         this.archives = new HashMap<>(archives);
         this.templates = new HashMap<>(templates);
     }
-    public static AdminSavedData of(MinecraftServer server) { return server.overworld().getDataStorage().computeIfAbsent(TYPE); }
+    public static AdminSavedData of(MinecraftServer server) { return server.overworld().getDataStorage().computeIfAbsent(TYPE, "fabricated_backpacks_administration"); }
+    @Override public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+        return tag.merge((CompoundTag) CODEC.encodeStart(RegistryOps.create(NbtOps.INSTANCE, registries), this).getOrThrow());
+    }
     private static DataResult<AdminSavedData> validate(AdminSavedData value) {
         if (value.templates.size() > MAX_TEMPLATES || value.templates.keySet().stream().anyMatch(name -> !AdminNames.isLocal(name))
                 || value.archives.entrySet().stream().anyMatch(entry -> !entry.getKey().equals(entry.getValue().identity())))

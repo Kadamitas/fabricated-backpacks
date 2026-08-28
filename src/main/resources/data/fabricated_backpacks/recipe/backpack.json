@@ -7,9 +7,15 @@
     "SLS"
   ],
   "key": {
-    "S": "minecraft:string",
-    "L": "minecraft:leather",
-    "C": "minecraft:chest"
+    "S": {
+      "item": "minecraft:string"
+    },
+    "L": {
+      "item": "minecraft:leather"
+    },
+    "C": {
+      "item": "minecraft:chest"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:backpack",

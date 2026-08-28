@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.network.WorkstationState;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -58,23 +59,23 @@ public final class WorkstationControls {
         Button button = Button.builder(Component.literal(label), ignored -> {
             Minecraft client = Minecraft.getInstance();
             if (client.gameMode != null && client.player != null && client.player.containerMenu.containerId == containerId) {
-                if (action < 0) client.gui.setScreen(new WorkstationChoiceScreen(screen, containerId));
+                if (action < 0) client.setScreen(new WorkstationChoiceScreen(screen, containerId));
                 else client.gameMode.handleInventoryButtonClick(containerId, action);
             }
         }).bounds(x, y, width, 14).build();
         button.visible = false;
         controls.add(new Control(action, button));
-        Screens.getWidgets(screen).add(button);
+        Screens.getButtons(screen).add(button);
     }
     private static void update(Minecraft client) {
-        Screen screen = client.gui.screen();
+        Screen screen = client.screen;
         List<Control> controls = CONTROLS.get(screen);
         if (controls == null) return;
         boolean valid = client.player != null && client.player.containerMenu.containerId == containerId
                 && screen instanceof AbstractContainerScreen<?> container && container.getMenu().containerId == containerId;
-        String family = state.getStringOr("family", "");
-        String[] recent = state.getStringOr("recent_recipes", "").split(",");
-        String[] choices = state.getStringOr("choices", "").split(",");
+        String family = NbtAccess.getStringOr(state, "family", "");
+        String[] recent = NbtAccess.getStringOr(state, "recent_recipes", "").split(",");
+        String[] choices = NbtAccess.getStringOr(state, "choices", "").split(",");
         for (Control control : controls) {
             int action = control.action();
             Button button = control.button();
@@ -86,8 +87,8 @@ public final class WorkstationControls {
                 case -2 -> family.equals("stonecutter") && choices.length >= 13;
                 default -> family.equals("stonecutter") && action >= 10010 && action - 10010 < recent.length && !recent[action - 10010].isBlank();
             };
-            if (action == 10000) button.setMessage(Component.literal("Results: " + (state.getStringOr("result_destination", "STORAGE").equalsIgnoreCase("PLAYER") ? "player" : "backpack")));
-            if (action == 10001) button.setMessage(Component.literal("Refill: " + (state.getBooleanOr("grid_refill", false) ? "on" : "off")));
+            if (action == 10000) button.setMessage(Component.literal("Results: " + (NbtAccess.getStringOr(state, "result_destination", "STORAGE").equalsIgnoreCase("PLAYER") ? "player" : "backpack")));
+            if (action == 10001) button.setMessage(Component.literal("Refill: " + (NbtAccess.getBooleanOr(state, "grid_refill", false) ? "on" : "off")));
             if (action >= 10010 && button.visible) button.setTooltip(Tooltip.create(Component.literal(recent[action - 10010])));
             else if (action == 10000) button.setTooltip(Tooltip.create(Component.literal("Destination for shift-clicked results. A full destination never consumes ingredients.")));
         }

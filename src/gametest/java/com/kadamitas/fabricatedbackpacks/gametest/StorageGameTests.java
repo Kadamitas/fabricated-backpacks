@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
@@ -25,7 +26,7 @@ import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
+import com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate;
 import net.minecraft.world.item.Items;
 
 import java.util.HashSet;
@@ -58,7 +59,7 @@ final class StorageGameTests {
             helper.assertValueEqual(loaded.getItem(0).getCount(), 999, "Overstack count survives the actual ItemStack codec for " + tier);
             helper.assertValueEqual(loaded.capacity(new ItemStack(Items.COBBLESTONE)), 1024, "Stack multiplier survives " + tier);
             helper.assertTrue(identities.add(loaded.identity()), "Every created bag has its own identity");
-            helper.assertValueEqual(loaded.settings(upgrade(loaded, 0)).getLongOr("test_counter", 0), 9000000000L, "Upgrade settings retain wide values");
+            helper.assertValueEqual(NbtAccess.getLongOr(loaded.settings(upgrade(loaded, 0)), "test_counter", 0), 9000000000L, "Upgrade settings retain wide values");
             helper.assertTrue(!loaded.canPlaceItem(1, new ItemStack(Items.DIRT)), "Remembered slot is enforced after loading");
             assertStack(helper, loaded.stack(), encodedOriginal, "All typed components and item data survive " + tier);
         }
@@ -166,7 +167,7 @@ final class StorageGameTests {
         helper.assertTrue(inventory.insert(new ItemStack(Items.DIRT, 64), true).isEmpty(), "Simulation reports available capacity");
         assertStack(helper, inventory.stack(), before, "Simulation leaves every persistent component unchanged");
         BagInventory reloaded = BagInventory.of(roundTrip(helper.getLevel(), inventory.stack()));
-        helper.assertValueEqual(reloaded.settings().getIntArray("no_sort").orElseThrow()[0], 5, "No-sort survives a saved item roundtrip");
+        helper.assertValueEqual(NbtAccess.getIntArray(reloaded.settings(), "no_sort").orElseThrow()[0], 5, "No-sort survives a saved item roundtrip");
         helper.assertFalse(reloaded.canPlaceItem(0, new ItemStack(Items.DIRT)), "Memory survives a saved item roundtrip");
 
         var filter = upgrade(inventory, 0);
@@ -199,10 +200,24 @@ final class StorageGameTests {
         inventory.updateSettings(filter, state -> state.putString("filter_mode", "ALLOW"));
         var storage = ItemStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH);
         helper.assertTrue(storage != null, "Placed bag exposes the registered public sided item API");
+        helper.assertTrue(storage instanceof net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage<?>,
+                "Native backpack storage keeps indexed physical views");
+        var indexed = (net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage<ItemVariant>) storage;
+        helper.assertValueEqual(indexed.getSlot(0).getCapacity(), 128L,
+                "The public slot advertises upgraded capacity rather than the vanilla item limit");
         ItemStack before = inventory.stack().copy();
         try (Transaction transaction = Transaction.openOuter()) {
             helper.assertValueEqual(storage.insert(ItemVariant.of(Items.EMERALD), 3, transaction), 0L, "Sided storage respects the ordinary upgrade filter");
             helper.assertValueEqual(storage.insert(ItemVariant.of(Items.DIAMOND), 40, transaction), 28L, "Partial insertion uses upgraded capacity without entering blocked columns");
+            var alias = ItemStorage.SIDED.find(helper.getLevel(), position, Direction.SOUTH);
+            helper.assertTrue(alias != null && alias != storage, "A second lookup returns an independent facade over the same physical bag");
+            try (Transaction nested = transaction.openNested()) {
+                helper.assertValueEqual(alias.extract(ItemVariant.of(Items.DIAMOND), 1, nested), 1L,
+                        "A fresh sided facade sees the first facade's provisional upgraded stack");
+                nested.commit();
+            }
+            helper.assertValueEqual(indexed.getSlot(0).getAmount(), 127L,
+                    "Retained indexed views immediately observe another facade's nested mutation");
         }
         helper.assertValueEqual(count(inventory, Items.DIAMOND), 100, "An aborted API insertion restores the live inventory");
         assertStack(helper, inventory.stack(), before, "An aborted API insertion also restores its persistent component snapshot");
@@ -253,9 +268,9 @@ final class StorageGameTests {
         BagInventory loaded = BagInventory.of(roundTrip(helper.getLevel(), source.stack()));
         helper.assertValueEqual(count(loaded, Items.DIAMOND), 37, "A warm runtime handle cannot overwrite closed-menu item changes");
         helper.assertTrue(loaded.ghost(upgrade(loaded, 0), 15).is(Items.EMERALD), "Closing a menu retains positional filter changes");
-        helper.assertValueEqual(loaded.settings(upgrade(loaded, 0)).getStringOr("filter_mode", ""), "ALLOW", "Closing a menu retains upgrade preferences");
+        helper.assertValueEqual(NbtAccess.getStringOr(loaded.settings(upgrade(loaded, 0)), "filter_mode", ""), "ALLOW", "Closing a menu retains upgrade preferences");
         helper.assertTrue(loaded.upgradeInventory(upgrade(loaded, 1)).getItem(11).is(Items.MUSIC_DISC_13), "Closing a menu retains the twelfth physical record");
-        helper.assertTrue(loaded.settings(upgrade(loaded, 1)).getBooleanOr("shuffle", false), "Closing a menu retains playback preference changes");
+        helper.assertTrue(NbtAccess.getBooleanOr(loaded.settings(upgrade(loaded, 1)), "shuffle", false), "Closing a menu retains playback preference changes");
         BagInventory copy = BagInventory.of(source.stack().copy());
         helper.assertTrue(copy != warm && copy.identity().equals(warm.identity()), "Codec and transaction copies never alias live state merely because their saved UUID agrees");
         copy.setItem(0, new ItemStack(Items.DIAMOND, 2));

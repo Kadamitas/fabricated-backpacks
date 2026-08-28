@@ -5,12 +5,11 @@ import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariantAttributes;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,18 +19,18 @@ import java.util.Optional;
 public final class FluidPresentation {
     private FluidPresentation() {}
 
-    public static Optional<Identifier> canonical(Identifier id) {
+    public static Optional<ResourceLocation> canonical(ResourceLocation id) {
         return BuiltInRegistries.FLUID.getOptional(id).filter(fluid -> !fluid.defaultFluidState().isEmpty()).flatMap(fluid -> {
             try { return Optional.ofNullable(BuiltInRegistries.FLUID.getKey(FluidVariant.of(fluid).getFluid())); }
             catch (IllegalArgumentException invalid) { return Optional.empty(); }
         });
     }
 
-    public static Component name(Identifier id) {
+    public static Component name(ResourceLocation id) {
         return variant(id).map(FluidVariantAttributes::getName).orElseGet(() -> Component.literal(id.toString()));
     }
 
-    public static List<Component> tooltip(Identifier id) {
+    public static List<Component> tooltip(ResourceLocation id) {
         List<Component> lines = new ArrayList<>(variant(id).map(FluidVariantRendering::getTooltip)
                 .orElseGet(() -> List.of(Component.literal(id.toString()))));
         if (lines.stream().noneMatch(line -> line.getString().equals(id.toString())))
@@ -39,13 +38,12 @@ public final class FluidPresentation {
         return List.copyOf(lines);
     }
 
-    public static void draw(GuiGraphicsExtractor graphics, Identifier id, int x, int y) {
+    public static void draw(GuiGraphics graphics, ResourceLocation id, int x, int y) {
         var variant = variant(id).orElse(null);
         if (variant == null) return;
-        var sprite = Minecraft.getInstance().getModelManager().getFluidStateModelSet()
-                .get(variant.getFluid().defaultFluidState()).stillMaterial().sprite();
+        var sprite = FluidVariantRendering.getSprite(variant);
         int color = FluidVariantRendering.getColor(variant) | 0xFF000000;
-        if (sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
+        if (sprite == null || sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
             // Some registry fluids have no world model. A tinted droplet is an explicit fluid icon,
             // not a fabricated bucket item or Minecraft's missing-texture checkerboard.
             graphics.fill(x + 7, y + 1, x + 9, y + 4, color);
@@ -53,10 +51,11 @@ public final class FluidPresentation {
             graphics.fill(x + 3, y + 7, x + 13, y + 12, color);
             graphics.fill(x + 5, y + 12, x + 11, y + 15, color);
             graphics.fill(x + 5, y + 8, x + 6, y + 11, 0xFFECF1E7);
-        } else graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, 16, 16, color);
+        } else graphics.blit(x, y, 0, 16, 16, sprite,
+                (color >> 16 & 255) / 255F, (color >> 8 & 255) / 255F, (color & 255) / 255F, 1F);
     }
 
-    private static Optional<FluidVariant> variant(Identifier id) {
+    private static Optional<FluidVariant> variant(ResourceLocation id) {
         return canonical(id).flatMap(BuiltInRegistries.FLUID::getOptional).map(FluidVariant::of);
     }
 }

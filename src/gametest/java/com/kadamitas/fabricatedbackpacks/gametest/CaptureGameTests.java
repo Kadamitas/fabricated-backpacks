@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.gameplay.MobCapture;
@@ -9,7 +10,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -25,7 +26,7 @@ final class CaptureGameTests {
         var level = helper.getLevel();
         var player = player(helper);
         player.setPos(helper.absoluteVec(new Vec3(3.5, 1, 5.5)));
-        var pig = helper.spawn(EntityTypes.PIG, new BlockPos(3, 1, 3));
+        var pig = helper.spawn(EntityType.PIG, new BlockPos(3, 1, 3));
         pig.setNoAi(true);
         pig.setPersistenceRequired();
         pig.setCustomName(Component.literal("Traveling pig"));
@@ -38,16 +39,16 @@ final class CaptureGameTests {
         helper.assertTrue(MobCapture.capture(captured, pig, player), "Basic catcher captures an eligible nearby passive mob");
         helper.assertFalse(pig.isAlive(), "Capture removes the original world entity exactly once");
         helper.assertFalse(MobCapture.capture(captured, pig, player), "Repeated capture cannot duplicate a removed entity");
-        int[] cells = captured.settings().getIntArray("captured_slots").orElseThrow();
+        int[] cells = captured.settings().getIntArray("captured_slots");
         helper.assertTrue(cells.length >= 9, "Mob capture reserves real storage cells according to health and size");
         for (int cell : cells) helper.assertFalse(captured.canPlaceItem(cell, new ItemStack(Items.DIAMOND)), "Each captured cell refuses ordinary item insertion");
         helper.assertFalse(captured.canRemoveUpgrade(0), "Capture upgrade cannot be removed while it owns a stored entity");
         BagInventory restored = BagInventory.of(roundTrip(level, captured.stack()));
-        helper.assertValueEqual(restored.settings().getListOrEmpty("captured_entities").size(), 1, "Captured entity data survives the actual bag codec");
+        helper.assertValueEqual(NbtAccess.getListOrEmpty(restored.settings(), "captured_entities").size(), 1, "Captured entity data survives the actual bag codec");
 
         BagInventory full = bag(BackpackTier.LEATHER, UpgradeKind.MOB_CATCHER);
         for (int slot = 0; slot < full.getContainerSize(); slot++) full.setItem(slot, new ItemStack(Items.DIRT, 64));
-        var second = helper.spawn(EntityTypes.PIG, new BlockPos(4, 1, 4));
+        var second = helper.spawn(EntityType.PIG, new BlockPos(4, 1, 4));
         second.setNoAi(true);
         ItemStack before = full.stack().copy();
         helper.assertFalse(MobCapture.capture(full, second, player), "A full bag cannot capture a mob without a real rectangle");
@@ -55,7 +56,7 @@ final class CaptureGameTests {
         assertStack(helper, full.stack(), before, "Failed capture leaves all stored items unchanged");
 
         player.setPos(helper.absoluteVec(new Vec3(5.5, 1, 5.5)));
-        var zombie = helper.spawn(EntityTypes.ZOMBIE, new BlockPos(6, 1, 4));
+        var zombie = helper.spawn(EntityType.ZOMBIE, new BlockPos(6, 1, 4));
         zombie.setNoAi(true);
         var zombieId = zombie.getUUID();
         helper.assertFalse(MobCapture.capture(bag(BackpackTier.NETHERITE, UpgradeKind.MOB_CATCHER), zombie, player), "Basic catcher rejects a healthy hostile mob above its cost limit");
@@ -76,7 +77,8 @@ final class CaptureGameTests {
             helper.assertValueEqual(released.getName().getString(), "Traveling pig", "Release preserves custom names");
             helper.assertValueEqual(((Mob) released).getHealth(), 7F, "Release preserves current health");
             helper.assertTrue(((Mob) released).isNoAi() && ((Mob) released).hasEffect(MobEffects.FIRE_RESISTANCE), "Release preserves mob flags and active effects");
-            helper.assertValueEqual(restored.settings().getIntArray("captured_slots").orElseThrow().length, 0, "Successful release frees precisely its owned cells");
+            helper.assertTrue(restored.settings().contains("captured_slots", net.minecraft.nbt.Tag.TAG_INT_ARRAY), "Successful release retains an explicit empty reservation array");
+            helper.assertValueEqual(restored.settings().getIntArray("captured_slots").length, 0, "Successful release frees precisely its owned cells");
             helper.assertTrue(restored.canRemoveUpgrade(0), "An empty catcher becomes removable again");
             helper.assertValueEqual(count(restored, Items.LAPIS_LAZULI), 32, "Capture and release never consume unrelated bag contents");
             helper.assertFalse(MobCapture.release(restored, 0, player, helper.absoluteVec(new Vec3(1.5, 1, 1.5))), "Repeated release cannot spawn another copy");

@@ -7,8 +7,12 @@
     "MMM"
   ],
   "key": {
-    "M": "minecraft:copper_ingot",
-    "U": "fabricated_backpacks:backpack"
+    "M": {
+      "item": "minecraft:copper_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:backpack"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:copper_backpack",

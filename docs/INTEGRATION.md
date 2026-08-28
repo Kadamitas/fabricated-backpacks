@@ -1,8 +1,8 @@
 # Item, fluid and energy integration
 
-This document describes the working branch for Minecraft 26.2. These changes
-are not in the existing `v0.5.0-alpha` download. Test outcomes for the exact
-build are recorded in [the revision record](UI_REVISION.md).
+This document describes the Minecraft 1.21.1 port. These changes are not in the
+existing 26.2 `v0.5.0-alpha` download. Target-specific status is recorded in
+[1.21.1 compatibility](COMPATIBILITY_1_21_1.md).
 
 ## Shared interfaces
 
@@ -12,7 +12,7 @@ build are recorded in [the revision record](UI_REVISION.md).
 | Fluids | Fabric `FluidStorage.SIDED` | Fabric `FluidStorage.ITEM` |
 | Energy | Team Reborn `EnergyStorage.SIDED` | Team Reborn `EnergyStorage.ITEM` |
 
-Fabric API supplies the item/fluid interfaces. Team Reborn Energy API 5.0.0 is
+Fabric API supplies the item/fluid interfaces. Team Reborn Energy API 4.1.0 is
 included in the mod JAR. No separate Fabricated Backpacks pipe protocol or
 energy unit is required. See the upstream [Fabric Transfer API](https://wiki.fabricmc.net/tutorial:transfer-api)
 and [Team Reborn Energy contract](https://github.com/TechReborn/Energy/blob/master/src/main/java/team/reborn/energy/api/EnergyStorage.java).
@@ -80,7 +80,7 @@ The built-in picker searches registered types by name, ID, `@namespace`,
 buckets. Left-click a ghost to search; right-click or Delete clears it.
 See [the player guide](AUTOMATION.md#item-and-fluid-filters) for examples.
 
-The optional adapter targets **JEI 30.28.0.191 for Fabric 26.2** through its
+The optional adapter targets **JEI 19.44.0.413 for Fabric 1.21.1** through its
 public `IGuiContainerHandler` and `IGhostIngredientHandler` APIs. JEI is neither
 bundled nor a required runtime dependency. Its drag targets use
 `ConduitScreen.acceptItem` / `acceptFluid`, the same server-bound path as the

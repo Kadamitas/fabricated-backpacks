@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:bucket",
-    "T": "minecraft:iron_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:piston"
+    "M": {
+      "item": "minecraft:bucket"
+    },
+    "T": {
+      "item": "minecraft:iron_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:piston"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:pump_upgrade",

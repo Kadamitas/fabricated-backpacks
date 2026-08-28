@@ -7,10 +7,18 @@
     " C "
   ],
   "key": {
-    "H": "minecraft:hopper",
-    "R": "minecraft:redstone",
-    "U": "fabricated_backpacks:smelting_upgrade",
-    "C": "minecraft:comparator"
+    "H": {
+      "item": "minecraft:hopper"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "U": {
+      "item": "fabricated_backpacks:smelting_upgrade"
+    },
+    "C": {
+      "item": "minecraft:comparator"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:auto_smelting_upgrade",

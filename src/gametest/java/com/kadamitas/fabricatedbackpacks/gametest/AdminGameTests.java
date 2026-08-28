@@ -22,7 +22,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.PackLocationInfo;
@@ -31,16 +31,15 @@ import net.minecraft.server.packs.PathPackResources;
 import net.minecraft.server.packs.metadata.pack.PackMetadataSection;
 import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
-import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.util.datafix.DataFixers;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.storage.LevelResource;
-import net.minecraft.world.level.storage.SavedDataStorage;
+import net.minecraft.world.level.storage.DimensionDataStorage;
 
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -53,9 +52,11 @@ public final class AdminGameTests {
     private AdminGameTests() { }
     private static String name(String prefix) { return prefix + UUID.randomUUID().toString().replace("-", ""); }
     private static void operator(ServerPlayer player) {
-        player.level().getServer().getPlayerList().op(player.nameAndId(), Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.of(false));
+        var players = player.serverLevel().getServer().getPlayerList();
+        players.getOps().add(new net.minecraft.server.players.ServerOpListEntry(player.getGameProfile(), 2, false));
+        players.sendPlayerPermissionLevel(player);
     }
-    private static void ordinary(ServerPlayer player) { player.level().getServer().getPlayerList().deop(player.nameAndId()); }
+    private static void ordinary(ServerPlayer player) { player.level().getServer().getPlayerList().deop(player.getGameProfile()); }
     private static int command(ServerPlayer player, String command) {
         try { return player.level().getServer().getCommands().getDispatcher().execute(command, player.createCommandSourceStack()); }
         catch (CommandSyntaxException exception) { throw new AssertionError("Valid command failed: " + command, exception); }
@@ -89,7 +90,7 @@ public final class AdminGameTests {
             helper.assertValueEqual(command(player, "fabricatedbackpacks"), 1, "Full command alias is also registered");
             helper.assertValueEqual(command(player, "fb template create " + template), 1, "An operator in survival can author a template");
         } finally { ordinary(player); }
-        denied(helper, player, "fb template give " + template + " " + player.getGameProfile().name());
+        denied(helper, player, "fb template give " + template + " " + player.getGameProfile().getName());
         helper.assertValueEqual(bags(player).size(), 1, "Revoked permission cannot grant another backpack");
         helper.succeed();
     }
@@ -125,11 +126,11 @@ public final class AdminGameTests {
         helper.assertTrue(archive.itemName().equals("Archived expedition") && archive.accessedAt() > 0, "Access log records name and time");
         operator(author);
         try {
-            helper.assertTrue(command(author, "fb list player " + author.getGameProfile().name()) >= 1, "Actual command filters archives by player name");
-            helper.assertValueEqual(command(author, "fb recover " + UUID.randomUUID() + " " + first.getGameProfile().name()), 0, "An unknown archive cannot grant a substitute backpack");
+            helper.assertTrue(command(author, "fb list player " + author.getGameProfile().getName()) >= 1, "Actual command filters archives by player name");
+            helper.assertValueEqual(command(author, "fb recover " + UUID.randomUUID() + " " + first.getGameProfile().getName()), 0, "An unknown archive cannot grant a substitute backpack");
             helper.assertTrue(bags(first).isEmpty(), "Failed recovery leaves the target inventory unchanged");
-            helper.assertValueEqual(command(author, "fb recover " + bag.identity() + " " + first.getGameProfile().name()), 1, "Recovery dispatch gives first recipient one bag");
-            helper.assertValueEqual(command(author, "fabricatedbackpacks give " + bag.identity() + " " + second.getGameProfile().name()), 1, "Recovery give alias uses the same saved snapshot");
+            helper.assertValueEqual(command(author, "fb recover " + bag.identity() + " " + first.getGameProfile().getName()), 1, "Recovery dispatch gives first recipient one bag");
+            helper.assertValueEqual(command(author, "fabricatedbackpacks give " + bag.identity() + " " + second.getGameProfile().getName()), 1, "Recovery give alias uses the same saved snapshot");
         } finally { ordinary(author); }
         ItemStack a = bags(first).getFirst();
         ItemStack b = bags(second).getFirst();
@@ -161,7 +162,7 @@ public final class AdminGameTests {
             String before = Files.readString(json);
             var location = new PackLocationInfo("file/" + pack.getFileName(), Component.literal("Export fixture"), PackSource.DEFAULT, Optional.empty());
             var resources = new PathPackResources(location, pack);
-            var metadata = resources.getMetadataSection(PackMetadataSection.SERVER_TYPE);
+            var metadata = resources.getMetadataSection(PackMetadataSection.TYPE);
             helper.assertTrue(metadata != null, "Minecraft parses current-format pack.mcmeta without fallback metadata");
             try (var manager = new MultiPackResourceManager(PackType.SERVER_DATA, List.of(resources))) {
                 var loaded = BackpackTemplates.read(manager, helper.getLevel().registryAccess(), BackpackRegistry.id(name)).orElseThrow();
@@ -174,7 +175,7 @@ public final class AdminGameTests {
                 throw new AssertionError("Path traversal was accepted");
             } catch (IllegalArgumentException expected) { }
             helper.assertTrue(BackpackTemplates.names(helper.getLevel().getServer()).contains("fabricated_backpacks_tests:admin_fixture"), "Bundled datapack template is independently discoverable");
-            helper.assertValueEqual(command(author, "fb template give fabricated_backpacks_tests:admin_fixture " + recipient.getGameProfile().name()), 1, "Actual command resolves an explicitly namespaced datapack reference");
+            helper.assertValueEqual(command(author, "fb template give fabricated_backpacks_tests:admin_fixture " + recipient.getGameProfile().getName()), 1, "Actual command resolves an explicitly namespaced datapack reference");
             BackpackTestSupport.assertStack(helper, BagInventory.of(bags(recipient).getFirst()).getItem(2), Items.DIAMOND, 43, "Datapack grant uses the decoded fixture, not the held bag");
             String wrongItem = "{\"format\":1,\"backpack\":{\"id\":\"minecraft:stone\",\"count\":1}}";
             try {
@@ -195,7 +196,7 @@ public final class AdminGameTests {
         helper.assertTrue(owner.containerMenu instanceof BackpackMenu, "A real backpack menu is open");
         BackpackMenu menu = (BackpackMenu)owner.containerMenu;
         menu.setCarried(new ItemStack(Items.EMERALD, 11));
-        menu.clicked(0, 0, ContainerInput.PICKUP, owner);
+        menu.clicked(0, 0, ClickType.PICKUP, owner);
         owner.closeContainer();
         helper.runAfterDelay(25, () -> {
             var saved = AdminSavedData.of(helper.getLevel().getServer()).archive(bag.identity()).orElseThrow();
@@ -210,7 +211,7 @@ public final class AdminGameTests {
         var storage = server.overworld().getDataStorage();
         AdminSavedData original = AdminSavedData.of(server);
         AdminSavedData fixture = new AdminSavedData();
-        storage.set(AdminSavedData.TYPE, fixture);
+        storage.set("fabricated_backpacks_administration", fixture);
         operator(author);
         try {
             BagInventory empty = BackpackTestSupport.bag(BackpackTier.LEATHER);
@@ -218,7 +219,7 @@ public final class AdminGameTests {
             occupied.setItem(5, new ItemStack(Items.DIAMOND, 37));
             BagInventory upgraded = BackpackTestSupport.bag(BackpackTier.LEATHER, UpgradeKind.PICKUP);
             BagInventory pending = BackpackTestSupport.bag(BackpackTier.LEATHER);
-            pending.stack().set(WorldComponents.DEFERRED_LOOT, new WorldComponents.DeferredLoot(Identifier.withDefaultNamespace("chests/spawn_bonus_chest"), 47, 1, 0));
+            pending.stack().set(WorldComponents.DEFERRED_LOOT, new WorldComponents.DeferredLoot(ResourceLocation.withDefaultNamespace("chests/spawn_bonus_chest"), 47, 1, 0));
             BagInventory ownedEmpty = BackpackTestSupport.bag(BackpackTier.LEATHER);
             for (BagInventory bag : List.of(empty, occupied, upgraded, pending)) BackpackArchives.record(helper.getLevel(), bag, null);
             BackpackArchives.record(helper.getLevel(), ownedEmpty, author);
@@ -233,12 +234,14 @@ public final class AdminGameTests {
             helper.assertTrue(fixture.archive(empty.identity()).isEmpty() && fixture.archive(pending.identity()).isPresent(), "Empty filtering uses persisted extra contents and unrolled loot");
             fixture.putTemplate("saved_fixture", occupied.stack(), false);
             var folder = Files.createTempDirectory(server.getWorldPath(LevelResource.ROOT), "fb-admin-save-");
-            try (SavedDataStorage writer = new SavedDataStorage(folder, DataFixers.getDataFixer(), helper.getLevel().registryAccess())) {
-                writer.set(AdminSavedData.TYPE, fixture);
-                writer.saveAndJoin();
+            {
+                DimensionDataStorage writer = new DimensionDataStorage(folder.toFile(), DataFixers.getDataFixer(), helper.getLevel().registryAccess());
+                writer.set("fabricated_backpacks_administration", fixture);
+                writer.save();
             }
-            try (SavedDataStorage reader = new SavedDataStorage(folder, DataFixers.getDataFixer(), helper.getLevel().registryAccess())) {
-                AdminSavedData loaded = reader.get(AdminSavedData.TYPE);
+            {
+                DimensionDataStorage reader = new DimensionDataStorage(folder.toFile(), DataFixers.getDataFixer(), helper.getLevel().registryAccess());
+                AdminSavedData loaded = reader.get(AdminSavedData.TYPE, "fabricated_backpacks_administration");
                 helper.assertTrue(loaded != null, "Actual saved-data file reloads through Minecraft's registry-aware codec");
                 helper.assertValueEqual(loaded.archives("").size(), 4, "Every retained archive survives disk save/load");
                 helper.assertValueEqual(BagInventory.of(loaded.archive(occupied.identity()).orElseThrow().backpack()).getItem(5).getCount(), 37, "Archive item counts survive disk reload");
@@ -249,7 +252,7 @@ public final class AdminGameTests {
             helper.assertTrue(fixture.archive(ownedEmpty.identity()).isPresent() && fixture.archives("").size() == 1, "Player-owned empty backups are still recoverable");
             helper.assertTrue(fixture.template("saved_fixture").isPresent(), "Archive cleanup cannot delete templates");
         } catch (java.io.IOException exception) { throw new AssertionError("Saved-data fixture failed", exception); }
-        finally { storage.set(AdminSavedData.TYPE, original); ordinary(author); }
+        finally { storage.set("fabricated_backpacks_administration", original); ordinary(author); }
         helper.succeed();
     }
 
@@ -268,14 +271,14 @@ public final class AdminGameTests {
             AdminSavedData data = AdminSavedData.of(helper.getLevel().getServer());
             helper.assertTrue(BagInventory.of(data.template(name).orElseThrow().backpack()).getItem(4).is(Items.EMERALD), "Rejected overwrite preserves the earlier complete snapshot");
             helper.assertValueEqual(command(author, "fabricatedbackpacks template create " + name + " overwrite"), 1, "Explicit overwrite replaces the template");
-            helper.assertValueEqual(command(author, "fb template give " + name + " " + recipient.getGameProfile().name()), 1, "Actual grant resolves a local template");
+            helper.assertValueEqual(command(author, "fb template give " + name + " " + recipient.getGameProfile().getName()), 1, "Actual grant resolves a local template");
             ItemStack delivered = bags(recipient).getFirst();
             helper.assertFalse(delivered.get(BagComponents.IDENTITY).equals(bag.identity()), "Template grants do not reuse the source UUID");
             BackpackTestSupport.assertStack(helper, BagInventory.of(delivered).getItem(4), Items.DIAMOND, 5, "The replacement template is the one granted");
             BagInventory.of(delivered).setItem(4, ItemStack.EMPTY);
             BackpackTestSupport.assertStack(helper, bag.getItem(4), Items.DIAMOND, 5, "Giving a template never changes held storage");
             helper.assertValueEqual(command(author, "fb template delete " + name), 1, "Local template deletion is explicit");
-            helper.assertValueEqual(command(author, "fb template give " + name + " " + recipient.getGameProfile().name()), 0, "Deleted template cannot grant a replacement bag");
+            helper.assertValueEqual(command(author, "fb template give " + name + " " + recipient.getGameProfile().getName()), 0, "Deleted template cannot grant a replacement bag");
             helper.assertValueEqual(bags(recipient).size(), 1, "Failed template grant leaves existing inventory unchanged");
         } finally { ordinary(author); }
         helper.succeed();

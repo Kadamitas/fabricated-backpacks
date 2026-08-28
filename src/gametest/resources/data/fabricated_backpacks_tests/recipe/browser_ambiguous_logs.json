@@ -1,5 +1,15 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "ingredients": ["#minecraft:logs", "minecraft:oak_log"],
-  "result": {"id": "minecraft:stick", "count": 1}
+  "ingredients": [
+    {
+      "tag": "minecraft:logs"
+    },
+    {
+      "item": "minecraft:oak_log"
+    }
+  ],
+  "result": {
+    "id": "minecraft:stick",
+    "count": 1
+  }
 }

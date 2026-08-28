@@ -6,16 +6,14 @@ import com.kadamitas.fabricatedbackpacks.client.screen.BackpackIconButton.Icon;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackStyle;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.InputWithModifiers;
-import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
@@ -31,18 +29,18 @@ public final class RegistryPickerScreen extends Screen {
     private final Screen previous;
     private final Kind kind;
     private final BooleanSupplier live;
-    private final Consumer<Identifier> selected;
+    private final Consumer<ResourceLocation> selected;
     private final List<EntryButton> entries = new ArrayList<>();
     private EditBox search;
     private BackpackIconButton previousPage, nextPage;
-    private List<Identifier> matches = List.of();
+    private List<ResourceLocation> matches = List.of();
     private String query = "";
     private int left, top, panelWidth, panelHeight, columns, rows, gridX, gridY, page;
     private Object seenIndex;
     private long seenVersion = -1;
     private boolean invalidQuery;
 
-    RegistryPickerScreen(Screen previous, Kind kind, BooleanSupplier live, Consumer<Identifier> selected) {
+    RegistryPickerScreen(Screen previous, Kind kind, BooleanSupplier live, Consumer<ResourceLocation> selected) {
         super(text(kind == Kind.ITEM ? "picker.item" : "picker.fluid"));
         this.previous = Objects.requireNonNull(previous);
         this.kind = Objects.requireNonNull(kind);
@@ -84,7 +82,7 @@ public final class RegistryPickerScreen extends Screen {
     }
 
     @Override public void tick() {
-        if (!validContext()) { minecraft.gui.setScreen(null); return; }
+        if (!validContext()) { minecraft.setScreen(null); return; }
         beginIndex(minecraft);
         Object index = kind == Kind.ITEM ? RecipeBrowserClient.index() : RecipeBrowserClient.fluids();
         long version = kind == Kind.ITEM ? RecipeBrowserClient.index().version() : RecipeBrowserClient.fluids().version();
@@ -100,11 +98,10 @@ public final class RegistryPickerScreen extends Screen {
                 && minecraft.player.isAlive() && live.getAsBoolean();
     }
 
-    @Override public void onClose() { minecraft.gui.setScreen(validContext() ? previous : null); }
+    @Override public void onClose() { minecraft.setScreen(validContext() ? previous : null); }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public boolean isInGameUi() { return true; }
 
-    private void choose(Identifier id) {
+    private void choose(ResourceLocation id) {
         if (validContext()) selected.accept(id);
         onClose();
     }
@@ -144,37 +141,40 @@ public final class RegistryPickerScreen extends Screen {
         return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
     }
 
-    @Override public boolean keyPressed(KeyEvent event) {
-        if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_F) {
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (net.minecraft.client.gui.screens.Screen.hasControlDown() && keyCode == GLFW.GLFW_KEY_F) {
             setFocused(search); search.setFocused(true); return true;
         }
-        return super.keyPressed(event);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    // This screen paints its own backdrop before its native widgets.
+    @Override public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {}
+
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         graphics.fill(0, 0, width, height, 0xC011171D);
         BackpackStyle.frame(graphics, left, top, panelWidth, panelHeight, BackpackStyle.Surface.BODY);
         BackpackStyle.frame(graphics, left + 3, top + 3, panelWidth - 6, 20, BackpackStyle.Surface.TITLE);
-        graphics.text(font, title, left + 8, top + 9, BackpackStyle.TITLE_TEXT, false);
+        graphics.drawString(font, title, left + 8, top + 9, BackpackStyle.TITLE_TEXT, false);
         int pages = Math.ceilDiv(matches.size(), columns * rows);
         String position = (pages == 0 ? 0 : page + 1) + " / " + pages;
-        graphics.text(font, position, left + (panelWidth - font.width(position)) / 2,
+        graphics.drawString(font, position, left + (panelWidth - font.width(position)) / 2,
                 top + panelHeight - 20, BackpackStyle.TEXT, false);
         if (matches.isEmpty()) {
             boolean building = kind == Kind.ITEM ? RecipeBrowserClient.index().itemsBuilding() : RecipeBrowserClient.fluids().building();
             Component message = invalidQuery ? Component.translatable("browser.fabricated_backpacks.query_too_complex")
                     : text(building ? "picker.loading" : "picker.empty");
-            graphics.textWithWordWrap(font, message, left + 10, gridY + 5, panelWidth - 20, BackpackStyle.TEXT, false);
+            graphics.drawWordWrap(font, message, left + 10, gridY + 5, panelWidth - 20, BackpackStyle.TEXT);
         }
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
+        super.render(graphics, mouseX, mouseY, delta);
     }
 
     private final class EntryButton extends AbstractButton {
-        private final Identifier id;
+        private final ResourceLocation id;
         private final ItemStack item;
         private final List<Component> tooltip;
 
-        EntryButton(int x, int y, Identifier id) {
+        EntryButton(int x, int y, ResourceLocation id) {
             super(x, y, 18, 18, kind == Kind.ITEM ? RecipeBrowserClient.index().item(id).getHoverName() : FluidPresentation.name(id));
             this.id = id;
             item = kind == Kind.ITEM ? RecipeBrowserClient.index().item(id) : ItemStack.EMPTY;
@@ -193,16 +193,16 @@ public final class RegistryPickerScreen extends Screen {
             setTooltip(Tooltip.create(fullTooltip));
         }
 
-        @Override public void onPress(InputWithModifiers input) { choose(id); }
+        @Override public void onPress() { choose(id); }
 
-        @Override protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        @Override protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
             BackpackStyle.slot(graphics, getX() + 1, getY() + 1, true);
             graphics.enableScissor(getX() + 1, getY() + 1, getRight() - 1, getBottom() - 1);
             try {
-                if (kind == Kind.ITEM) graphics.fakeItem(item, getX() + 1, getY() + 1);
+                if (kind == Kind.ITEM) graphics.renderFakeItem(item, getX() + 1, getY() + 1);
                 else FluidPresentation.draw(graphics, id, getX() + 1, getY() + 1);
             } finally { graphics.disableScissor(); }
-            if (isHoveredOrFocused()) graphics.outline(getX(), getY(), 18, 18, 0xFFFFD375);
+            if (isHoveredOrFocused()) graphics.renderOutline(getX(), getY(), 18, 18, 0xFFFFD375);
         }
 
         @Override protected void updateWidgetNarration(NarrationElementOutput narration) { defaultButtonNarrationText(narration); }

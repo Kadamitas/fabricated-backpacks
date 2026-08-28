@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:experience_bottle",
-    "T": "minecraft:gold_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:lapis_lazuli"
+    "M": {
+      "item": "minecraft:experience_bottle"
+    },
+    "T": {
+      "item": "minecraft:gold_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:lapis_lazuli"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:xp_pump_upgrade",

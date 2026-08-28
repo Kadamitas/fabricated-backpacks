@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:ender_pearl",
-    "T": "minecraft:gold_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:lead"
+    "M": {
+      "item": "minecraft:ender_pearl"
+    },
+    "T": {
+      "item": "minecraft:gold_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:lead"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:mob_catcher_upgrade",

@@ -7,8 +7,12 @@
     "MMM"
   ],
   "key": {
-    "M": "minecraft:diamond",
-    "U": "fabricated_backpacks:gold_backpack"
+    "M": {
+      "item": "minecraft:diamond"
+    },
+    "U": {
+      "item": "fabricated_backpacks:gold_backpack"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:diamond_backpack",

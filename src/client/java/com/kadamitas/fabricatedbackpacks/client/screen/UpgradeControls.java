@@ -1,10 +1,12 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackIconButton.Icon;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -68,7 +70,7 @@ final class UpgradeControls {
         return switch (operation) {
             case "filter_mode" -> {
                 String initial = !operation.equals(action) || kind.family().equals("void") ? "ALLOW" : "BLOCK";
-                String value = settings.getStringOr(key, initial);
+                String value = NbtAccess.getStringOr(settings, key, initial);
                 yield new Presentation(switch (value) {
                     case "BLOCK" -> Icon.FILTER_BLOCK;
                     case "CONTENTS" -> Icon.FILTER_CONTENTS;
@@ -76,7 +78,7 @@ final class UpgradeControls {
                 }, label(action) + ": " + value, false);
             }
             case "filter_match" -> {
-                String value = settings.getStringOr(key, "ITEM");
+                String value = NbtAccess.getStringOr(settings, key, "ITEM");
                 yield new Presentation(switch (value) {
                     case "NAMESPACE" -> Icon.MATCH_MOD;
                     case "TAGS" -> Icon.MATCH_TAGS;
@@ -84,18 +86,18 @@ final class UpgradeControls {
                 }, label(action) + ": " + value, false);
             }
             case "match_damage", "match_components" -> {
-                boolean match = settings.getBooleanOr(key, false);
+                boolean match = NbtAccess.getBooleanOr(settings, key, false);
                 Icon icon = operation.equals("match_damage")
                         ? match ? Icon.MATCH_DAMAGE : Icon.IGNORE_DAMAGE
                         : match ? Icon.MATCH_COMPONENTS : Icon.IGNORE_COMPONENTS;
                 yield new Presentation(icon, label(action) + (match ? ": On" : ": Off"), false);
             }
-            case "tag_match" -> new Presentation(Icon.TAG, label(action) + ": " + settings.getStringOr(key, "ANY"), false);
+            case "tag_match" -> new Presentation(Icon.TAG, label(action) + ": " + NbtAccess.getStringOr(settings, key, "ANY"), false);
             default -> {
                 Boolean initial = booleanDefault(key);
-                boolean booleanOption = initial != null || settings.getBoolean(key).isPresent();
-                boolean selected = booleanOption && settings.getBooleanOr(key, Boolean.TRUE.equals(initial));
-                String value = booleanOption ? selected ? "On" : "Off" : settings.getStringOr(key, enumDefault(key));
+                boolean booleanOption = initial != null || settings.contains(key, Tag.TAG_ANY_NUMERIC);
+                boolean selected = booleanOption && NbtAccess.getBooleanOr(settings, key, Boolean.TRUE.equals(initial));
+                String value = booleanOption ? selected ? "On" : "Off" : NbtAccess.getStringOr(settings, key, enumDefault(key));
                 yield new Presentation(actionIcon(action), label(action) + (value.isEmpty() ? "" : ": " + value), selected);
             }
         };

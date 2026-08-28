@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.mixin;
 
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeAccess;
-import net.minecraft.world.entity.monster.zombie.ZombieVillager;
+import net.minecraft.world.entity.monster.ZombieVillager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 import java.util.UUID;

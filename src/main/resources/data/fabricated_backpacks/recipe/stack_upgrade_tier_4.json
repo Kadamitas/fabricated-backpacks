@@ -7,8 +7,12 @@
     "MMM"
   ],
   "key": {
-    "M": "minecraft:netherite_ingot",
-    "U": "fabricated_backpacks:stack_upgrade_tier_3"
+    "M": {
+      "item": "minecraft:netherite_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:stack_upgrade_tier_3"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:stack_upgrade_tier_4",

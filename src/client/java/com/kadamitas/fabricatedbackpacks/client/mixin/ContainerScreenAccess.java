@@ -10,4 +10,7 @@ public interface ContainerScreenAccess {
     @Accessor("hoveredSlot") Slot fabricatedBackpacks$hoveredSlot();
     @Accessor("leftPos") int fabricatedBackpacks$left();
     @Accessor("topPos") int fabricatedBackpacks$top();
+    @Accessor("lastClickSlot") void fabricatedBackpacks$lastClickSlot(Slot slot);
+    @Accessor("lastClickTime") void fabricatedBackpacks$lastClickTime(long time);
+    @Accessor("doubleclick") void fabricatedBackpacks$doubleClick(boolean value);
 }

@@ -7,8 +7,12 @@
     "CCC"
   ],
   "key": {
-    "C": "minecraft:copper_ingot",
-    "R": "minecraft:redstone"
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:energy_conduit",

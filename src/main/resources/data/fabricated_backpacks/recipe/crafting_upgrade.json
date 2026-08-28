@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:crafting_table",
-    "T": "minecraft:iron_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:stick"
+    "M": {
+      "item": "minecraft:crafting_table"
+    },
+    "T": {
+      "item": "minecraft:iron_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:stick"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:crafting_upgrade",

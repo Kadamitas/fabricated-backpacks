@@ -7,7 +7,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -21,8 +21,8 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ConduitFilterProtocolTest {
-    private static final Identifier STONE = Identifier.withDefaultNamespace("stone");
-    private static final Identifier WATER = Identifier.withDefaultNamespace("water");
+    private static final ResourceLocation STONE = ResourceLocation.withDefaultNamespace("stone");
+    private static final ResourceLocation WATER = ResourceLocation.withDefaultNamespace("water");
 
     @BeforeAll static void bootstrap() {
         SharedConstants.tryDetectVersion();
@@ -45,7 +45,7 @@ class ConduitFilterProtocolTest {
 
     @Test
     void aViewerSnapshotPreservesTheFixedFaceAndSparsePolicies() {
-        var item = new ConduitFilter(ConduitFilterMode.ALLOW, Map.of(0, STONE, 8, Identifier.parse("removed_mod:part")));
+        var item = new ConduitFilter(ConduitFilterMode.ALLOW, Map.of(0, STONE, 8, ResourceLocation.parse("removed_mod:part")));
         var fluid = new ConduitFilter(ConduitFilterMode.BLOCK, Map.of(4, WATER));
         var snapshot = new ConduitFilterState(17, Direction.SOUTH, item, fluid);
         assertEquals(snapshot, roundTrip(ConduitFilterState.STREAM_CODEC, snapshot));

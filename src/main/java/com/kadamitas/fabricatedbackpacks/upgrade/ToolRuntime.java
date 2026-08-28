@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.upgrade;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
@@ -50,7 +51,7 @@ public final class ToolRuntime {
     public static boolean forEntity(BagInventory bag, ServerPlayer player, LivingEntity target, boolean manual) {
         InstalledUpgrade upgrade = installed(bag, manual);
         if (upgrade == null || BackpackRegistry.isBackpack(player.getMainHandItem())
-                || (upgrade.kind().advanced() && !bag.settings(upgrade).getBooleanOr("swap_weapons", true))) return false;
+                || (upgrade.kind().advanced() && !NbtAccess.getBooleanOr(bag.settings(upgrade), "swap_weapons", true))) return false;
         if (!permits(bag, upgrade, player, manual) || !manual && !heldTool(player)) return false;
         List<Candidate> candidates = new ArrayList<>();
         Container storage = BackpackTraversal.processingInventory(bag, player);
@@ -74,7 +75,7 @@ public final class ToolRuntime {
 
     private static boolean permits(BagInventory bag, InstalledUpgrade upgrade, ServerPlayer player, boolean manual) {
         if (manual || !upgrade.kind().advanced()) return true;
-        return switch (bag.settings(upgrade).getStringOr("tool_mode", "AUTO")) {
+        return switch (NbtAccess.getStringOr(bag.settings(upgrade), "tool_mode", "AUTO")) {
             case "MANUAL" -> false;
             case "ONLY_TOOLS" -> heldTool(player);
             default -> true;
@@ -118,7 +119,7 @@ public final class ToolRuntime {
     private static boolean choose(BagInventory bag, ServerPlayer player, List<Candidate> candidates, Score heldScore, boolean manual) {
         candidates.sort(Comparator.comparing(Candidate::score).reversed().thenComparingInt(Candidate::slot));
         if (manual && !candidates.isEmpty()) {
-            int previous = bag.settings().getIntOr("last_tool_slot", -1);
+            int previous = NbtAccess.getIntOr(bag.settings(), "last_tool_slot", -1);
             int selected = 0;
             for (int index = 0; index < candidates.size(); index++) if (candidates.get(index).slot() == previous) selected = (index + 1) % candidates.size();
             Candidate candidate = candidates.get(selected);
@@ -146,7 +147,7 @@ public final class ToolRuntime {
         List<ItemStack> bagPlan = InventoryMoves.snapshot(storage);
         List<ItemStack> playerPlan = InventoryMoves.snapshot(player.getInventory());
         bagPlan.set(sourceSlot, source.copyWithCount(source.getCount() - count));
-        playerPlan.set(player.getInventory().getSelectedSlot(), source.copyWithCount(count));
+        playerPlan.set(player.getInventory().selected, source.copyWithCount(count));
         ItemStack remaining = InventoryMoves.insertIntoPlan(storage, bagPlan, held, false);
         if (!InventoryMoves.insertIntoPlan(player.getInventory(), playerPlan, remaining, false).isEmpty()) return false;
         // Publish the player plan before modifying its bag carrier's component

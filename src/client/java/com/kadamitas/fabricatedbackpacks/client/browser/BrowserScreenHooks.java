@@ -28,10 +28,10 @@ final class BrowserScreenHooks {
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
             if (!(screen instanceof AbstractContainerScreen<?> container)) return;
             // Fabric recreates these per-screen events on every init, including resize.
-            ScreenKeyboardEvents.allowKeyPress(screen).register((current, event) -> {
-                if (event.hasAltDown() || event.hasControlDown() || event.hasShiftDown() || textInputFocused(current, 0)) return true;
+            ScreenKeyboardEvents.allowKeyPress(screen).register((current, keyCode, scanCode, modifiers) -> {
+                if (net.minecraft.client.gui.screens.Screen.hasAltDown() || net.minecraft.client.gui.screens.Screen.hasControlDown() || net.minecraft.client.gui.screens.Screen.hasShiftDown() || textInputFocused(current, 0)) return true;
                 KeyMapping key = browserKey(client);
-                if (key == null || !key.matches(event)) return true;
+                if (key == null || !key.matches(keyCode, scanCode)) return true;
                 RecipeBrowserClient.open(current);
                 return false;
             });
@@ -44,7 +44,7 @@ final class BrowserScreenHooks {
             browser.setTooltip(Tooltip.create(key == null ? Component.translatable("browser.fabricated_backpacks.open")
                     : Component.translatable("browser.fabricated_backpacks.open_key", key.getTranslatedKeyMessage())));
             browser.active = ClientPlayNetworking.canSend(BrowserCatalogRequest.TYPE);
-            Screens.getWidgets(screen).add(browser);
+            Screens.getButtons(screen).add(browser);
         });
     }
 

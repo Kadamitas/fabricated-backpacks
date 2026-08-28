@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.settings;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
@@ -10,10 +12,9 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -45,8 +46,9 @@ public final class SettingsRuntime {
     private static CompoundTag playerData(ServerPlayer player) { return player.getAttachedOrElse(PLAYER_SETTINGS, CustomData.EMPTY).copyTag(); }
 
     public static CompoundTag effective(BagInventory bag, ServerPlayer player) {
-        CompoundTag result = playerData(player).getCompoundOrEmpty("defaults").copy();
-        bag.settings().entrySet().forEach(entry -> result.put(entry.getKey(), entry.getValue().copy()));
+        CompoundTag result = NbtAccess.getCompoundOrEmpty(playerData(player), "defaults").copy();
+        CompoundTag bagSettings = bag.settings();
+        bagSettings.getAllKeys().forEach(key -> result.put(key, bagSettings.get(key).copy()));
         return result;
     }
     public static CustomData view(BagInventory bag, ServerPlayer player) {
@@ -62,7 +64,7 @@ public final class SettingsRuntime {
         return CustomData.of(result);
     }
     public static List<String> names(ServerPlayer player) {
-        List<String> names = new ArrayList<>(playerData(player).getCompoundOrEmpty("templates").keySet().stream().sorted().toList());
+        List<String> names = new ArrayList<>(NbtAccess.getCompoundOrEmpty(playerData(player), "templates").getAllKeys().stream().sorted().toList());
         player.level().getServer().getResourceManager().listResources("backpack_settings", id -> id.getPath().endsWith(".snbt")).keySet().stream()
                 .sorted().map(id -> id.getNamespace() + ":" + id.getPath().substring("backpack_settings/".length(), id.getPath().length() - 5)).forEach(names::add);
         return List.copyOf(names);
@@ -72,20 +74,20 @@ public final class SettingsRuntime {
             switch (action) {
                 case "setting" -> {
                     if (text.equals("sort_order") || !PREFERENCES.contains(text) && !Set.of("inception_nested_first", "inception_inner_upgrades", "inception_outer_inventory").contains(text)) return false;
-                    boolean current = effective(bag, player).getBooleanOr(text, text.equals("keep_tab") || text.equals("keep_search") || text.startsWith("inception_"));
+                    boolean current = NbtAccess.getBooleanOr(effective(bag, player), text, text.equals("keep_tab") || text.equals("keep_search") || text.startsWith("inception_"));
                     bag.updateSettings(tag -> tag.putBoolean(text, !current));
                 }
                 case "search" -> {
                     if (text.length() > 120 || text.codePoints().anyMatch(Character::isISOControl)) return false;
-                    boolean remember = effective(bag, player).getBooleanOr("keep_search", true);
+                    boolean remember = NbtAccess.getBooleanOr(effective(bag, player), "keep_search", true);
                     bag.updateSettings(tag -> { if (remember) tag.putString("last_search", text); else tag.remove("last_search"); });
                 }
                 case "display_slot" -> {
                     if (value < -1 || value >= bag.getContainerSize()) return false;
                     bag.updateSettings(tag -> tag.putInt("display_slot", value));
                 }
-                case "display_rotation" -> bag.updateSettings(tag -> tag.putInt("display_rotation", Math.floorMod(tag.getIntOr("display_rotation", 0) + 45, 360)));
-                case "display_depth" -> bag.updateSettings(tag -> tag.putInt("display_depth", Math.clamp(tag.getIntOr("display_depth", 0) + Math.clamp(value, -1, 1), -16, 16)));
+                case "display_rotation" -> bag.updateSettings(tag -> tag.putInt("display_rotation", Math.floorMod(NbtAccess.getIntOr(tag, "display_rotation", 0) + 45, 360)));
+                case "display_depth" -> bag.updateSettings(tag -> tag.putInt("display_depth", Math.clamp(NbtAccess.getIntOr(tag, "display_depth", 0) + Math.clamp(value, -1, 1), -16, 16)));
                 case "no_sort_color" -> {
                     if (!text.matches("#?[0-9a-fA-F]{6}")) return false;
                     int color = Integer.parseInt(text.startsWith("#") ? text.substring(1) : text, 16);
@@ -100,7 +102,7 @@ public final class SettingsRuntime {
                 case "defaults_use" -> bag.updateSettings(tag -> PREFERENCES.forEach(tag::remove));
                 case "template_save" -> {
                     if (!validName(text)) { tell(player, "Template name: 1–48 letters, numbers, spaces, _ or -."); return false; }
-                    CompoundTag data = playerData(player), templates = data.getCompoundOrEmpty("templates");
+                    CompoundTag data = playerData(player), templates = NbtAccess.getCompoundOrEmpty(data, "templates");
                     if (!templates.contains(text) && templates.size() >= MAX_TEMPLATES) { tell(player, "At most 32 personal templates are allowed."); return false; }
                     var encoded = SettingsTemplate.CODEC.encodeStart(RegistryOps.create(NbtOps.INSTANCE, player.registryAccess()), SettingsTemplate.capture(bag)).getOrThrow();
                     if (encoded.sizeInBytes() > MAX_BYTES) { tell(player, "Template is too large."); return false; }
@@ -121,13 +123,13 @@ public final class SettingsRuntime {
                 }
                 case "template_delete" -> {
                     if (!validName(text)) return false;
-                    CompoundTag data = playerData(player), templates = data.getCompoundOrEmpty("templates");
+                    CompoundTag data = playerData(player), templates = NbtAccess.getCompoundOrEmpty(data, "templates");
                     templates.remove(text); data.put("templates", templates);
                     player.setAttached(PLAYER_SETTINGS, CustomData.of(data));
                     tell(player, "Removed personal template: " + text);
                 }
                 case "template_export" -> {
-                    if (!player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) { tell(player, "Exporting a server data pack requires operator permission."); return false; }
+                    if (!player.hasPermissions(2)) { tell(player, "Exporting a server data pack requires operator permission."); return false; }
                     if (!validName(text)) { tell(player, "Invalid export name."); return false; }
                     export(player, text, SettingsTemplate.capture(bag));
                     tell(player, "Exported settings data pack. Enable it with /datapack, then /reload.");
@@ -146,17 +148,17 @@ public final class SettingsRuntime {
         var ops = RegistryOps.create(NbtOps.INSTANCE, player.registryAccess());
         if (!name.contains(":")) {
             if (!validName(name)) return null;
-            CompoundTag templates = playerData(player).getCompoundOrEmpty("templates");
+            CompoundTag templates = NbtAccess.getCompoundOrEmpty(playerData(player), "templates");
             return templates.contains(name) ? SettingsTemplate.CODEC.parse(ops, templates.get(name)).getOrThrow() : null;
         }
-        Identifier id = Identifier.tryParse(name);
+        ResourceLocation id = ResourceLocation.tryParse(name);
         if (id == null) return null;
-        var resource = player.level().getServer().getResourceManager().getResource(Identifier.fromNamespaceAndPath(id.getNamespace(), "backpack_settings/" + id.getPath() + ".snbt"));
+        var resource = player.level().getServer().getResourceManager().getResource(ResourceLocation.fromNamespaceAndPath(id.getNamespace(), "backpack_settings/" + id.getPath() + ".snbt"));
         if (resource.isEmpty()) return null;
         try (var stream = resource.get().open()) {
             byte[] bytes = stream.readNBytes(MAX_BYTES + 1);
             if (bytes.length > MAX_BYTES) throw new IOException("Template exceeds128KiB");
-            return SettingsTemplate.CODEC.parse(ops, TagParser.parseCompoundFully(new String(bytes, StandardCharsets.UTF_8))).getOrThrow();
+            return SettingsTemplate.CODEC.parse(ops, TagParser.parseTag(new String(bytes, StandardCharsets.UTF_8))).getOrThrow();
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException exception) { throw new IOException("Invalid template SNBT", exception); }
     }
     private static void export(ServerPlayer player, String name, SettingsTemplate template) throws IOException {
@@ -169,12 +171,12 @@ public final class SettingsRuntime {
         if (encoded.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) throw new IOException("Template exceeds128KiB");
         Path content = pack.resolve("data/fabricated_backpacks/backpack_settings");
         Files.createDirectories(content);
-        var format = net.minecraft.SharedConstants.getCurrentVersion().packVersion(net.minecraft.server.packs.PackType.SERVER_DATA);
-        var metadata = new net.minecraft.server.packs.metadata.pack.PackMetadataSection(
-                Component.literal("Fabricated Backpacks settings template"), new net.minecraft.util.InclusiveRange<>(format, format));
+        int format = net.minecraft.SharedConstants.getCurrentVersion().getPackVersion(net.minecraft.server.packs.PackType.SERVER_DATA);
+        var metadata = new com.google.gson.JsonObject();
+        metadata.addProperty("pack_format", format);
+        metadata.addProperty("description", "Fabricated Backpacks settings template");
         var manifest = new com.google.gson.JsonObject();
-        manifest.add("pack", net.minecraft.server.packs.metadata.pack.PackMetadataSection.SERVER_TYPE.codec()
-                .encodeStart(com.mojang.serialization.JsonOps.INSTANCE, metadata).getOrThrow());
+        manifest.add("pack", metadata);
         Files.writeString(pack.resolve("pack.mcmeta"), manifest.toString(), StandardOpenOption.CREATE_NEW);
         Files.writeString(content.resolve(slug + ".snbt"), encoded, StandardOpenOption.CREATE_NEW);
     }

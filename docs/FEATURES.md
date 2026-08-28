@@ -84,7 +84,7 @@ and inventory transfers. Search changes presentation, not storage coordinates.
 The native menu continues to validate page, cell, source bag and session on the
 server while a filtered view is open.
 
-Default keys are **B** to open a backpack, **G** for equipment, **O** for the
+Default keys are **B** to open a backpack, **G** for equipment, **V** for the
 recipe browser and **K** for manual tool selection. **C** transfers against the
 looked-at inventory using the first active deposit/restock upgrade in the first
 resolved backpack. Separate deposit and restock bindings are available but

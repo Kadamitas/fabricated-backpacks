@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.config.ConfigFile;
 import com.kadamitas.fabricatedbackpacks.config.ServerConfig;
@@ -32,7 +33,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -97,17 +98,19 @@ public final class ConfigGameTests {
             bag.toggleNoSort(80);
             bag.updateSettings(tag -> tag.putInt("display_slot", 80));
             var player = BackpackTestSupport.player(helper);
-            var chicken = helper.spawn(EntityTypes.CHICKEN, new BlockPos(5, 1, 5));
+            var chicken = helper.spawn(EntityType.CHICKEN, new BlockPos(5, 1, 5));
             chicken.setNoAi(true);
             helper.assertTrue(MobCapture.capture(bag, chicken, player), "A real chicken occupies the only free rectangle in the last two rows");
-            int[] before = bag.settings().getIntArray("captured_slots").orElseThrow();
+            int[] before = bag.settings().getIntArray("captured_slots");
             helper.assertValueEqual(before.length, 4, "The chicken uses a complete rectangular footprint");
-            bag.stack().set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(List.of(2.5f), List.of(true), List.of("retained"), List.of(1, 2)));
+            bag.stack().set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(12345));
+            var unrelated = new net.minecraft.nbt.CompoundTag();
+            unrelated.putFloat("model_float", 2.5F); unrelated.putBoolean("model_flag", true); unrelated.putString("model_string", "retained");
+            bag.stack().set(DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(unrelated));
             bag.dye(0x13579B, 0x2468AC);
-            CustomModelData dyed = bag.stack().get(DataComponents.CUSTOM_MODEL_DATA);
-            helper.assertValueEqual(dyed.floats(), List.of(2.5f), "Dye preserves model floats");
-            helper.assertValueEqual(dyed.flags(), List.of(true), "Dye preserves model flags");
-            helper.assertValueEqual(dyed.strings(), List.of("retained"), "Dye preserves model strings");
+            helper.assertValueEqual(bag.stack().get(DataComponents.CUSTOM_MODEL_DATA), new CustomModelData(12345), "Dye preserves native scalar model data");
+            helper.assertValueEqual(bag.stack().get(DataComponents.CUSTOM_DATA), net.minecraft.world.item.component.CustomData.of(unrelated), "Dye preserves unrelated float, flag and string metadata");
+            helper.assertValueEqual(bag.stack().get(BagComponents.COLORS), new com.kadamitas.fabricatedbackpacks.item.BackpackColors(0x13579B, 0x2468AC), "Both separate dye components have their exact new values");
 
             ItemStack saved = BackpackTestSupport.roundTrip(helper.getLevel(), bag.stack());
             BackpackConfig.configure(ConfigFile.decode("{\"capacities\":{\"backpack\":{\"slots\":82,\"upgrades\":0}}}"));
@@ -117,10 +120,10 @@ public final class ConfigGameTests {
             BackpackTestSupport.assertStack(helper, widened.getItem(104), Items.STONE, 1, "The last old cell retains its row and column");
             helper.assertTrue(widened.stack().getOrDefault(BagComponents.MEMORY, InventorySnapshot.EMPTY).entries().stream().anyMatch(entry -> entry.slot() == 104),
                     "Memory reservations move with the cell");
-            helper.assertTrue(Arrays.stream(widened.settings().getIntArray("no_sort").orElseThrow()).anyMatch(slot -> slot == 104), "No-sort cells move with the grid");
-            helper.assertValueEqual(widened.settings().getIntOr("display_slot", -1), 104, "Exterior display follows its item cell");
+            helper.assertTrue(Arrays.stream(widened.settings().getIntArray("no_sort")).anyMatch(slot -> slot == 104), "No-sort cells move with the grid");
+            helper.assertValueEqual(NbtAccess.getIntOr(widened.settings(), "display_slot", -1), 104, "Exterior display follows its item cell");
             int[] expected = Arrays.stream(before).map(slot -> slot / 9 * 12 + slot % 9).sorted().toArray();
-            helper.assertTrue(Arrays.equals(expected, widened.settings().getIntArray("captured_slots").orElseThrow()), "Captured rectangles reflow without changing their shape");
+            helper.assertTrue(Arrays.equals(expected, widened.settings().getIntArray("captured_slots")), "Captured rectangles reflow without changing their shape");
             helper.assertTrue(MobCapture.release(widened, 0, player, Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 2)))),
                     "The real captured entity remains releasable after reflow and serialization");
             helper.assertValueEqual(BackpackTestSupport.count(widened, Items.STONE), 77, "Reflow conserves every ordinary item");
@@ -143,24 +146,24 @@ public final class ConfigGameTests {
             helper.assertTrue(bag.canPlaceItem(0, new ItemStack(Items.DIAMOND)), "An unrelated item remains insertable");
             helper.assertValueEqual(bag.insert(new ItemStack(Items.STONE, 23), false).getCount(), 23, "Rejected insertion returns the whole resource");
             var player = BackpackTestSupport.player(helper);
-            var blocked = helper.spawn(EntityTypes.CHICKEN, new BlockPos(5, 1, 5));
+            var blocked = helper.spawn(EntityType.CHICKEN, new BlockPos(5, 1, 5));
             helper.assertFalse(MobCapture.capture(bag, blocked, player), "A blocked entity remains live");
             helper.assertTrue(blocked.isAlive(), "Rejected capture does not remove the entity");
             blocked.discard();
-            var zombie = helper.spawn(EntityTypes.ZOMBIE, new BlockPos(5, 1, 5));
+            var zombie = helper.spawn(EntityType.ZOMBIE, new BlockPos(5, 1, 5));
             zombie.setNoAi(true); zombie.setHealth(2);
             helper.assertTrue(MobCapture.capture(bag, zombie, player), "Passive classification wins over a simultaneous hostile override");
-            var villager = helper.spawn(EntityTypes.VILLAGER, new BlockPos(5, 1, 5));
+            var villager = helper.spawn(EntityType.VILLAGER, new BlockPos(5, 1, 5));
             villager.setHealth(2);
             helper.assertFalse(MobCapture.capture(bag, villager, player), "Configured inventory-entity exclusion rejects a real villager");
             villager.discard();
 
             BackpackConfig.configure(ConfigFile.decode("{\"capture\":{\"blockedEntities\":[\"#minecraft:undead\"],\"passiveEntities\":[\"minecraft:zombie\"]}}"));
-            var undead = helper.spawn(EntityTypes.ZOMBIE, new BlockPos(5, 1, 5));
+            var undead = helper.spawn(EntityType.ZOMBIE, new BlockPos(5, 1, 5));
             undead.setNoAi(true); undead.setHealth(2);
             helper.assertFalse(MobCapture.capture(bag, undead, player), "An entity tag blocklist remains stronger than passive classification");
             undead.discard();
-            helper.assertFalse(bag.settings().getListOrEmpty("captured_entities").isEmpty(), "Rejected attempts preserve the earlier captured entity");
+            helper.assertFalse(NbtAccess.getListOrEmpty(bag.settings(), "captured_entities").isEmpty(), "Rejected attempts preserve the earlier captured entity");
         } finally { BackpackConfig.configure(previous); }
         helper.succeed();
     }
@@ -174,15 +177,15 @@ public final class ConfigGameTests {
             com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.set(player, new ItemStack(BackpackRegistry.item(BackpackTier.LEATHER)));
             helper.assertValueEqual(BurdenRuntime.backpackCount(player), 7L, "Burden counts physical inventory and native equipment even when only worn upgrades tick");
             BurdenRuntime.tick(player);
-            var effect = player.getEffect(net.minecraft.world.effect.MobEffects.SLOWNESS);
+            var effect = player.getEffect(net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN);
             helper.assertTrue(effect != null && effect.getAmplifier() == 3, "Each backpack over the three-bag allowance adds one effect level");
-            player.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.SLOWNESS, 600, 5));
+            player.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN, 600, 5));
             BurdenRuntime.tick(player);
-            helper.assertValueEqual(player.getEffect(net.minecraft.world.effect.MobEffects.SLOWNESS).getAmplifier(), 5, "Burden does not weaken a stronger existing potion effect");
+            helper.assertValueEqual(player.getEffect(net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN).getAmplifier(), 5, "Burden does not weaken a stronger existing potion effect");
             for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) player.getInventory().setItem(slot, ItemStack.EMPTY);
             com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.set(player, ItemStack.EMPTY);
             BurdenRuntime.tick(player);
-            helper.assertValueEqual(player.getEffect(net.minecraft.world.effect.MobEffects.SLOWNESS).getAmplifier(), 5, "Removing bags does not remove another effect's provenance");
+            helper.assertValueEqual(player.getEffect(net.minecraft.world.effect.MobEffects.MOVEMENT_SLOWDOWN).getAmplifier(), 5, "Removing bags does not remove another effect's provenance");
         } finally { BackpackConfig.configure(previous); }
         helper.succeed();
     }
@@ -259,7 +262,7 @@ public final class ConfigGameTests {
             assertStack(helper, legacy.ghost(cooker, 15), Items.CHARCOAL, 1, "All legacy fuel positions retain their relative order");
             legacy.setFilter(cooker, 11, new ItemStack(Items.RAW_GOLD));
             legacy.setFilter(cooker, 17, new ItemStack(Items.BAMBOO));
-            helper.assertValueEqual(legacy.settings(cooker).getIntOr("cooking_input_filter_slots", -1), 12, "Editing migrates the actual saved input geometry");
+            helper.assertValueEqual(NbtAccess.getIntOr(legacy.settings(cooker), "cooking_input_filter_slots", -1), 12, "Editing migrates the actual saved input geometry");
             SettingsTemplate template = SettingsTemplate.capture(legacy);
             var ops = helper.getLevel().registryAccess().createSerializationContext(NbtOps.INSTANCE);
             template = SettingsTemplate.CODEC.parse(ops, SettingsTemplate.CODEC.encodeStart(ops, template).getOrThrow()).getOrThrow();
@@ -278,7 +281,7 @@ public final class ConfigGameTests {
             target.setItem(2, new ItemStack(Items.RAW_GOLD));
             CookingRuntime.tick(target, installed, helper.getLevel());
             helper.assertTrue(target.upgradeInventory(installed).getItem(CookingRuntime.INPUT).is(Items.RAW_IRON), "Auto cooking uses the remapped input filter against a real recipe");
-            helper.assertTrue(target.settings(installed).getBooleanOr("burning", false), "The remapped fuel filter supplies actual vanilla fuel");
+            helper.assertTrue(NbtAccess.getBooleanOr(target.settings(installed), "burning", false), "The remapped fuel filter supplies actual vanilla fuel");
             assertStack(helper, target.getItem(2), Items.RAW_GOLD, 1, "A trimmed source filter cannot authorize unrelated input");
         } finally { BackpackConfig.configure(previous); }
         helper.succeed();
@@ -299,10 +302,10 @@ public final class ConfigGameTests {
                 bag.upgradeInventory(upgrade).setItem(CookingRuntime.INPUT, input);
                 bag.upgradeInventory(upgrade).setItem(CookingRuntime.FUEL, new ItemStack(Items.COAL));
                 bag.updateSettings(upgrade, state -> { state.putDouble("cooking_speed", 64); state.putDouble("fuel_efficiency", 64); });
-                int duration = (int) Math.ceil(recipe.cookingTime() / rules.upgrades().cooking().speed());
+                int duration = (int) Math.ceil(recipe.getCookingTime() / rules.upgrades().cooking().speed());
                 boolean quick = kind == UpgradeKind.SMOKING || kind == UpgradeKind.AUTO_SMOKING || kind == UpgradeKind.BLASTING || kind == UpgradeKind.AUTO_BLASTING;
-                int fuel = (int) Math.floor(helper.getLevel().fuelValues().burnDuration(new ItemStack(Items.COAL)) * rules.upgrades().cooking().fuelEfficiency() * (quick ? .5 : 1));
-                cases.add(new CookingCase(bag, upgrade, rules, duration, fuel, recipe.assemble(new net.minecraft.world.item.crafting.SingleRecipeInput(input)).getItem()));
+                int fuel = (int) Math.floor(net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.getFuel().getOrDefault(Items.COAL, 0) * rules.upgrades().cooking().fuelEfficiency() * (quick ? .5 : 1));
+                cases.add(new CookingCase(bag, upgrade, rules, duration, fuel, recipe.assemble(new net.minecraft.world.item.crafting.SingleRecipeInput(input), helper.getLevel().registryAccess()).getItem()));
             }
         }
         int[] elapsed = {0};
@@ -315,11 +318,11 @@ public final class ConfigGameTests {
                     BackpackConfig.configure(test.rules());
                     CookingRuntime.tick(test.bag(), test.upgrade(), helper.getLevel());
                     var state = test.bag().settings(test.upgrade());
-                    helper.assertValueEqual(state.getIntOr("cook_total", -1), test.duration(), "Server speed overrides a forged item multiplier for " + test.upgrade().kind());
-                    helper.assertValueEqual(state.getIntOr("burn_total", -1), test.fuel(), "Server efficiency overrides a forged item multiplier for " + test.upgrade().kind());
+                    helper.assertValueEqual(NbtAccess.getIntOr(state, "cook_total", -1), test.duration(), "Server speed overrides a forged item multiplier for " + test.upgrade().kind());
+                    helper.assertValueEqual(NbtAccess.getIntOr(state, "burn_total", -1), test.fuel(), "Server efficiency overrides a forged item multiplier for " + test.upgrade().kind());
                     if (elapsed[0] == test.duration()) {
                         helper.assertValueEqual(count(test.bag(), test.result()) + count(test.bag().upgradeInventory(test.upgrade()), test.result()), 1, "Exactly one recipe completes at the configured tick boundary");
-                        helper.assertValueEqual(state.getIntOr("burn_remaining", -1), test.fuel() - test.duration(), "Fuel is spent once per active vanilla tick");
+                        helper.assertValueEqual(NbtAccess.getIntOr(state, "burn_remaining", -1), test.fuel() - test.duration(), "Fuel is spent once per active vanilla tick");
                         helper.assertValueEqual(count(test.bag().upgradeInventory(test.upgrade()), Items.COAL), 0, "Exactly one physical fuel item is consumed");
                     } else helper.assertValueEqual(count(test.bag(), test.result()) + count(test.bag().upgradeInventory(test.upgrade()), test.result()), 0, "The configured speed cannot produce an early result");
                 }
@@ -399,13 +402,13 @@ public final class ConfigGameTests {
             pump.updateSettings(pumping, tag -> tag.putBoolean("handlers", false));
             player.getInventory().setItem(0, ItemStack.EMPTY);
             ResourceRuntime.tick(pump, helper.getLevel(), origin, player);
-            helper.assertValueEqual(pump.settings(pumping).getLongOr("next_work", 0), now + 13, "An idle pump uses its configured work delay");
+            helper.assertValueEqual(NbtAccess.getLongOr(pump.settings(pumping), "next_work", 0), now + 13, "An idle pump uses its configured work delay");
             pump.updateSettings(pumping, tag -> tag.putLong("next_work", 0));
             player.getInventory().setItem(0, new ItemStack(Items.WATER_BUCKET));
             ResourceRuntime.tick(pump, helper.getLevel(), origin, player);
             assertStack(helper, player.getInventory().getItem(0), Items.BUCKET, 1, "Configured hand work exchanges one real bucket");
-            helper.assertValueEqual(pump.settings(pumping).getLongOr("next_work", 0), now + 7, "Successful hand work uses its configured cooldown");
-            helper.assertValueEqual(pump.settings(pumping).getLongOr("fast_until", 0), now + 17, "Fast polling uses the configured finite grace period");
+            helper.assertValueEqual(NbtAccess.getLongOr(pump.settings(pumping), "next_work", 0), now + 7, "Successful hand work uses its configured cooldown");
+            helper.assertValueEqual(NbtAccess.getLongOr(pump.settings(pumping), "fast_until", 0), now + 17, "Fast polling uses the configured finite grace period");
             helper.getLevel().setBlockAndUpdate(origin.east(), Blocks.WATER.defaultBlockState());
             pump.updateSettings(pumping, tag -> { tag.putBoolean("hands", false); tag.putBoolean("world", true); tag.putLong("next_work", 0); });
             ResourceRuntime.tick(pump, helper.getLevel(), origin, player);
@@ -415,7 +418,7 @@ public final class ConfigGameTests {
             ResourceRuntime.tick(pump, helper.getLevel(), origin, player);
             helper.assertTrue(helper.getLevel().getBlockState(origin.east()).isAir(), "The same real source becomes available inside radius two");
             helper.assertValueEqual(ResourceRuntime.tankStoredMb(pump, 0), 2_000L, "Hand and world pumping conserve both full buckets");
-            helper.assertValueEqual(pump.settings(pumping).getLongOr("next_work", 0), now + 12, "World delay combines configured handler cadence with actual distance");
+            helper.assertValueEqual(NbtAccess.getLongOr(pump.settings(pumping), "next_work", 0), now + 12, "World delay combines configured handler cadence with actual distance");
         } finally { BackpackConfig.configure(previous); }
         helper.succeed();
     }
@@ -437,14 +440,14 @@ public final class ConfigGameTests {
             UpgradeEngine.tick(magnet, helper.getLevel(), origin, null);
             helper.assertFalse(near.isAlive(), "A basic magnet collects inside its configured volume");
             helper.assertTrue(middle.isAlive() && far.isAlive(), "Basic magnet collection does not exceed its server range");
-            helper.assertValueEqual(magnet.settings(upgrade(magnet, 0)).getLongOr("magnet_next", 0), now + 7, "Successful magnet work uses the configured cadence");
+            helper.assertValueEqual(NbtAccess.getLongOr(magnet.settings(upgrade(magnet, 0)), "magnet_next", 0), now + 7, "Successful magnet work uses the configured cadence");
             BagInventory advanced = bag(BackpackTier.LEATHER, UpgradeKind.ADVANCED_MAGNET);
             UpgradeEngine.tick(advanced, helper.getLevel(), origin, null);
             helper.assertFalse(middle.isAlive(), "The advanced magnet uses its independently configured larger range");
             helper.assertTrue(far.isAlive(), "The advanced range is also bounded");
             BagInventory idle = bag(BackpackTier.LEATHER, UpgradeKind.MAGNET);
             UpgradeEngine.tick(idle, helper.getLevel(), origin, null);
-            helper.assertValueEqual(idle.settings(upgrade(idle, 0)).getLongOr("magnet_next", 0), now + 13, "Failed magnet work backs off by the configured interval");
+            helper.assertValueEqual(NbtAccess.getLongOr(idle.settings(upgrade(idle, 0)), "magnet_next", 0), now + 13, "Failed magnet work backs off by the configured interval");
             far.discard();
 
             var player = player(helper);
@@ -454,12 +457,12 @@ public final class ConfigGameTests {
             feeding.setItem(0, new ItemStack(Items.APPLE, 2));
             ConsumptionRuntime.feed(feeding, upgrade(feeding, 0), helper.getLevel(), origin, null);
             assertStack(helper, feeding.getItem(0), Items.APPLE, 2, "Placed feeding ignores players outside the configured volume");
-            helper.assertValueEqual(feeding.settings(upgrade(feeding, 0)).getLongOr("feeding_next", 0), now + 17, "Feeding idle time comes from server configuration");
+            helper.assertValueEqual(NbtAccess.getLongOr(feeding.settings(upgrade(feeding, 0)), "feeding_next", 0), now + 17, "Feeding idle time comes from server configuration");
             player.setPos(Vec3.atCenterOf(origin).add(1, 0, 0));
             feeding.updateSettings(upgrade(feeding, 0), tag -> tag.putLong("feeding_next", 0));
             ConsumptionRuntime.feed(feeding, upgrade(feeding, 0), helper.getLevel(), origin, null);
             assertStack(helper, feeding.getItem(0), Items.APPLE, 1, "Entering the configured feeding volume consumes exactly one food");
-            helper.assertValueEqual(feeding.settings(upgrade(feeding, 0)).getLongOr("feeding_next", 0), now + 7, "A still-hungry player uses the configured shorter feeding delay");
+            helper.assertValueEqual(NbtAccess.getLongOr(feeding.settings(upgrade(feeding, 0)), "feeding_next", 0), now + 7, "A still-hungry player uses the configured shorter feeding delay");
 
             BagInventory refill = bag(BackpackTier.LEATHER, UpgradeKind.REFILL);
             refill.setItem(0, new ItemStack(Items.TORCH, 4)); refill.setFilter(upgrade(refill, 0), 0, new ItemStack(Items.TORCH));
@@ -513,7 +516,7 @@ public final class ConfigGameTests {
             helper.assertTrue(first.isRemoved(), "Basic XP collection uses the configured radius");
             helper.assertFalse(distant.isRemoved(), "The basic XP radius excludes a more distant orb");
             helper.assertValueEqual(ResourceRuntime.tankStoredMb(magnet, 0), 100L, "Five real orb points become exactly 100 mB");
-            helper.assertValueEqual(magnet.settings(control).getLongOr("magnet_xp_next", 0), started + 7, "XP uses the configured active cadence independently of item work");
+            helper.assertValueEqual(NbtAccess.getLongOr(magnet.settings(control), "magnet_xp_next", 0), started + 7, "XP uses the configured active cadence independently of item work");
             ResourceRuntime.tick(advanced, helper.getLevel(), origin, null);
             helper.assertTrue(distant.isRemoved(), "Advanced XP collection uses its configured larger radius");
             helper.assertValueEqual(ResourceRuntime.tankStoredMb(advanced, 0), 140L, "Advanced collection conserves all seven points");
@@ -535,13 +538,13 @@ public final class ConfigGameTests {
                 } else {
                     helper.assertTrue(pending.isRemoved(), "XP work resumes at the configured seven-tick deadline, not a fixed ten-tick boundary");
                     helper.assertValueEqual(ResourceRuntime.tankStoredMb(magnet, 0), 160L, "Both XP collections conserve eight total points");
-                    if (elapsed < 14) helper.assertValueEqual(magnet.settings(control).getLongOr("magnet_xp_next", 0), started + 14, "Successful repeated XP work keeps its active cadence");
+                    if (elapsed < 14) helper.assertValueEqual(NbtAccess.getLongOr(magnet.settings(control), "magnet_xp_next", 0), started + 14, "Successful repeated XP work keeps its active cadence");
                 }
                 if (elapsed >= 14) {
-                    helper.assertValueEqual(magnet.settings(control).getLongOr("magnet_xp_next", 0), started + 27, "An empty scan changes to the configured idle cadence");
+                    helper.assertValueEqual(NbtAccess.getLongOr(magnet.settings(control), "magnet_xp_next", 0), started + 27, "An empty scan changes to the configured idle cadence");
                     magnet.updateSettings(control, tag -> tag.putLong("magnet_xp_next", Long.MAX_VALUE));
                     ResourceRuntime.tick(magnet, helper.getLevel(), origin, null);
-                    helper.assertValueEqual(magnet.settings(control).getLongOr("magnet_xp_next", 0), helper.getLevel().getGameTime() + 13, "A stale future clock cannot suspend XP collection indefinitely");
+                    helper.assertValueEqual(NbtAccess.getLongOr(magnet.settings(control), "magnet_xp_next", 0), helper.getLevel().getGameTime() + 13, "A stale future clock cannot suspend XP collection indefinitely");
                     helper.succeed();
                 }
             } finally { BackpackConfig.configure(beforeTick); }
@@ -549,8 +552,8 @@ public final class ConfigGameTests {
     }
 
     private static ExperienceOrb configOrb(GameTestHelper helper, BlockPos origin, double x, int points) {
-        ExperienceOrb orb = new ExperienceOrb(helper.getLevel(), new Vec3(origin.getX() + x, origin.getY() + .5, origin.getZ() + .5), Vec3.ZERO, points);
-        // The constructor's third vector biases random launch direction; it does not set velocity.
+        ExperienceOrb orb = new ExperienceOrb(helper.getLevel(), origin.getX() + x, origin.getY() + .5, origin.getZ() + .5, points);
+        // The native constructor assigns random launch velocity even when the fixture has no gravity.
         orb.setNoGravity(true);
         orb.setDeltaMovement(Vec3.ZERO);
         helper.getLevel().addFreshEntity(orb);
@@ -571,8 +574,8 @@ public final class ConfigGameTests {
             bag.upgradeInventory(upgrade).setItem(5, new ItemStack(Items.MUSIC_DISC_BLOCKS));
             JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "play");
             JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "next");
-            helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 5, "The original twelve-slot session has active audio and history");
-            originalFinish = bag.settings(upgrade).getLongOr("song_finish", 0);
+            helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade), "active_slot", -1), 5, "The original twelve-slot session has active audio and history");
+            originalFinish = NbtAccess.getLongOr(bag.settings(upgrade), "song_finish", 0);
         } finally { BackpackConfig.configure(previous); }
         helper.runAfterDelay(2, () -> {
             ServerConfig beforeTick = BackpackConfig.get();
@@ -583,25 +586,25 @@ public final class ConfigGameTests {
                 expanded.setItem(14, new ItemStack(Items.MUSIC_DISC_FAR));
                 expanded.setItem(15, new ItemStack(Items.MUSIC_DISC_CHIRP));
                 JukeboxRuntime.tick(bag, upgrade, helper.getLevel(), position, null);
-                helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 5, "Growing an existing session retains its unchanged active disc");
-                helper.assertValueEqual(bag.settings(upgrade).getLongOr("song_finish", 0), originalFinish, "A later resize tick does not restart active audio");
+                helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade), "active_slot", -1), 5, "Growing an existing session retains its unchanged active disc");
+                helper.assertValueEqual(NbtAccess.getLongOr(bag.settings(upgrade), "song_finish", 0), originalFinish, "A later resize tick does not restart active audio");
                 JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "next");
-                helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 14, "Expanded queue includes actual new high-index records");
+                helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade), "active_slot", -1), 14, "Expanded queue includes actual new high-index records");
                 JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "previous");
-                helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 5, "Playback history remains usable after expansion");
+                helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade), "active_slot", -1), 5, "Playback history remains usable after expansion");
                 JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "shuffle");
                 JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "repeat");
                 BackpackConfig.configure(ConfigFile.decode("{\"upgrades\":{\"jukebox\":{\"size\":2}}}"));
                 JukeboxRuntime.tick(bag, upgrade, helper.getLevel(), position, null);
-                helper.assertTrue(bag.settings(upgrade).getBooleanOr("playing", false), "A smaller configured default cannot truncate the saved disc inventory or stop an unaffected song");
+                helper.assertTrue(NbtAccess.getBooleanOr(bag.settings(upgrade), "playing", false), "A smaller configured default cannot truncate the saved disc inventory or stop an unaffected song");
                 helper.assertValueEqual(bag.upgradeInventory(upgrade).getContainerSize(), 16, "Existing auxiliary extent preserves all owned discs");
                 JukeboxRuntime.stopUpgrade(bag, upgrade.slot(), helper.getLevel().getServer());
                 BagInventory restored = BagInventory.of(roundTrip(helper.getLevel(), bag.stack()));
                 InstalledUpgrade restoredUpgrade = upgrade(restored, 0);
                 JukeboxRuntime.tick(restored, restoredUpgrade, helper.getLevel(), position, null);
-                helper.assertFalse(restored.settings(restoredUpgrade).getBooleanOr("playing", true), "Restored preferences never restart missing audio instances");
-                helper.assertTrue(restored.settings(restoredUpgrade).getBooleanOr("shuffle", false), "Resize and component persistence preserve shuffle");
-                helper.assertValueEqual(restored.settings(restoredUpgrade).getStringOr("repeat", ""), "ALL", "Resize and persistence preserve repeat");
+                helper.assertFalse(NbtAccess.getBooleanOr(restored.settings(restoredUpgrade), "playing", true), "Restored preferences never restart missing audio instances");
+                helper.assertTrue(NbtAccess.getBooleanOr(restored.settings(restoredUpgrade), "shuffle", false), "Resize and component persistence preserve shuffle");
+                helper.assertValueEqual(NbtAccess.getStringOr(restored.settings(restoredUpgrade), "repeat", ""), "ALL", "Resize and persistence preserve repeat");
                 helper.assertValueEqual(count(restored.upgradeInventory(restoredUpgrade), Items.MUSIC_DISC_FAR), 1, "High-index physical records survive the whole resize/codec lifecycle");
                 helper.assertValueEqual(count(restored.upgradeInventory(restoredUpgrade), Items.MUSIC_DISC_CHIRP), 1, "The final physical slot remains conserved");
                 JukeboxRuntime.stopUpgrade(restored, restoredUpgrade.slot(), helper.getLevel().getServer());

@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
@@ -44,8 +46,8 @@ public final class BackpackTank extends SnapshotParticipant<BackpackTank.Snapsho
     @Override public long getAmount() {
         if (!attached()) return 0;
         CompoundTag tag = bag.settings(upgrade);
-        return new FluidAmount(tag.getLongOr("amount", 0),
-                Math.toIntExact(tag.getLongOr("amount_droplets", 0))).droplets();
+        return new FluidAmount(NbtAccess.getLongOr(tag, "amount", 0),
+                Math.toIntExact(NbtAccess.getLongOr(tag, "amount_droplets", 0))).droplets();
     }
 
     @Override public FluidVariant getResource() {

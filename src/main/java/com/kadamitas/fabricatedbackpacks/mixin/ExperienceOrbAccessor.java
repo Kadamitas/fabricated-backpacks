@@ -9,5 +9,5 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 public interface ExperienceOrbAccessor {
     @Accessor("count") int fabricatedBackpacks$getCount();
     @Accessor("count") void fabricatedBackpacks$setCount(int count);
-    @Invoker("setValue") void fabricatedBackpacks$setValue(int value);
+    @Accessor("value") void fabricatedBackpacks$setValue(int value);
 }

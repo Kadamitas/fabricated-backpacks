@@ -5,7 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.SoundEventListener;
 import net.minecraft.client.sounds.WeighedSoundEvents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 
 import java.time.Duration;
@@ -62,7 +62,7 @@ final class ClientAudioProbe implements SoundEventListener, AutoCloseable {
         }
     }
 
-    SoundInstance onlyActive(Identifier soundEvent) {
+    SoundInstance onlyActive(ResourceLocation soundEvent) {
         return context.computeOnClient(client -> {
             List<SoundInstance> matching = records.stream().filter(client.getSoundManager()::isActive)
                     .filter(sound -> sound.getIdentifier().equals(soundEvent)).toList();

@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
@@ -9,17 +10,13 @@ import com.kadamitas.fabricatedbackpacks.domain.BackpackLayout;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import net.fabricmc.fabric.api.transfer.v1.client.fluid.FluidVariantRendering;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.ActiveTextCollector;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.ComponentRenderUtils;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -84,7 +81,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
                          int inventoryRows, int controlColumns, int controlsPerPage, boolean furnaceLayout) {}
 
     public BackpackScreen(BackpackMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, menu.imageWidth(), menu.imageHeight());
+        super(menu, inventory, title); imageWidth = menu.imageWidth(); imageHeight = menu.imageHeight();
     }
     @Override protected void init() {
         cancelQuickCraft();
@@ -114,7 +111,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         topPos = (height - contentHeight) / 2;
         int storageX = menu.storageX();
         if (!searchInitialized) {
-            query = menu.preferences().getBooleanOr("keep_search", true) ? menu.bag().settings().getStringOr("last_search", "") : "";
+            query = NbtAccess.getBooleanOr(menu.preferences(), "keep_search", true) ? NbtAccess.getStringOr(menu.bag().settings(), "last_search", "") : "";
             searchInitialized = true;
             sentQuery = query;
             searchExpanded = !query.isBlank();
@@ -123,9 +120,8 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         int orderX = menu.layout().tabX() - 17;
         int headerWidth = orderX - (showSearch ? 26 : 13) - storageX - 3;
         backpackHeading = heading(title, storageX, 5, headerWidth, BackpackStyle.TITLE_TEXT);
-        noResults = addRenderableWidget(new StringWidget(leftPos + storageX + 4, topPos + menu.storageY() + 8, menu.storageWidth() - 24, font.lineHeight,
-                Component.literal("No matching items").withStyle(style -> style.withColor(BackpackStyle.MUTED_TEXT).withoutShadow()), font)
-                .setMaxWidth(menu.storageWidth() - 24));
+        noResults = heading(Component.literal("No matching items"), storageX + 4, menu.storageY() + 8,
+                menu.storageWidth() - 24, BackpackStyle.MUTED_TEXT);
         search = addRenderableWidget(new EditBox(font, leftPos + storageX, topPos + 4, headerWidth, 11,
                 Component.translatable("screen.fabricated_backpacks.search")));
         search.setMaxLength(120);
@@ -140,7 +136,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         smallIcon("Sort", orderX - 13, 4, Icon.TRANSFER_UP, this::sort);
         sortOrderButton = smallIcon("Sort order", orderX, 4, Icon.SORT_ORDER, () -> menuButton(10));
         settingsButton = addRenderableWidget(new BackpackIconButton(leftPos + menu.layout().tabX(), topPos + 4,
-                22, 22, Component.literal("Prefs"), Icon.GEAR, () -> minecraft.gui.setScreen(new BackpackSettingsScreen(this))));
+                22, 22, Component.literal("Prefs"), Icon.GEAR, () -> minecraft.setScreen(new BackpackSettingsScreen(this))));
         int bar = menu.layout().inventoryTitleY();
         int actionsX = menu.inventoryX() + 124;
         if (menu.bag().rows() > menu.visibleRows()) {
@@ -149,9 +145,9 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         }
         if (menu.bag().getContainerSize() > 27) {
             smallIcon("Store matching", actionsX, bar, Icon.TRANSFER_UP,
-                    () -> send("bulk_store", 0, minecraft.hasShiftDown() ? 1 : 0, ""));
+                    () -> send("bulk_store", 0, net.minecraft.client.gui.screens.Screen.hasShiftDown() ? 1 : 0, ""));
             smallIcon("Take matching", actionsX + 13, bar, Icon.TRANSFER_DOWN,
-                    () -> send("bulk_take", 0, minecraft.hasShiftDown() ? 1 : 0, ""));
+                    () -> send("bulk_take", 0, net.minecraft.client.gui.screens.Screen.hasShiftDown() ? 1 : 0, ""));
             smallIcon("Items", actionsX + 26, bar, Icon.ITEMS, this::openBrowser);
         }
         menu.setUpgradeWindow(upgradePage * railSize, railSize);
@@ -229,18 +225,14 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         position.fabricatedBackpacks$y(y);
     }
     private StringWidget heading(Component text, int x, int y, int width, int color) {
-        final int maxHeadingWidth = width;
-        var label = new StringWidget(leftPos + x, topPos + y, width, font.lineHeight,
-                text.copy().withStyle(style -> style.withColor(color).withoutShadow()), font) {
-            @Override public void visitLines(ActiveTextCollector collector) {
-                var line = font.width(getMessage()) > maxHeadingWidth
-                        ? ComponentRenderUtils.clipText(getMessage(), font, maxHeadingWidth) : getMessage().getVisualOrderText();
-                // Native clipping appends an unstyled ellipsis, so apply the no-shadow rule after clipping too.
-                collector.accept(getX(), getY() + (getHeight() - font.lineHeight) / 2,
-                        sink -> line.accept((index, style, codePoint) -> sink.accept(index,
-                                (style.getColor() == null ? style.withColor(color) : style).withoutShadow(), codePoint)));
+        var label = new StringWidget(leftPos + x, topPos + y, Math.max(0, width), font.lineHeight, text, font) {
+            @Override public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+                var line = ClientText.clipText(getMessage(), font, getWidth());
+                graphics.enableScissor(getX(), getY(), getRight(), getBottom());
+                try { graphics.drawString(font, line, getX(), getY(), color, false); }
+                finally { graphics.disableScissor(); }
             }
-        }.setMaxWidth(width);
+        };
         label.setTooltip(Tooltip.create(text));
         return addRenderableWidget(label);
     }
@@ -277,9 +269,9 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
             BackpackIconButton button = icon(presentation.label(), panel.x() + 6 + i % panel.controlColumns() * 18,
                     panel.controlsY() + i / panel.controlColumns() * 18, 16, presentation.icon(),
                     () -> {
-                        if (action.equals("tags") || action.equals("input_tags")) minecraft.gui.setScreen(new FilterTagsScreen(this, action.equals("input_tags")));
-                        else if (action.equals("fluids")) minecraft.gui.setScreen(new VoidFluidFiltersScreen(this));
-                        else if (action.equals("slot_rules")) minecraft.gui.setScreen(new SlotRulesScreen(this, upgrade));
+                        if (action.equals("tags") || action.equals("input_tags")) minecraft.setScreen(new FilterTagsScreen(this, action.equals("input_tags")));
+                        else if (action.equals("fluids")) minecraft.setScreen(new VoidFluidFiltersScreen(this));
+                        else if (action.equals("slot_rules")) minecraft.setScreen(new SlotRulesScreen(this, upgrade));
                         else send(action.startsWith("inception_") ? "setting" : "upgrade", 0, 0, action);
                     });
             button.setSelected(presentation.selected());
@@ -435,7 +427,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
     }
     private void menuButton(int id) { minecraft.gameMode.handleInventoryButtonClick(menu.containerId, id); }
     private void sort() {
-        menuButton(switch (menu.preferences().getStringOr("sort_order", "name")) {
+        menuButton(switch (NbtAccess.getStringOr(menu.preferences(), "sort_order", "name")) {
             case "count" -> 3;
             case "mod" -> 4;
             case "tags" -> 5;
@@ -488,9 +480,12 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         return x >= bounds.left() && x < bounds.right() && y >= bounds.top() && y < bounds.bottom();
     }
 
-    @Override public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        renderTooltip(graphics, mouseX, mouseY);
+    }
+    @Override protected void renderBg(GuiGraphics graphics, float delta, int mouseX, int mouseY) {
         refreshLayout();
-        super.extractBackground(graphics, mouseX, mouseY, delta);
         var layout = menu.layout();
         BackpackStyle.frame(graphics, leftPos + layout.storagePanelX(), topPos,
                 menu.storageWidth(), layout.inventoryTitleY() + 13, BackpackStyle.Surface.BODY);
@@ -507,7 +502,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         }
         if (panel != null) {
             BackpackStyle.frame(graphics, leftPos + panel.x(), topPos + panel.y(), panel.width(), panel.height(), BackpackStyle.Surface.PANEL);
-            if (compactTabs) menu.selected().ifPresent(upgrade -> graphics.fakeItem(upgrade.stack(), leftPos + panel.x() + 4, topPos + panel.y() + 5));
+            if (compactTabs) menu.selected().ifPresent(upgrade -> graphics.renderFakeItem(upgrade.stack(), leftPos + panel.x() + 4, topPos + panel.y() + 5));
         }
         for (Slot slot : menu.slots) if (slot.isActive()) {
             if (slot.container == menu.bag().upgrades() && !slot.hasItem())
@@ -517,14 +512,14 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         for (int slot = 0; slot < menu.bag().getContainerSize(); slot++) {
             Slot display = menu.slots.get(slot);
             if (!display.isActive()) continue;
-            if (java.util.Arrays.stream(menu.bag().settings().getIntArray("no_sort").orElseGet(() -> new int[0])).anyMatch(i -> i == display.getContainerSlot()))
-                graphics.outline(leftPos + display.x - 1, topPos + display.y - 1, 18, 18,
-                        0xff000000 | menu.bag().settings().getIntOr("no_sort_color", 0xdb8c39) & 0xffffff);
+            if (java.util.Arrays.stream(menu.bag().settings().getIntArray("no_sort")).anyMatch(i -> i == display.getContainerSlot()))
+                graphics.renderOutline(leftPos + display.x - 1, topPos + display.y - 1, 18, 18,
+                        0xff000000 | NbtAccess.getIntOr(menu.bag().settings(), "no_sort_color", 0xdb8c39) & 0xffffff);
             menu.bag().stack().getOrDefault(BagComponents.MEMORY, com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot.EMPTY).entries().stream()
                     .filter(entry -> entry.slot() == display.getContainerSlot()).findFirst().ifPresent(entry -> {
-                        graphics.outline(leftPos + display.x - 1, topPos + display.y - 1, 18, 18, 0xff568f9b);
+                        graphics.renderOutline(leftPos + display.x - 1, topPos + display.y - 1, 18, 18, 0xff568f9b);
                         if (display.getItem().isEmpty()) {
-                            graphics.fakeItem(entry.create(), leftPos + display.x, topPos + display.y);
+                            graphics.renderFakeItem(entry.create(), leftPos + display.x, topPos + display.y);
                             graphics.fill(leftPos + display.x, topPos + display.y, leftPos + display.x + 16, topPos + display.y + 16, 0x88888785);
                         }
                     });
@@ -539,7 +534,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         return menu.bag().installedUpgrades().stream()
                 .filter(upgrade -> upgrade.kind() == UpgradeKind.TANK || upgrade.kind() == UpgradeKind.BATTERY).toList();
     }
-    private void drawResources(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    private void drawResources(GuiGraphics graphics, int mouseX, int mouseY) {
         List<InstalledUpgrade> resources = resources();
         for (InstalledUpgrade upgrade : resources) {
             ScreenRectangle bounds = resourceBounds(upgrade.slot()).orElseThrow();
@@ -563,7 +558,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
             if (contains(bounds, mouseX, mouseY)) {
                 String name = experience ? "Liquid experience" : tank ? fluid.isBlank() ? "Empty tank" : FluidVariantRendering.getTooltip(fluid).stream()
                         .findFirst().map(Component::getString).orElse("Fluid") : "Stored energy";
-                graphics.setTooltipForNextFrame(font, Component.literal(name + ": " + amount + " / " + capacity
+                com.kadamitas.fabricatedbackpacks.client.screen.ClientText.tooltip(font, Component.literal(name + ": " + amount + " / " + capacity
                         + (tank ? " mB" : " E") + " — click with a container to transfer"), mouseX, mouseY);
             }
         }
@@ -574,44 +569,43 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         if (amount >= 10_000) return String.format(Locale.ROOT, "%.0fk", amount / 1000.0);
         return Long.toString(amount);
     }
-    private void drawCaptures(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        var captures = menu.bag().settings().getListOrEmpty("captured_entities");
+    private void drawCaptures(GuiGraphics graphics, int mouseX, int mouseY) {
+        var captures = NbtAccess.getListOrEmpty(menu.bag().settings(), "captured_entities");
         String fingerprint = captures.toString();
         if (!fingerprint.equals(captureFingerprint)) {
             capturedPreviews.clear();
             captureFingerprint = fingerprint;
         }
         for (int index = 0; index < captures.size(); index++) {
-            var capture = captures.getCompoundOrEmpty(index);
-            int row = capture.getIntOr("y", 0) - menu.page() * menu.visibleRows();
-            int rows = capture.getIntOr("height", 1);
+            var capture = NbtAccess.getCompoundOrEmpty(captures, index);
+            int row = NbtAccess.getIntOr(capture, "y", 0) - menu.page() * menu.visibleRows();
+            int rows = NbtAccess.getIntOr(capture, "height", 1);
             if (row >= menu.visibleRows() || row + rows <= 0) continue;
-            int x = menu.storageX() + capture.getIntOr("x", 0) * 18;
+            int x = menu.storageX() + NbtAccess.getIntOr(capture, "x", 0) * 18;
             int y = menu.storageY() + Math.max(0, row) * 18;
-            int width = capture.getIntOr("width", 1) * 18 - 2;
+            int width = NbtAccess.getIntOr(capture, "width", 1) * 18 - 2;
             int height = (Math.min(menu.visibleRows(), row + rows) - Math.max(0, row)) * 18 - 2;
             graphics.fill(leftPos + x, topPos + y, leftPos + x + width, topPos + y + height, 0xff7b8873);
-            graphics.outline(leftPos + x, topPos + y, width, height, 0xff344c39);
+            graphics.renderOutline(leftPos + x, topPos + y, width, height, 0xff344c39);
             if (minecraft.level != null) {
                 var preview = capturedPreviews.get(index);
                 if (preview == null) {
-                    var loaded = net.minecraft.world.entity.EntityType.loadEntityRecursive(capture.getCompoundOrEmpty("entity"), minecraft.level,
-                            new net.minecraft.world.entity.EntitySpawnRequest(net.minecraft.world.entity.EntitySpawnReason.LOAD, false),
-                            net.minecraft.world.entity.EntityProcessor.NOP);
+                    var loaded = net.minecraft.world.entity.EntityType.loadEntityRecursive(NbtAccess.getCompoundOrEmpty(capture, "entity"), minecraft.level,
+                            entity -> entity);
                     if (loaded instanceof net.minecraft.world.entity.LivingEntity living) { preview = living; capturedPreviews.put(index, living); }
                 }
-                if (preview != null) net.minecraft.client.gui.screens.inventory.InventoryScreen.extractEntityInInventoryFollowsMouse(graphics,
+                if (preview != null) net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(graphics,
                         leftPos + x + 2, topPos + y + 2, leftPos + x + width - 2, topPos + y + height - 2,
                         Math.max(8, Math.min(35, (int) (height / Math.max(1.0, preview.getBbHeight())))), 0.1f, mouseX, mouseY, preview);
             }
-            if (isHovering(x, y, width, height, mouseX, mouseY)) graphics.setTooltipForNextFrame(font,
-                    Component.literal(capture.getStringOr("name", "Captured mob") + " — right click to release ahead of you"), mouseX, mouseY);
+            if (isHovering(x, y, width, height, mouseX, mouseY)) com.kadamitas.fabricatedbackpacks.client.screen.ClientText.tooltip(font,
+                    Component.literal(NbtAccess.getStringOr(capture, "name", "Captured mob") + " — right click to release ahead of you"), mouseX, mouseY);
         }
     }
-    private void slotBackground(GuiGraphicsExtractor graphics, int x, int y, boolean ghost) {
+    private void slotBackground(GuiGraphics graphics, int x, int y, boolean ghost) {
         BackpackStyle.slot(graphics, leftPos + x, topPos + y, ghost);
     }
-    private void drawUpgrade(GuiGraphicsExtractor graphics, InstalledUpgrade upgrade, int mouseX, int mouseY) {
+    private void drawUpgrade(GuiGraphics graphics, InstalledUpgrade upgrade, int mouseX, int mouseY) {
         int x = panel.x() + 6;
         var settings = menu.bag().settings(upgrade);
         for (int index = 0; index < menu.bag().filterSlots(upgrade); index++) {
@@ -621,50 +615,51 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
             int gy = bounds.top() - topPos;
             slotBackground(graphics, gx, gy, true);
             ItemStack ghost = menu.bag().ghost(upgrade, index);
-            if (!ghost.isEmpty()) graphics.fakeItem(ghost, leftPos + gx, topPos + gy);
-            if (contains(bounds, mouseX, mouseY)) graphics.setTooltipForNextFrame(font,
+            if (!ghost.isEmpty()) graphics.renderFakeItem(ghost, leftPos + gx, topPos + gy);
+            if (contains(bounds, mouseX, mouseY)) com.kadamitas.fabricatedbackpacks.client.screen.ClientText.tooltip(font,
                     ghost.isEmpty() ? Component.translatable("screen.fabricated_backpacks.ghost_help") : ghost.getHoverName(), mouseX, mouseY);
         }
-        if (upgrade.kind().family().equals("jukebox") && settings.getBooleanOr("playing", false)) {
-            int active = settings.getIntOr("active_slot", -1);
+        if (upgrade.kind().family().equals("jukebox") && NbtAccess.getBooleanOr(settings, "playing", false)) {
+            int active = NbtAccess.getIntOr(settings, "active_slot", -1);
             int first = auxiliaryPage * auxiliaryPageSize(upgrade);
             if (active >= first && active < first + auxiliaryPageSize(upgrade)) {
                 int local = active - first;
-                graphics.outline(leftPos + x + local % inventoryColumns(upgrade) * 18 - 1,
+                graphics.renderOutline(leftPos + x + local % inventoryColumns(upgrade) * 18 - 1,
                         topPos + panel.inventoryY() + local / inventoryColumns(upgrade) * 18 - 1, 18, 18, 0xff54db80);
             }
-            long start = settings.getLongOr("song_started", 0), end = settings.getLongOr("song_finish", 1);
+            long start = NbtAccess.getLongOr(settings, "song_started", 0), end = NbtAccess.getLongOr(settings, "song_finish", 1);
             long now = minecraft.level == null ? start : minecraft.level.getGameTime();
             int barWidth = panel.width() - 16;
             int length = (int) Math.clamp(barWidth * (now - start) / Math.max(1, end - start), 0, barWidth);
             graphics.fill(leftPos + x, topPos + panel.controlsY() - 5, leftPos + x + length, topPos + panel.controlsY() - 3, 0xff4d8f65);
         }
         if (panel.furnaceLayout()) {
-            int progress = settings.getIntOr("cook_progress", 0), total = settings.getIntOr("cook_total", 200);
+            int progress = NbtAccess.getIntOr(settings, "cook_progress", 0), total = NbtAccess.getIntOr(settings, "cook_total", 200);
             int arrowX = leftPos + x + 23, arrowY = topPos + panel.inventoryY() + 21;
             graphics.fill(arrowX, arrowY + 3, arrowX + 19, arrowY + 8, 0xff635440);
             graphics.fill(arrowX + 14, arrowY, arrowX + 17, arrowY + 11, 0xff635440);
             graphics.fill(arrowX, arrowY + 4, arrowX + (int) Math.clamp(19L * progress / Math.max(1, total), 0, 19), arrowY + 7, 0xffffba43);
             int fireX = leftPos + x + 4, fireY = topPos + panel.inventoryY() + 21;
-            boolean burning = settings.getBooleanOr("burning", false);
+            boolean burning = NbtAccess.getBooleanOr(settings, "burning", false);
             graphics.fill(fireX + 2, fireY, fireX + 6, fireY + 9, burning ? 0xffd86825 : 0xff635440);
             graphics.fill(fireX, fireY + 4, fireX + 8, fireY + 10, burning ? 0xffdc8328 : 0xff635440);
             graphics.fill(fireX + 2, fireY + 6, fireX + 6, fireY + 11, burning ? 0xffffd26a : 0xff8d7960);
         }
     }
-    @Override protected void extractLabels(GuiGraphicsExtractor graphics, int x, int y) {
-        graphics.text(font, playerInventoryTitle, menu.inventoryX(), menu.layout().inventoryTitleY() + 2, BackpackStyle.TITLE_TEXT, false);
+    @Override protected void renderLabels(GuiGraphics graphics, int x, int y) {
+        graphics.drawString(font, playerInventoryTitle, menu.inventoryX(), menu.layout().inventoryTitleY() + 2, BackpackStyle.TITLE_TEXT, false);
     }
-    @Override protected void extractSlot(GuiGraphicsExtractor graphics, Slot slot, int x, int y) {
+    @Override protected void renderSlot(GuiGraphics graphics, Slot slot) {
         if (slot.container == menu.bag() && slot.getItem().getCount() > 999) {
-            graphics.item(slot.getItem(), slot.x, slot.y);
-            graphics.itemDecorations(font, slot.getItem().copyWithCount(1), slot.x, slot.y);
-            graphics.pose().pushMatrix();
-            graphics.pose().translate(slot.x + 17, slot.y + 11).scale(0.65f);
+            graphics.renderItem(slot.getItem(), slot.x, slot.y);
+            graphics.renderItemDecorations(font, slot.getItem().copyWithCount(1), slot.x, slot.y);
+            graphics.pose().pushPose();
+            graphics.pose().translate(slot.x + 17, slot.y + 11, 200);
+            graphics.pose().scale(0.65f, 0.65f, 1);
             String count = shortAmount(slot.getItem().getCount());
-            graphics.text(font, count, -font.width(count), 0, 0xffffffff, true);
-            graphics.pose().popMatrix();
-        } else super.extractSlot(graphics, slot, x, y);
+            graphics.drawString(font, count, -font.width(count), 0, 0xffffffff, true);
+            graphics.pose().popPose();
+        } else super.renderSlot(graphics, slot);
     }
     @Override protected List<Component> getTooltipFromContainerItem(ItemStack item) {
         List<Component> tooltip = new ArrayList<>(super.getTooltipFromContainerItem(item));
@@ -709,46 +704,46 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
             storagePage.setTooltip(Tooltip.create(Component.literal("Page " + (menu.page() + 1) + "/" + menu.pages())));
         }
     }
-    @Override public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    @Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
         refreshLayout();
         cancelNextRelease = false;
         customClick = false;
-        var captures = menu.filtering() ? new net.minecraft.nbt.ListTag() : menu.bag().settings().getListOrEmpty("captured_entities");
+        var captures = menu.filtering() ? new net.minecraft.nbt.ListTag() : NbtAccess.getListOrEmpty(menu.bag().settings(), "captured_entities");
         for (int index = 0; index < captures.size(); index++) {
-            var capture = captures.getCompoundOrEmpty(index);
-            int row = capture.getIntOr("y", 0) - menu.page() * menu.visibleRows();
-            int rows = capture.getIntOr("height", 1);
+            var capture = NbtAccess.getCompoundOrEmpty(captures, index);
+            int row = NbtAccess.getIntOr(capture, "y", 0) - menu.page() * menu.visibleRows();
+            int rows = NbtAccess.getIntOr(capture, "height", 1);
             if (row >= menu.visibleRows() || row + rows <= 0) continue;
-            if (isHovering(menu.storageX() + capture.getIntOr("x", 0) * 18, menu.storageY() + Math.max(0, row) * 18,
-                    capture.getIntOr("width", 1) * 18 - 2, (Math.min(menu.visibleRows(), row + rows) - Math.max(0, row)) * 18 - 2,
-                    event.x(), event.y())) {
-                beginCustomClick(event);
-                if (event.button() == 1) send("release_mob", index, 0, "");
+            if (isHovering(menu.storageX() + NbtAccess.getIntOr(capture, "x", 0) * 18, menu.storageY() + Math.max(0, row) * 18,
+                    NbtAccess.getIntOr(capture, "width", 1) * 18 - 2, (Math.min(menu.visibleRows(), row + rows) - Math.max(0, row)) * 18 - 2,
+                    mouseX, mouseY)) {
+                beginCustomClick();
+                if (button == 1) send("release_mob", index, 0, "");
                 return true;
             }
         }
         var resources = menu.filtering() ? List.<InstalledUpgrade>of() : resources();
         for (InstalledUpgrade resource : resources)
-            if (resourceBounds(resource.slot()).filter(bounds -> contains(bounds, event.x(), event.y())).isPresent()) {
-                beginCustomClick(event);
+            if (resourceBounds(resource.slot()).filter(bounds -> contains(bounds, mouseX, mouseY)).isPresent()) {
+                beginCustomClick();
                 send("resource_container", resource.slot(), 0, "");
                 return true;
             }
         InstalledUpgrade upgrade = menu.selected().orElse(null);
         if (upgrade != null) for (int index = 0; index < menu.bag().filterSlots(upgrade); index++) {
-            if (ghostBounds(index).filter(bounds -> contains(bounds, event.x(), event.y())).isPresent()) {
-                beginCustomClick(event);
-                if (event.button() == 0 && menu.getCarried().isEmpty()) {
+            if (ghostBounds(index).filter(bounds -> contains(bounds, mouseX, mouseY)).isPresent()) {
+                beginCustomClick();
+                if (button == 0 && menu.getCarried().isEmpty()) {
                     com.kadamitas.fabricatedbackpacks.client.browser.RecipeBrowserClient.openForGhost(this, index);
                     return true;
                 }
-                send("ghost", index, event.button() == 1 ? 1 : 0, ""); return true;
+                send("ghost", index, button == 1 ? 1 : 0, ""); return true;
             }
         }
-        return super.mouseClicked(event, doubleClick);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
-    @Override protected boolean hasClickedOutside(double mouseX, double mouseY, int left, int top) {
-        // Vanilla's image dimensions are final in 26.2; the synchronized layout can grow after opening.
+    @Override protected boolean hasClickedOutside(double mouseX, double mouseY, int left, int top, int button) {
+        // The synchronized layout and attached panel can grow after opening.
         return mouseX < left || mouseY < top || mouseX >= left + contentWidth || mouseY >= top + contentHeight;
     }
     @Override protected boolean isHovering(int x, int y, int width, int height, double mouseX, double mouseY) {
@@ -758,30 +753,34 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
                     && mouseY >= topPos + y && mouseY < topPos + y + height;
         return super.isHovering(x, y, width, height, mouseX, mouseY);
     }
-    private void beginCustomClick(MouseButtonEvent event) {
+    private void beginCustomClick() {
         // Reset vanilla's last-slot/double-click state for these non-slot controls.
         // Otherwise returning a cursor item to its previous slot can collect it again.
-        super.mouseClicked(event, false);
+        var access = (com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess) (Object) this;
+        access.fabricatedBackpacks$lastClickSlot(null);
+        access.fabricatedBackpacks$lastClickTime(0);
+        access.fabricatedBackpacks$doubleClick(false);
+        clearDraggingState();
         customClick = true;
     }
-    @Override public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+    @Override public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         if (isQuickCrafting && quickCraftSlots.size() >= MAX_DRAG_SLOTS) return true;
-        return super.mouseDragged(event, deltaX, deltaY);
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
-    @Override public boolean mouseReleased(MouseButtonEvent event) {
+    @Override public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (cancelNextRelease) { cancelNextRelease = false; customClick = false; return true; }
         if (customClick) { customClick = false; return true; }
-        return super.mouseReleased(event);
+        return super.mouseReleased(mouseX, mouseY, button);
     }
-    @Override public boolean keyPressed(KeyEvent event) {
-        if (event.hasControlDown() && event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_F) {
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (net.minecraft.client.gui.screens.Screen.hasControlDown() && keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_F) {
             if (!searchExpanded) toggleSearch();
             setFocused(search);
             search.setFocused(true);
             return true;
         }
-        if (search.isFocused() && event.key() != org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) return search.keyPressed(event);
-        return super.keyPressed(event);
+        if (search.isFocused() && keyCode != org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) return search.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
     private String selectionKey() { return menu.selectedSlot() + ":" + menu.selected().map(upgrade -> upgrade.kind().id()).orElse(""); }
     private void cancelQuickCraft() {
@@ -799,7 +798,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         refreshStorageView();
         if (searchDebounce > 0 && --searchDebounce == 0) flushSearch();
         if (searchButton != null) searchButton.setSelected(searchExpanded || !query.isBlank());
-        sortOrderButton.setTooltip(Tooltip.create(Component.literal("Sort order: " + menu.preferences().getStringOr("sort_order", "name"))));
+        sortOrderButton.setTooltip(Tooltip.create(Component.literal("Sort order: " + NbtAccess.getStringOr(menu.preferences(), "sort_order", "name"))));
         settingsButton.setSelected(menu.editMode() != 0);
         settingsButton.setTooltip(Tooltip.create(Component.literal(switch (menu.editMode()) {
             case 1 -> "Prefs — Memory slots: click a storage slot to remember its item";
@@ -808,7 +807,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         })));
         menu.selected().ifPresent(upgrade -> {
             var name = upgrade.stack().getHoverName();
-            var heading = panelTitle(upgrade).copy().withStyle(style -> style.withColor(BackpackStyle.PANEL_TEXT).withoutShadow());
+            var heading = panelTitle(upgrade).copy().withStyle(style -> style.withColor(BackpackStyle.PANEL_TEXT));
             if (upgradeHeading != null && !upgradeHeading.getMessage().equals(heading)) {
                 upgradeHeading.setMessage(heading);
                 upgradeHeading.setTooltip(Tooltip.create(name));

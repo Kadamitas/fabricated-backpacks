@@ -4,7 +4,7 @@ import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.player.StackedItemContents;
+import net.minecraft.world.entity.player.StackedContents;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -80,7 +80,7 @@ class ComponentInventory extends SimpleContainer {
     @Override public List<ItemStack> removeAllItems() { refreshFromOwner(); return super.removeAllItems(); }
     @Override public boolean canAddItem(ItemStack stack) { refreshFromOwner(); return super.canAddItem(stack); }
     @Override public void clearContent() { refreshFromOwner(); super.clearContent(); }
-    @Override public void fillStackedContents(StackedItemContents contents) { refreshFromOwner(); super.fillStackedContents(contents); }
+    @Override public void fillStackedContents(StackedContents contents) { refreshFromOwner(); super.fillStackedContents(contents); }
     @Override public String toString() { refreshFromOwner(); return super.toString(); }
     @Override public int getMaxStackSize() { return Integer.MAX_VALUE; }
     @Override public int getMaxStackSize(ItemStack stack) { return stack.getMaxStackSize(); }

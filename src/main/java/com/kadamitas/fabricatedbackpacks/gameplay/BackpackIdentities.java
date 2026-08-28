@@ -46,7 +46,7 @@ public final class BackpackIdentities {
         List<ServerPlayer> players = orderedPlayers(server.getPlayerList().getPlayers());
         scan.players(players);
         for (ServerPlayer player : players) {
-            for (ItemEntity entity : nearby(player.level(), player.getBoundingBox().inflate(DROP_RADIUS))) {
+            for (ItemEntity entity : nearby(player.serverLevel(), player.getBoundingBox().inflate(DROP_RADIUS))) {
                 scan.drop(entity);
                 pass(server).entities.add(entity.getUUID());
             }
@@ -69,7 +69,7 @@ public final class BackpackIdentities {
         AABB area = origin.getBoundingBox().inflate(DROP_RADIUS);
         Scan scan = new Scan();
         scan.players(orderedPlayers(level.getServer().getPlayerList().getPlayers().stream()
-                .filter(player -> player.level() == level && player.getBoundingBox().intersects(area)).toList()));
+                .filter(player -> player.serverLevel() == level && player.getBoundingBox().intersects(area)).toList()));
         scan.drop(origin);
         pass(level.getServer()).entities.add(origin.getUUID());
         for (ItemEntity entity : nearby(level, area)) {

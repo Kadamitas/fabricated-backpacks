@@ -1,6 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
@@ -89,7 +89,7 @@ public final class BackpackIconButton extends Button {
     public Icon getIcon() { return icon; }
     public BackpackIconButton setItem(ItemStack value) { item = value == null ? ItemStack.EMPTY : value.copy(); return this; }
     @Override public void setMessage(Component label) { super.setMessage(label); setTooltip(Tooltip.create(label)); }
-    @Override protected void extractContents(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+    @Override protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         if (alpha <= 0 || getWidth() <= 2 || getHeight() <= 2) return;
         boolean hot = active && isHoveredOrFocused();
         int fill, light, dark, edge;
@@ -132,16 +132,16 @@ public final class BackpackIconButton extends Button {
     private int fade(int color) {
         return ((int) ((color >>> 24) * Math.clamp(alpha, 0.0F, 1.0F)) << 24) | (color & 0xFFFFFF);
     }
-    private void drawItem(GuiGraphicsExtractor g) {
+    private void drawItem(GuiGraphics g) {
         int size = Math.min(16, Math.min(getWidth(), getHeight()) - 2);
-        g.pose().pushMatrix();
+        g.pose().pushPose();
         try {
-            g.pose().translate(getX() + (getWidth() - size) / 2.0F, getY() + (getHeight() - size) / 2.0F);
-            g.pose().scale(size / 16.0F, size / 16.0F);
-            g.fakeItem(item, 0, 0);
-        } finally { g.pose().popMatrix(); }
+            g.pose().translate(getX() + (getWidth() - size) / 2.0F, getY() + (getHeight() - size) / 2.0F, 0);
+            g.pose().scale(size / 16.0F, size / 16.0F, 1);
+            g.renderFakeItem(item, 0, 0);
+        } finally { g.pose().popPose(); }
     }
-    private void drawGlyph(GuiGraphicsExtractor g) {
+    private void drawGlyph(GuiGraphics g) {
         if (icon.coloredSpans != null) {
             int x = getX() + (getWidth() - 14) / 2, y = getY() + (getHeight() - 14) / 2;
             for (int[] span : icon.coloredSpans)

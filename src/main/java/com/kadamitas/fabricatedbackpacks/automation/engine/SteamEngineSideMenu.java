@@ -6,7 +6,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 
@@ -56,7 +56,7 @@ public final class SteamEngineSideMenu extends AbstractContainerMenu {
     public EngineSideMode mode(ConduitKind kind) { return mode(kind, selectedFace()); }
     @Override public boolean stillValid(Player player) {
         return player == owner && player.isAlive() && !player.isSpectator()
-                && (player.level().isClientSide() || engine != null && engine.stillValid(player));
+                && (player.level().isClientSide || engine != null && engine.stillValid(player));
     }
     @Override public boolean clickMenuButton(Player player, int action) {
         if (engine == null || player.containerMenu != this || !stillValid(player)) return false;
@@ -70,5 +70,5 @@ public final class SteamEngineSideMenu extends AbstractContainerMenu {
         return true;
     }
     @Override public ItemStack quickMoveStack(Player player, int index) { return ItemStack.EMPTY; }
-    @Override public void clicked(int slot, int button, ContainerInput input, Player player) { }
+    @Override public void clicked(int slot, int button, ClickType input, Player player) { }
 }

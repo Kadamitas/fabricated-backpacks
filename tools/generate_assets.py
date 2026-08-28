@@ -498,8 +498,13 @@ def body_model(tier: Tier):
     return model
 
 
+def ingredient(identifier: str):
+    """Minecraft 1.21.1 ingredients are explicit item/tag objects."""
+    return {"tag": identifier[1:]} if identifier.startswith("#") else {"item": identifier}
+
+
 def shaped(result: str, pattern, key, count=1, recipe_type="minecraft:crafting_shaped", **extra):
-    return {"type": recipe_type, "category": "equipment", "pattern": pattern, "key": key,
+    return {"type": recipe_type, "category": "equipment", "pattern": pattern, "key": {symbol: ingredient(value) for symbol, value in key.items()},
             "result": {"id": f"{MOD}:{result}", "count": count}, **extra}
 
 
@@ -521,8 +526,8 @@ def generate_recipes(upgrades):
     recipes["iron_backpack_from_copper"] = shaped("iron_backpack", [" I ", "IBI", " I "], {"I": "minecraft:iron_ingot", "B": f"{MOD}:copper_backpack"},
                                                        recipe_type=f"{MOD}:backpack_upgrade", source=f"{MOD}:copper_backpack")
     recipes["netherite_backpack"] = {
-        "type": f"{MOD}:backpack_smithing", "template": "minecraft:netherite_upgrade_smithing_template",
-        "base": f"{MOD}:diamond_backpack", "addition": "minecraft:netherite_ingot", "result": {"id": f"{MOD}:netherite_backpack", "count": 1},
+        "type": f"{MOD}:backpack_smithing", "template": ingredient("minecraft:netherite_upgrade_smithing_template"),
+        "base": ingredient(f"{MOD}:diamond_backpack"), "addition": ingredient("minecraft:netherite_ingot"), "result": {"id": f"{MOD}:netherite_backpack", "count": 1},
     }
     for item in upgrades:
         if item in ("infinity_upgrade", "stack_upgrade_omega_tier"):
@@ -531,7 +536,7 @@ def generate_recipes(upgrades):
             if "downgrade" in item:
                 level = int(item[-1])
                 center = "upgrade_base" if level == 1 else f"stack_downgrade_tier_{level - 1}"
-                recipes[item] = shaped(item, [" S ", "SUS", " C "], {"S": "minecraft:string", "U": f"{MOD}:{center}", "C": "minecraft:iron_chain"})
+                recipes[item] = shaped(item, [" S ", "SUS", " C "], {"S": "minecraft:string", "U": f"{MOD}:{center}", "C": "minecraft:chain"})
             elif item == "stack_upgrade_starter_tier":
                 recipes[item] = shaped(item, [" I ", "IUI", " R "], {"I": "minecraft:iron_ingot", "U": f"{MOD}:upgrade_base", "R": "minecraft:redstone"})
             else:
@@ -552,7 +557,7 @@ def generate_recipes(upgrades):
         center = "upgrade_base" if target == source + 1 else conversion_id(source, target - 1)
         recipes[item] = ring_recipe(item, f"{MOD}:{center}", f"minecraft:{material}")
         recipes[f"{item}_apply"] = {"type": "minecraft:crafting_shapeless", "category": "equipment",
-            "ingredients": [f"{MOD}:{stack_id(source)}", f"{MOD}:{item}"], "result": {"id": f"{MOD}:{stack_id(target)}", "count": 1}}
+            "ingredients": [ingredient(f"{MOD}:{stack_id(source)}"), ingredient(f"{MOD}:{item}")], "result": {"id": f"{MOD}:{stack_id(target)}", "count": 1}}
     return recipes
 
 
@@ -560,6 +565,10 @@ def translations(upgrades):
     lang = {
         "itemGroup.fabricated_backpacks": "Fabricated Backpacks",
         "itemGroup.fabricated_backpacks.main": "Fabricated Backpacks",
+        "tag.item.fabricated_backpacks.backpacks": "Backpacks",
+        "tag.item.fabricated_backpacks.conduits": "Conduits",
+        "tag.item.fabricated_backpacks.stack_conversions": "Stack Upgrade Conversions",
+        "tag.item.fabricated_backpacks.upgrades": "Backpack Upgrades",
         "container.fabricated_backpacks.backpack": "Backpack",
         "container.fabricated_backpacks.equipment": "Backpack Equipment",
         "key.category.fabricated_backpacks": "Fabricated Backpacks",
@@ -695,10 +704,6 @@ def generate():
             f"facing={facing},open={opened}": {"model": f"{MOD}:block/{tier.item}_body", "y": angle, "uvlock": False}
             for facing, angle in (("north", 0), ("east", 90), ("south", 180), ("west", 270)) for opened in ("false", "true")}})
         put_json(f"{ASSET}/models/item/{tier.item}.json", {"parent": f"{MOD}:block/{tier.item}_closed"})
-        put_json(f"{ASSET}/items/{tier.item}.json", {"model": {"type": "minecraft:model", "model": f"{MOD}:item/{tier.item}", "tints": [
-            {"type": "minecraft:custom_model_data", "index": 0, "default": BODY_COLOR},
-            {"type": "minecraft:custom_model_data", "index": 1, "default": TRIM_COLOR},
-        ]}})
         # Block code owns the persisted ItemStack drop. A second loot drop would
         # duplicate the backpack; an empty table is deliberate and audited.
         put_json(f"{DATA}/loot_table/blocks/{tier.item}.json", {"type": "minecraft:block", "pools": []})
@@ -707,7 +712,6 @@ def generate():
     for item in misc_items:
         put_png(f"{ASSET}/textures/item/{item}.png", item_icon(item))
         put_json(f"{ASSET}/models/item/{item}.json", {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/{item}"}})
-        put_json(f"{ASSET}/items/{item}.json", {"model": {"type": "minecraft:model", "model": f"{MOD}:item/{item}"}})
     for recipe, value in generate_recipes(upgrades).items():
         put_json(f"{DATA}/recipe/{recipe}.json", value)
     utility_tools = {
@@ -721,6 +725,8 @@ def generate():
     put_json(f"{DATA}/tags/item/upgrades.json", {"replace": False, "values": [f"{MOD}:{item}" for item in upgrades]})
     put_json(f"{DATA}/tags/item/stack_conversions.json", {"replace": False, "values": [f"{MOD}:{item}" for _, _, item in CONVERSIONS]})
     put_json(f"{DATA}/tags/block/backpacks.json", {"replace": False, "values": [f"{MOD}:{tier.item}" for tier in TIERS]})
+    put_json(f"{DATA}/tags/entity_type/unsupported_capture.json",
+             {"replace": False, "values": [{"id": "cobblemon:pokemon", "required": False}]})
     put_json("src/main/resources/data/minecraft/tags/item/piglin_safe_armor.json",
              {"replace": False, "values": [f"{MOD}:gold_backpack"]})
     put_json(f"{ASSET}/lang/en_us.json", translations(upgrades))
@@ -761,7 +767,8 @@ def generate():
     automation.generate(sys.modules[__name__], put_json, put_png, models)
     put_png(PROJECT_ICON, project_icon(rasters, models))
     manifest = {
-        "schema": 1, "generator": "tools/generate_assets.py", "license": "MIT",
+        "schema": 1, "generator": "tools/generate_assets.py", "license": "MIT", "minecraft_version": "1.21.1",
+        "item_model_format": "models/item with native item color providers; independent fabricated_backpacks:colors component",
         "registered_item_count": 76, "backpack_tier_count": 6, "upgrade_count": 54, "conversion_count": 10,
         "automation_items": list(automation.ITEMS),
         "creative_only": ["infinity_upgrade", "stack_upgrade_omega_tier"],
@@ -978,6 +985,20 @@ def main():
     options = parser.parse_args()
     outputs, rasters, models = generate()
     stale = []
+    # Retire only our explicitly named newer-version item definitions. No resource
+    # folder is recursively deleted and unrelated user files are never removed.
+    item_ids = [tier.item for tier in TIERS] + ["upgrade_base", *read_upgrade_ids(),
+                *(item for _, _, item in CONVERSIONS), *automation.ITEMS]
+    asset_root = (ROOT / ASSET).resolve()
+    for item in item_ids:
+        obsolete = ROOT / ASSET / "items" / f"{item}.json"
+        if not obsolete.resolve().is_relative_to(asset_root):
+            raise ValueError("Retired generated item definition escaped the asset root")
+        if obsolete.exists():
+            if options.check:
+                stale.append(str(obsolete.relative_to(ROOT)))
+            else:
+                obsolete.unlink()
     for relative, contents in sorted(outputs.items()):
         path = ROOT / relative
         if options.check:

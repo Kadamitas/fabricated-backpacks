@@ -3,7 +3,7 @@ package com.kadamitas.fabricatedbackpacks.network;
 import com.mojang.serialization.Lifecycle;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.DecoderException;
-import net.minecraft.IdentifierException;
+import net.minecraft.ResourceLocationException;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -13,7 +13,8 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.item.JukeboxSong;
@@ -27,8 +28,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class JukeboxAudioProtocolTest {
     private static final String IDENTITY = "c8a960dc-bef7-45e9-af5b-e5bad787b3ba:0:15f71fd3-7229-44f5-aebe-9d7771350871";
-    private static final Identifier BLOCKS = Identifier.withDefaultNamespace("blocks");
-    private static final Identifier CUSTOM = Identifier.parse("music_pack:records/wind");
+    private static final ResourceLocation BLOCKS = ResourceLocation.withDefaultNamespace("blocks");
+    private static final ResourceLocation CUSTOM = ResourceLocation.parse("music_pack:records/wind");
 
     @BeforeAll static void bootstrap() {
         SharedConstants.tryDetectVersion();
@@ -38,11 +39,11 @@ class JukeboxAudioProtocolTest {
     @Test void foreignRegisteredHolderFailsOldRegistryIdEncodingButNewPacketCrossesActualBytes() {
         // Separate frozen registries reproduce bootstrap-versus-level ownership without requiring a live item-component load.
         RegistryAccess defaults = registry(BLOCKS, song(345));
-        Holder<JukeboxSong> itemSong = defaults.lookupOrThrow(Registries.JUKEBOX_SONG).get(BLOCKS).orElseThrow();
+        Holder<JukeboxSong> itemSong = defaults.lookupOrThrow(Registries.JUKEBOX_SONG).get(ResourceKey.create(Registries.JUKEBOX_SONG, BLOCKS)).orElseThrow();
         RegistryAccess level = registry(BLOCKS, song(90));
         RegistryFriendlyByteBuf encoded = buffer(level);
         try {
-            assertNotSame(itemSong, level.lookupOrThrow(Registries.JUKEBOX_SONG).get(BLOCKS).orElseThrow());
+            assertNotSame(itemSong, level.lookupOrThrow(Registries.JUKEBOX_SONG).get(ResourceKey.create(Registries.JUKEBOX_SONG, BLOCKS)).orElseThrow());
             IllegalArgumentException previousFailure = assertThrows(IllegalArgumentException.class,
                     () -> JukeboxSong.STREAM_CODEC.encode(encoded, itemSong));
             assertTrue(previousFailure.getMessage().contains("Can't find id"), "Reproduce the real TCP encoder failure");
@@ -57,7 +58,7 @@ class JukeboxAudioProtocolTest {
                 assertEquals(packet, decoded);
                 assertEquals(0, received.readableBytes());
                 assertEquals(Optional.of(BLOCKS), decoded.song());
-                assertSame(level.lookupOrThrow(Registries.JUKEBOX_SONG).getValue(BLOCKS), decoded.resolveSong(level).orElseThrow());
+                assertSame(level.lookupOrThrow(Registries.JUKEBOX_SONG).get(ResourceKey.create(Registries.JUKEBOX_SONG, BLOCKS)).orElseThrow().value(), decoded.resolveSong(level).orElseThrow());
             } finally { received.release(); }
         } finally { encoded.release(); }
     }
@@ -67,7 +68,7 @@ class JukeboxAudioProtocolTest {
         RegistryAccess server = registry(CUSTOM, song(30));
         JukeboxSong clientSong = song(20);
         RegistryAccess client = registry(CUSTOM, clientSong);
-        Holder<JukeboxSong> foreign = source.lookupOrThrow(Registries.JUKEBOX_SONG).get(CUSTOM).orElseThrow();
+        Holder<JukeboxSong> foreign = source.lookupOrThrow(Registries.JUKEBOX_SONG).get(ResourceKey.create(Registries.JUKEBOX_SONG, CUSTOM)).orElseThrow();
         JukeboxAudio packet = JukeboxAudio.playback(server, IDENTITY, foreign, -1, new BlockPos(-6, 90, 7), 800).orElseThrow();
         JukeboxAudio decoded = roundTrip(packet);
         assertEquals(Optional.of(CUSTOM), decoded.song());
@@ -79,7 +80,7 @@ class JukeboxAudioProtocolTest {
 
     @Test void directMissingAndInvalidRegistrySongsCannotProducePlayback() {
         RegistryAccess level = registry(CUSTOM, song(30));
-        Holder<JukeboxSong> named = level.lookupOrThrow(Registries.JUKEBOX_SONG).get(CUSTOM).orElseThrow();
+        Holder<JukeboxSong> named = level.lookupOrThrow(Registries.JUKEBOX_SONG).get(ResourceKey.create(Registries.JUKEBOX_SONG, CUSTOM)).orElseThrow();
         assertTrue(JukeboxAudio.playback(level, IDENTITY, Holder.direct(song(30)), 1, BlockPos.ZERO, 20).isEmpty());
         assertTrue(JukeboxAudio.playback(RegistryAccess.EMPTY, IDENTITY, named, 1, BlockPos.ZERO, 20).isEmpty());
         assertTrue(JukeboxAudio.playback(registry(BLOCKS, song(30)), IDENTITY, named, 1, BlockPos.ZERO, 20).isEmpty());
@@ -92,7 +93,7 @@ class JukeboxAudioProtocolTest {
 
     @Test void playbackBoundsItsLeaseAndNeverResurrectsAnExpiredSong() {
         RegistryAccess level = registry(CUSTOM, song(Float.MAX_VALUE));
-        Holder<JukeboxSong> named = level.lookupOrThrow(Registries.JUKEBOX_SONG).get(CUSTOM).orElseThrow();
+        Holder<JukeboxSong> named = level.lookupOrThrow(Registries.JUKEBOX_SONG).get(ResourceKey.create(Registries.JUKEBOX_SONG, CUSTOM)).orElseThrow();
         JukeboxAudio maximum = JukeboxAudio.playback(level, IDENTITY, named, 1, BlockPos.ZERO, Integer.MAX_VALUE).orElseThrow();
         assertEquals(JukeboxAudio.MAX_REMAINING_TICKS, maximum.remainingTicks());
         assertEquals(maximum, roundTrip(maximum));
@@ -114,13 +115,13 @@ class JukeboxAudioProtocolTest {
     }
 
     @Test void textBoundsAndMandatoryFieldsApplyBeforeEncoding() {
-        Identifier longestKey = Identifier.parse("x:" + "a".repeat(JukeboxAudio.MAX_SONG_KEY_LENGTH - 2));
+        ResourceLocation longestKey = ResourceLocation.parse("x:" + "a".repeat(JukeboxAudio.MAX_SONG_KEY_LENGTH - 2));
         JukeboxAudio maximum = new JukeboxAudio("a".repeat(JukeboxAudio.MAX_IDENTITY_LENGTH),
                 Optional.of(longestKey), -1, BlockPos.ZERO, 1);
         assertEquals(maximum, roundTrip(maximum));
         for (String invalid : List.of("", " ", "line\nbreak", "x".repeat(JukeboxAudio.MAX_IDENTITY_LENGTH + 1)))
             assertThrows(IllegalArgumentException.class, () -> JukeboxAudio.stop(invalid));
-        Identifier tooLong = Identifier.parse("x:" + "a".repeat(JukeboxAudio.MAX_SONG_KEY_LENGTH - 1));
+        ResourceLocation tooLong = ResourceLocation.parse("x:" + "a".repeat(JukeboxAudio.MAX_SONG_KEY_LENGTH - 1));
         assertThrows(IllegalArgumentException.class, () -> new JukeboxAudio(IDENTITY, Optional.of(tooLong), 1, BlockPos.ZERO, 1));
         assertThrows(NullPointerException.class, () -> JukeboxAudio.stop(null));
         assertThrows(NullPointerException.class, () -> new JukeboxAudio(IDENTITY, null, -1, BlockPos.ZERO, 0));
@@ -162,7 +163,7 @@ class JukeboxAudioProtocolTest {
             buffer.writeUtf(IDENTITY);
             buffer.writeBoolean(true);
             buffer.writeUtf("Bad Namespace:record");
-            assertThrows(IdentifierException.class, () -> JukeboxAudio.STREAM_CODEC.decode(buffer));
+            assertThrows(ResourceLocationException.class, () -> JukeboxAudio.STREAM_CODEC.decode(buffer));
             for (int ticks : new int[] {-1, 0, JukeboxAudio.MAX_REMAINING_TICKS + 1, Integer.MAX_VALUE}) {
                 buffer.clear();
                 buffer.writeUtf(IDENTITY);
@@ -177,11 +178,11 @@ class JukeboxAudioProtocolTest {
     }
 
     private static JukeboxSong song(float seconds) {
-        return new JukeboxSong(Holder.direct(SoundEvent.createVariableRangeEvent(Identifier.parse("music_pack:record.wind"))),
+        return new JukeboxSong(Holder.direct(SoundEvent.createVariableRangeEvent(ResourceLocation.parse("music_pack:record.wind"))),
                 Component.literal("Test record"), seconds, 1);
     }
 
-    private static RegistryAccess registry(Identifier key, JukeboxSong value) {
+    private static RegistryAccess registry(ResourceLocation key, JukeboxSong value) {
         MappedRegistry<JukeboxSong> registry = new MappedRegistry<>(Registries.JUKEBOX_SONG, Lifecycle.stable());
         Registry.registerForHolder(registry, key, value);
         registry.freeze();

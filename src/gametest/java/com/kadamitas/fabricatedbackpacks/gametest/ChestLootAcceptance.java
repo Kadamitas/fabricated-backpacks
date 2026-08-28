@@ -7,7 +7,7 @@ import com.mojang.serialization.JsonOps;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -32,16 +32,16 @@ final class ChestLootAcceptance {
 
     static List<String> verify(ServerLevel level, BlockPos origin, boolean requireAllVanilla) {
         var registries = level.getServer().reloadableRegistries();
-        var ops = RegistryOps.create(JsonOps.INSTANCE, registries.lookup());
+        var ops = RegistryOps.create(JsonOps.INSTANCE, registries.get());
         LootParams params = new LootParams.Builder(level).withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(origin)).create(LootContextParamSets.CHEST);
         List<String> evidence = new ArrayList<>();
         int builtin = 0;
         for (var entry : ChestLoot.ROLLS.entrySet()) {
-            Identifier id = Identifier.withDefaultNamespace("chests/" + entry.getKey());
-            var resource = level.getServer().getResourceManager().getResource(Identifier.withDefaultNamespace("loot_table/" + id.getPath() + ".json")).orElseThrow();
+            ResourceLocation id = ResourceLocation.withDefaultNamespace("chests/" + entry.getKey());
+            var resource = level.getServer().getResourceManager().getResource(ResourceLocation.withDefaultNamespace("loot_table/" + id.getPath() + ".json")).orElseThrow();
             var table = registries.getLootTable(ResourceKey.create(Registries.LOOT_TABLE, id));
             JsonObject encoded = LootTable.DIRECT_CODEC.encodeStart(ops, table).getOrThrow().getAsJsonObject();
-            if (resource.getFabricPackSource() != PackSource.BUILT_IN) {
+            if (resource.source().location().source() != PackSource.BUILT_IN) {
                 check(!requireAllVanilla, "The default-world acceptance requires the vanilla source for " + id + "; actual=" + resource.sourcePackId());
                 try (var reader = resource.openAsReader()) {
                     LootTable supplied = LootTable.DIRECT_CODEC.parse(ops, JsonParser.parseReader(reader)).getOrThrow();

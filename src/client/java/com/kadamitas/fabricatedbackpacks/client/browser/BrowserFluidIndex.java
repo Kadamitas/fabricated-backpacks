@@ -3,7 +3,7 @@ package com.kadamitas.fabricatedbackpacks.client.browser;
 import com.kadamitas.fabricatedbackpacks.browser.BrowserQuery;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.material.Fluids;
 
 import java.util.ArrayDeque;
@@ -14,8 +14,8 @@ import java.util.TreeSet;
 
 /** Small incremental companion to the shared item index; flowing/source aliases appear once. */
 final class BrowserFluidIndex {
-    record Entry(Identifier id, BrowserQuery.SearchText text) {}
-    private final ArrayDeque<Identifier> pending = new ArrayDeque<>();
+    record Entry(ResourceLocation id, BrowserQuery.SearchText text) {}
+    private final ArrayDeque<ResourceLocation> pending = new ArrayDeque<>();
     private final List<Entry> fluids = new ArrayList<>();
     private boolean started, sorted;
     private long version;
@@ -26,7 +26,7 @@ final class BrowserFluidIndex {
     void begin(Minecraft client) {
         if (started || client.level == null) return;
         started = true;
-        var unique = new TreeSet<Identifier>();
+        var unique = new TreeSet<ResourceLocation>();
         for (var fluid : BuiltInRegistries.FLUID) if (fluid != Fluids.EMPTY) {
             FluidPresentation.canonical(BuiltInRegistries.FLUID.getKey(fluid)).ifPresent(unique::add);
         }
@@ -38,7 +38,7 @@ final class BrowserFluidIndex {
         long start = System.nanoTime();
         int count = 0;
         while (count < 64 && System.nanoTime() - start < 2_000_000 && !pending.isEmpty()) {
-            Identifier id = pending.removeFirst();
+            ResourceLocation id = pending.removeFirst();
             String name = FluidPresentation.name(id).getString();
             String tooltip = String.join(" ", FluidPresentation.tooltip(id).stream().map(line -> line.getString()).toList());
             fluids.add(new Entry(id, new BrowserQuery.SearchText(name + " " + id, id.getNamespace(), tooltip)));

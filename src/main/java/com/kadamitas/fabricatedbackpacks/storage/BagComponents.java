@@ -5,10 +5,11 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.component.CustomData;
 
 public final class BagComponents {
+    public static final DataComponentType<com.kadamitas.fabricatedbackpacks.item.BackpackColors> COLORS = register("colors", com.kadamitas.fabricatedbackpacks.item.BackpackColors.CODEC);
     public static final DataComponentType<InventorySnapshot> CONTENTS = snapshot("contents");
     public static final DataComponentType<InventorySnapshot> UPGRADES = snapshot("upgrades");
     public static final DataComponentType<InventorySnapshot> FILTERS = snapshot("filters");
@@ -25,7 +26,7 @@ public final class BagComponents {
 
     private static <T> DataComponentType<T> register(String path, Codec<T> codec) {
         return Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE,
-                Identifier.fromNamespaceAndPath("fabricated_backpacks", path),
+                ResourceLocation.fromNamespaceAndPath("fabricated_backpacks", path),
                 DataComponentType.<T>builder().persistent(codec)
                         .networkSynchronized(ByteBufCodecs.fromCodecWithRegistries(codec)).cacheEncoding().build());
     }

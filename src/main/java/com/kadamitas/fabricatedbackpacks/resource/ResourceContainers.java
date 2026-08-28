@@ -7,7 +7,7 @@ import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
+import net.fabricmc.fabric.api.transfer.v1.item.InventoryStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
 import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
@@ -21,7 +21,7 @@ final class ResourceContainers {
     private ResourceContainers() {}
 
     static void tank(BagInventory bag, InstalledUpgrade upgrade) {
-        ContainerStorage inventory = ContainerStorage.of(bag.upgradeInventory(upgrade), null);
+        InventoryStorage inventory = InventoryStorage.of(bag.upgradeInventory(upgrade), null);
         Storage<FluidVariant> tank = ResourceRuntime.tankStorage(bag, upgrade.slot(), false);
         ContainerItemContext drain = outputContext(inventory.getSlot(0), inventory.getSlot(2));
         ContainerItemContext fill = outputContext(inventory.getSlot(1), inventory.getSlot(3));
@@ -30,7 +30,7 @@ final class ResourceContainers {
     }
 
     static void battery(BagInventory bag, InstalledUpgrade upgrade) {
-        ContainerStorage inventory = ContainerStorage.of(bag.upgradeInventory(upgrade), null);
+        InventoryStorage inventory = InventoryStorage.of(bag.upgradeInventory(upgrade), null);
         BackpackBattery battery = new BackpackBattery(bag, upgrade);
         long rate = BackpackConfig.get().upgrades().battery().transfer(bag.rows(), bag.multiplier());
         ContainerItemContext discharge = ContainerItemContext.ofSingleSlot(inventory.getSlot(0));

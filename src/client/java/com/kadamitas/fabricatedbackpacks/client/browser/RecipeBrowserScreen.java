@@ -4,20 +4,16 @@ import com.kadamitas.fabricatedbackpacks.browser.BrowserQuery;
 import com.kadamitas.fabricatedbackpacks.browser.BrowserTransferResult;
 import com.kadamitas.fabricatedbackpacks.browser.NavigationHistory;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.InputWithModifiers;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
@@ -33,8 +29,8 @@ final class RecipeBrowserScreen extends Screen {
     private final NavigationHistory<ViewState> history = new NavigationHistory<>(64);
     private final List<ItemButton> itemButtons = new ArrayList<>();
     private final List<ItemButton> ingredientButtons = new ArrayList<>();
-    private Identifier selected = BackpackRegistry.id("backpack");
-    private Identifier category;
+    private ResourceLocation selected = BackpackRegistry.id("backpack");
+    private ResourceLocation category;
     private boolean uses;
     private boolean onlyBookmarks;
     private boolean savedRecipes;
@@ -52,7 +48,7 @@ final class RecipeBrowserScreen extends Screen {
     private BrowserClientIndex seenIndex;
     private List<BrowserClientIndex.BrowserItem> filtered = List.of();
     private List<BrowserRecipeView> matchingRecipes = List.of();
-    private List<Identifier> categories = List.of();
+    private List<ResourceLocation> categories = List.of();
     private Component status;
     private boolean statusError;
     private Component lastStatus;
@@ -62,7 +58,8 @@ final class RecipeBrowserScreen extends Screen {
     private EditBox search;
     private Button backButton, forwardButton, categoryButton, transferButton, maximumButton, itemFavoriteButton, recipeFavoriteButton;
     private Button previousItems, nextItems, previousRecipe, nextRecipe;
-    private Identifier hoveredItem;
+    private ResourceLocation hoveredItem;
+    private ItemStack hoveredStack = ItemStack.EMPTY;
 
     RecipeBrowserScreen(Screen previous, int containerId, int ghostSlot) {
         super(Component.translatable("screen.fabricated_backpacks.browser"));
@@ -144,7 +141,7 @@ final class RecipeBrowserScreen extends Screen {
 
     @Override public void tick() {
         if (!validContext()) {
-            minecraft.gui.setScreen(null);
+            minecraft.setScreen(null);
             return;
         }
         if (status != lastStatus) { lastStatus = status; statusSince = RecipeBrowserClient.ticks(); }
@@ -172,10 +169,9 @@ final class RecipeBrowserScreen extends Screen {
     }
 
     @Override public void onClose() {
-        minecraft.gui.setScreen(validContext() ? previous : null);
+        minecraft.setScreen(validContext() ? previous : null);
     }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public boolean isInGameUi() { return true; }
 
     void transferResult(BrowserTransferResult result) {
         if (pendingTransfer == 0 || result.requestId() != pendingTransfer) return;
@@ -275,20 +271,20 @@ final class RecipeBrowserScreen extends Screen {
         return matchingRecipes.isEmpty() ? null : matchingRecipes.get(recipePage);
     }
 
-    private void choose(ItemStack stack, InputWithModifiers input) {
+    private void choose(ItemStack stack, int button) {
         if (stack.isEmpty()) return;
-        Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        if (input.hasShiftDown() || input instanceof MouseButtonEvent mouse && mouse.button() == 2) {
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        if (hasShiftDown() || button == 2) {
             if (!RecipeBrowserClient.bookmarks().toggleItem(id)) bookmarkLimit();
             refreshItems();
             refreshRecipes();
             return;
         }
-        boolean nextUses = input instanceof MouseButtonEvent mouse && mouse.button() == 1;
+        boolean nextUses = button == 1;
         select(id, nextUses);
     }
 
-    private void select(Identifier id, boolean useMode) {
+    private void select(ResourceLocation id, boolean useMode) {
         if (selected.equals(id) && uses == useMode && !savedRecipes) return;
         remember();
         selected = id;
@@ -358,7 +354,7 @@ final class RecipeBrowserScreen extends Screen {
         if (mouseX < rightX) {
             itemPage += vertical > 0 ? -1 : 1;
             refreshItems();
-        } else if (minecraft.hasControlDown()) {
+        } else if (net.minecraft.client.gui.screens.Screen.hasControlDown()) {
             ingredientRow += vertical > 0 ? -1 : 1;
             refreshIngredientButtons();
         } else {
@@ -367,66 +363,71 @@ final class RecipeBrowserScreen extends Screen {
         return true;
     }
 
-    @Override public boolean keyPressed(KeyEvent event) {
-        if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_F) {
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (net.minecraft.client.gui.screens.Screen.hasControlDown() && keyCode == GLFW.GLFW_KEY_F) {
             setFocused(search);
             search.setFocused(true);
             return true;
         }
-        if (event.hasAltDown() && event.key() == GLFW.GLFW_KEY_LEFT) { navigateHistory(false); return true; }
-        if (event.hasAltDown() && event.key() == GLFW.GLFW_KEY_RIGHT) { navigateHistory(true); return true; }
+        if (net.minecraft.client.gui.screens.Screen.hasAltDown() && keyCode == GLFW.GLFW_KEY_LEFT) { navigateHistory(false); return true; }
+        if (net.minecraft.client.gui.screens.Screen.hasAltDown() && keyCode == GLFW.GLFW_KEY_RIGHT) { navigateHistory(true); return true; }
         if (!search.isFocused()) {
-            Identifier item = hoveredItem == null ? selected : hoveredItem;
-            if (event.key() == GLFW.GLFW_KEY_R) { select(item, false); return true; }
-            if (event.key() == GLFW.GLFW_KEY_U) { select(item, true); return true; }
-            if (event.key() == GLFW.GLFW_KEY_B) {
+            ResourceLocation item = hoveredItem == null ? selected : hoveredItem;
+            if (keyCode == GLFW.GLFW_KEY_R) { select(item, false); return true; }
+            if (keyCode == GLFW.GLFW_KEY_U) { select(item, true); return true; }
+            if (keyCode == GLFW.GLFW_KEY_B) {
                 if (!RecipeBrowserClient.bookmarks().toggleItem(item)) bookmarkLimit();
                 refreshItems();
                 refreshRecipes();
                 return true;
             }
         }
-        return super.keyPressed(event);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    // This screen paints its own backdrop before its native widgets.
+    @Override public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {}
+
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         hoveredItem = null;
+        hoveredStack = ItemStack.EMPTY;
         graphics.fill(0, 0, width, height, 0xF019252D);
         graphics.fill(5, 33, leftWidth + 11, height - 6, 0xFF24343C);
         graphics.fill(rightX - 3, 33, width - 5, height - 6, 0xFF203139);
-        graphics.text(font, title, 69, 13, 0xFFE8C89A);
+        graphics.drawString(font, title, 69, 13, 0xFFE8C89A);
         ItemStack selectedStack = RecipeBrowserClient.index().item(selected);
         Component heading = savedRecipes ? text("saved_recipes") : selectedStack.isEmpty() ? Component.literal(selected.toString()) : selectedStack.getHoverName();
-        graphics.text(font, font.plainSubstrByWidth(heading.getString(), rightWidth - 4), rightX, 38, 0xFFF1E7D2);
+        graphics.drawString(font, font.plainSubstrByWidth(heading.getString(), rightWidth - 4), rightX, 38, 0xFFF1E7D2);
         String mode = text(savedRecipes ? "saved" : uses ? "uses" : "recipes").getString();
-        graphics.text(font, mode + " · " + (matchingRecipes.isEmpty() ? 0 : recipePage + 1) + "/" + matchingRecipes.size(), rightX, 50, 0xFF9FC3C3);
+        graphics.drawString(font, mode + " · " + (matchingRecipes.isEmpty() ? 0 : recipePage + 1) + "/" + matchingRecipes.size(), rightX, 50, 0xFF9FC3C3);
         int pages = Math.max(1, Math.ceilDiv(filtered.size(), columns * rows));
-        graphics.centeredText(font, (itemPage + 1) + "/" + pages, 8 + leftWidth / 2, height - 42, 0xFFD6DEDB);
-        graphics.text(font, text("item_count", filtered.size()), 10, height - 22, 0xFFC8D1CB);
+        graphics.drawCenteredString(font, (itemPage + 1) + "/" + pages, 8 + leftWidth / 2, height - 42, 0xFFD6DEDB);
+        graphics.drawString(font, text("item_count", filtered.size()), 10, height - 22, 0xFFC8D1CB);
         BrowserRecipeView recipe = currentRecipe();
         if (recipe == null) {
-            graphics.textWithWordWrap(font, text(RecipeBrowserClient.total() < 0 || RecipeBrowserClient.received() < RecipeBrowserClient.total()
+            graphics.drawWordWrap(font, text(RecipeBrowserClient.total() < 0 || RecipeBrowserClient.received() < RecipeBrowserClient.total()
                     || RecipeBrowserClient.index().building() ? "loading" : "no_recipes"), rightX + 9, 118, rightWidth - 18, 0xFFD2DDD5);
         } else {
             int arrowX = rightX + rightWidth - 58;
-            graphics.text(font, "→", arrowX, 128, 0xFFE3BD81);
+            graphics.drawString(font, "→", arrowX, 128, 0xFFE3BD81);
             String id = recipe.source().recipe().toString();
-            graphics.text(font, font.plainSubstrByWidth(id, rightWidth - 6), rightX + 3, height - 65, 0xFF86ADAE);
+            graphics.drawString(font, font.plainSubstrByWidth(id, rightWidth - 6), rightX + 3, height - 65, 0xFF86ADAE);
             if (mouseY >= height - 67 && mouseY < height - 54 && mouseX >= rightX) {
-                graphics.setTooltipForNextFrame(Component.literal(id), mouseX, mouseY);
+                com.kadamitas.fabricatedbackpacks.client.screen.ClientText.tooltip(Component.literal(id), mouseX, mouseY);
             }
             String station = recipe.stations().isEmpty() ? categoryName(recipe.source().category()).getString() : recipe.stations().getFirst().getHoverName().getString();
-            graphics.text(font, font.plainSubstrByWidth(station, Math.max(0, rightWidth - 108)), rightX + 27, height - 47, 0xFFD4D9CC);
-            if (recipe.duration() > 0) graphics.text(font, text("cooking", recipe.duration() / 20.0F, recipe.experience()), rightX + 34, 150, 0xFF8BAAA8);
+            graphics.drawString(font, font.plainSubstrByWidth(station, Math.max(0, rightWidth - 108)), rightX + 27, height - 47, 0xFFD4D9CC);
+            if (recipe.duration() > 0) graphics.drawString(font, text("cooking", recipe.duration() / 20.0F, recipe.experience()), rightX + 34, 150, 0xFF8BAAA8);
             if (!recipe.source().unlocked()) {
-                graphics.text(font, "◇", rightX + rightWidth - 10, 38, 0xFFE0BC79);
-                if (mouseX >= rightX + rightWidth - 15 && mouseY < 58) graphics.setTooltipForNextFrame(text("not_unlocked"), mouseX, mouseY);
+                graphics.drawString(font, "◇", rightX + rightWidth - 10, 38, 0xFFE0BC79);
+                if (mouseX >= rightX + rightWidth - 15 && mouseY < 58) com.kadamitas.fabricatedbackpacks.client.screen.ClientText.tooltip(text("not_unlocked"), mouseX, mouseY);
             }
         }
-        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
+        if (!hoveredStack.isEmpty()) graphics.renderTooltip(font, hoveredStack, mouseX, mouseY);
         if (status != null) {
             graphics.fill(5, height - 80, width - 5, height - 54, 0xF0121D26);
-            graphics.textWithWordWrap(font, status, 10, height - 76, width - 20, statusError ? 0xFFFFAA87 : 0xFF9CE1C6);
+            graphics.drawWordWrap(font, status, 10, height - 76, width - 20, statusError ? 0xFFFFAA87 : 0xFF9CE1C6);
         }
         if (mouseY < 29 && mouseX >= 69 && mouseX < width - 53) {
             List<Component> help = new ArrayList<>();
@@ -438,12 +439,12 @@ final class RecipeBrowserScreen extends Screen {
                     String.format(java.util.Locale.ROOT, "%.3f", RecipeBrowserClient.index().searchNanos() / 1_000_000.0)));
             if (RecipeBrowserClient.undisplayed() > 0) help.add(text("undisplayed", RecipeBrowserClient.undisplayed()));
             if (RecipeBrowserClient.truncated()) help.add(text("truncated"));
-            graphics.setComponentTooltipForNextFrame(font, help, mouseX, mouseY);
+            com.kadamitas.fabricatedbackpacks.client.screen.ClientText.components(font, help, mouseX, mouseY);
         }
     }
 
     private static Component text(String key, Object... args) { return Component.translatable("browser.fabricated_backpacks." + key, args); }
-    private static Component categoryName(Identifier id) {
+    private static Component categoryName(ResourceLocation id) {
         String key = "browser.fabricated_backpacks.category." + id.getPath();
         return id.getNamespace().equals("minecraft") ? Component.translatable(key) : Component.literal(id.toString());
     }
@@ -454,25 +455,31 @@ final class RecipeBrowserScreen extends Screen {
             super(x, y, 18, 18, source.get().isEmpty() ? text("empty_slot") : source.get().getHoverName());
             this.source = source;
         }
-        @Override public void onPress(InputWithModifiers input) { choose(source.get(), input); }
-        @Override protected boolean isValidClickButton(MouseButtonInfo mouse) { return mouse.button() >= 0 && mouse.button() <= 2; }
-        @Override protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        private int clickButton;
+        @Override public void onPress() { choose(source.get(), clickButton); }
+        @Override protected boolean isValidClickButton(int button) { return button >= 0 && button <= 2; }
+        @Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            clickButton = button;
+            try { return super.mouseClicked(mouseX, mouseY, button); }
+            finally { clickButton = 0; }
+        }
+        @Override protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
             ItemStack stack = source.get();
             graphics.fill(getX(), getY(), getRight(), getBottom(), isHoveredOrFocused() ? 0xFF708B89 : 0xFF13242D);
-            graphics.outline(getX(), getY(), 18, 18, isHoveredOrFocused() ? 0xFFE8C68E : 0xFF42595E);
+            graphics.renderOutline(getX(), getY(), 18, 18, isHoveredOrFocused() ? 0xFFE8C68E : 0xFF42595E);
             if (stack.isEmpty()) return;
-            Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-            graphics.fakeItem(stack, getX() + 1, getY() + 1);
-            graphics.itemDecorations(font, stack, getX() + 1, getY() + 1);
+            ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+            graphics.renderFakeItem(stack, getX() + 1, getY() + 1);
+            graphics.renderItemDecorations(font, stack, getX() + 1, getY() + 1);
             if (RecipeBrowserClient.bookmarks().containsItem(id)) graphics.fill(getX() + 13, getY() + 1, getX() + 17, getY() + 4, 0xFFFFCF6A);
             if (isHoveredOrFocused()) {
                 hoveredItem = id;
-                graphics.setTooltipForNextFrame(font, stack, mouseX, mouseY);
+                hoveredStack = stack;
             }
             setMessage(stack.getHoverName());
         }
         @Override protected void updateWidgetNarration(NarrationElementOutput narration) { defaultButtonNarrationText(narration); }
     }
 
-    private record ViewState(Identifier item, boolean uses, boolean saved, Identifier category, String query, int itemPage, int recipePage, boolean bookmarks) {}
+    private record ViewState(ResourceLocation item, boolean uses, boolean saved, ResourceLocation category, String query, int itemPage, int recipePage, boolean bookmarks) {}
 }

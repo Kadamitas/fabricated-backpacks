@@ -37,7 +37,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -209,7 +209,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             player.getInventory().setItem(2, worn.stack());
             player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.DIAMOND_CHESTPLATE));
             for (int slot = 0; slot < RECORDS.size(); slot++) player.getInventory().setItem(9 + slot,
-                    new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace("music_disc_" + RECORDS.get(slot)))));
+                    new ItemStack(BuiltInRegistries.ITEM.getValue(ResourceLocation.withDefaultNamespace("music_disc_" + RECORDS.get(slot)))));
             player.getInventory().setItem(21, new ItemStack(Items.EMERALD, 19));
             player.getInventory().setItem(22, new ItemStack(Items.OAK_LOG, 3));
             player.getInventory().setItem(24, new ItemStack(Items.WATER_BUCKET));

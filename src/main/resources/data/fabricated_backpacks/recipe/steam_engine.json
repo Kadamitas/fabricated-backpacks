@@ -7,10 +7,18 @@
     "III"
   ],
   "key": {
-    "I": "minecraft:iron_ingot",
-    "F": "minecraft:furnace",
-    "C": "minecraft:copper_ingot",
-    "B": "minecraft:bucket"
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "F": {
+      "item": "minecraft:furnace"
+    },
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "B": {
+      "item": "minecraft:bucket"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:steam_engine",

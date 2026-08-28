@@ -2,7 +2,7 @@ package com.kadamitas.fabricatedbackpacks.client.browser;
 
 import com.kadamitas.fabricatedbackpacks.browser.BrowserRecipeEntry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.HashSet;
@@ -20,14 +20,14 @@ record BrowserRecipeView(BrowserRecipeEntry source, Layout layout, int columns, 
         stations = List.copyOf(stations);
     }
 
-    Set<Identifier> resultIds() { return ids(List.of(results)); }
-    Set<Identifier> ingredientIds() {
-        Set<Identifier> ids = ids(ingredients);
+    Set<ResourceLocation> resultIds() { return ids(List.of(results)); }
+    Set<ResourceLocation> ingredientIds() {
+        Set<ResourceLocation> ids = ids(ingredients);
         ids.addAll(ids(List.of(fuel)));
         return ids;
     }
-    private static Set<Identifier> ids(List<List<ItemStack>> groups) {
-        Set<Identifier> ids = new HashSet<>();
+    private static Set<ResourceLocation> ids(List<List<ItemStack>> groups) {
+        Set<ResourceLocation> ids = new HashSet<>();
         for (List<ItemStack> group : groups) for (ItemStack stack : group) if (!stack.isEmpty()) ids.add(BuiltInRegistries.ITEM.getKey(stack.getItem()));
         return ids;
     }

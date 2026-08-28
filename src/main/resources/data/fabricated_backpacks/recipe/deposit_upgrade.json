@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:dropper",
-    "T": "minecraft:copper_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:redstone"
+    "M": {
+      "item": "minecraft:dropper"
+    },
+    "T": {
+      "item": "minecraft:copper_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:redstone"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:deposit_upgrade",

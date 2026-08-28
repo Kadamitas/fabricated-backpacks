@@ -10,7 +10,7 @@ import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityT
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -32,11 +32,11 @@ public final class BackpackRegistry {
     public static BlockEntityType<BackpackBlockEntity> BLOCK_ENTITY;
 
     private BackpackRegistry() {}
-    public static Identifier id(String path) { return Identifier.fromNamespaceAndPath("fabricated_backpacks", path); }
+    public static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath("fabricated_backpacks", path); }
 
     public static void initialize() {
         for (BackpackTier tier : BackpackTier.values()) {
-            var properties = BlockBehaviour.Properties.of().setId(ResourceKey.create(Registries.BLOCK, id(tier.id())))
+            var properties = BlockBehaviour.Properties.of()
                     .strength(1.5F).noOcclusion().sound(SoundType.WOOL).mapColor(MapColor.COLOR_BROWN);
             var block = Registry.register(BuiltInRegistries.BLOCK, id(tier.id()), new BackpackBlock(properties));
             BLOCKS.put(tier, block);
@@ -60,7 +60,7 @@ public final class BackpackRegistry {
     }
 
     private static Item.Properties properties(String path) {
-        return new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id(path)));
+        return new Item.Properties();
     }
     private static Item register(String path, Item item) {
         Registry.register(BuiltInRegistries.ITEM, id(path), item);

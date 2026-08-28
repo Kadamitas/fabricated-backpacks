@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:paper",
-    "T": "minecraft:iron_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:string"
+    "M": {
+      "item": "minecraft:paper"
+    },
+    "T": {
+      "item": "minecraft:iron_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:string"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:filter_upgrade",

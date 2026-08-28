@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.domain.ExperienceMath;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
@@ -30,11 +32,11 @@ final class ExperienceRuntime {
 
     static void tick(BagInventory bag, InstalledUpgrade upgrade, ServerLevel level, BlockPos position, LivingEntity carrier) {
         CompoundTag settings = bag.settings(upgrade);
-        if (!settings.getBooleanOr("enabled", true)) return;
+        if (!NbtAccess.getBooleanOr(settings, "enabled", true)) return;
         var rules = BackpackConfig.get().upgrades().experience();
-        long target = ExperienceMath.pointsAtLevel(Math.clamp(settings.getIntOr("target", 10), 0, 10_000));
-        long maximum = Math.clamp(settings.getIntOr("transfer_points", rules.transferPoints()), 1, rules.transferPoints());
-        String direction = settings.getStringOr("direction", "input");
+        long target = ExperienceMath.pointsAtLevel(Math.clamp(NbtAccess.getIntOr(settings, "target", 10), 0, 10_000));
+        long maximum = Math.clamp(NbtAccess.getIntOr(settings, "transfer_points", rules.transferPoints()), 1, rules.transferPoints());
+        String direction = NbtAccess.getStringOr(settings, "direction", "input");
         List<ServerPlayer> players = carrier instanceof ServerPlayer player ? List.of(player)
                 : carrier == null ? level.getEntitiesOfClass(ServerPlayer.class, new AABB(position).inflate(rules.range()),
                         player -> player.isAlive() && !player.isSpectator()) : List.of();
@@ -46,15 +48,15 @@ final class ExperienceRuntime {
             } else if ((direction.equals("output") || direction.equals("keep")) && points < target) {
                 transfer(bag, player, Math.min(maximum, target - points), false);
             }
-            if (rules.allowMending() && settings.getBooleanOr("mending", true)) {
-                mend(bag, player, Math.clamp(settings.getIntOr("mending_points", rules.mendingPoints()), 1, rules.mendingPoints()));
+            if (rules.allowMending() && NbtAccess.getBooleanOr(settings, "mending", true)) {
+                mend(bag, player, Math.clamp(NbtAccess.getIntOr(settings, "mending_points", rules.mendingPoints()), 1, rules.mendingPoints()));
             }
         }
     }
 
     static void action(BagInventory bag, InstalledUpgrade upgrade, String action, ServerPlayer player) {
         CompoundTag settings = bag.settings(upgrade);
-        int levels = Math.clamp(settings.getIntOr("levels", 1), 1, 10_000);
+        int levels = Math.clamp(NbtAccess.getIntOr(settings, "levels", 1), 1, 10_000);
         long points = new PlayerExperience(player).points();
         int level = ExperienceMath.levelAtPoints(points);
         switch (action) {
@@ -63,13 +65,13 @@ final class ExperienceRuntime {
                     Math.max(0, ExperienceMath.pointsAtLevel((int) Math.min(Integer.MAX_VALUE, (long) level + levels)) - points), false);
             case "store_all" -> transfer(bag, player, points, true);
             case "take_all" -> transfer(bag, player, Math.max(0, ExperienceMath.pointsAtLevel(10_000) - points), false);
-            case "target_up" -> bag.updateSettings(upgrade, tag -> tag.putInt("target", Math.clamp((long) tag.getIntOr("target", 10) + 1, 0, 10_000)));
-            case "target_down" -> bag.updateSettings(upgrade, tag -> tag.putInt("target", Math.clamp((long) tag.getIntOr("target", 10) - 1, 0, 10_000)));
-            case "levels_up" -> bag.updateSettings(upgrade, tag -> tag.putInt("levels", Math.clamp((long) tag.getIntOr("levels", 1) + 1, 1, 10_000)));
-            case "levels_down" -> bag.updateSettings(upgrade, tag -> tag.putInt("levels", Math.clamp((long) tag.getIntOr("levels", 1) - 1, 1, 10_000)));
-            case "mending" -> bag.updateSettings(upgrade, tag -> tag.putBoolean("mending", !tag.getBooleanOr("mending", true)));
+            case "target_up" -> bag.updateSettings(upgrade, tag -> tag.putInt("target", Math.clamp((long) NbtAccess.getIntOr(tag, "target", 10) + 1, 0, 10_000)));
+            case "target_down" -> bag.updateSettings(upgrade, tag -> tag.putInt("target", Math.clamp((long) NbtAccess.getIntOr(tag, "target", 10) - 1, 0, 10_000)));
+            case "levels_up" -> bag.updateSettings(upgrade, tag -> tag.putInt("levels", Math.clamp((long) NbtAccess.getIntOr(tag, "levels", 1) + 1, 1, 10_000)));
+            case "levels_down" -> bag.updateSettings(upgrade, tag -> tag.putInt("levels", Math.clamp((long) NbtAccess.getIntOr(tag, "levels", 1) - 1, 1, 10_000)));
+            case "mending" -> bag.updateSettings(upgrade, tag -> tag.putBoolean("mending", !NbtAccess.getBooleanOr(tag, "mending", true)));
             case "direction" -> bag.updateSettings(upgrade, tag -> tag.putString("direction",
-                    switch (tag.getStringOr("direction", "input")) {
+                    switch (NbtAccess.getStringOr(tag, "direction", "input")) {
                         case "input" -> "output";
                         case "output" -> "keep";
                         case "keep" -> "off";
@@ -98,10 +100,10 @@ final class ExperienceRuntime {
         long now = level.getGameTime();
         for (InstalledUpgrade upgrade : bag.installedUpgrades()) {
             CompoundTag settings = bag.settings(upgrade);
-            if (!settings.getBooleanOr("enabled", true)) continue;
+            if (!NbtAccess.getBooleanOr(settings, "enabled", true)) continue;
             if (upgrade.kind().family().equals("cooking") && upgrade.kind().id().startsWith("auto_")) {
                 if (now % BackpackConfig.get().upgrades().cooking().retryMinimum() != 0) continue;
-                double stored = settings.getDoubleOr("experience", 0);
+                double stored = NbtAccess.getDoubleOr(settings, "experience", 0);
                 if (!Double.isFinite(stored) || stored < 1) continue;
                 try (Transaction transaction = Transaction.openOuter()) {
                     long accepted = ResourceRuntime.insertExperience(bag, (long) Math.floor(stored), transaction);
@@ -110,9 +112,9 @@ final class ExperienceRuntime {
                         transaction.commit();
                     }
                 }
-            } else if (upgrade.kind().family().equals("magnet") && settings.getBooleanOr("magnet_xp", true)) {
+            } else if (upgrade.kind().family().equals("magnet") && NbtAccess.getBooleanOr(settings, "magnet_xp", true)) {
                 var rules = BackpackConfig.get().upgrades().magnet();
-                long next = settings.getLongOr("magnet_xp_next", 0);
+                long next = NbtAccess.getLongOr(settings, "magnet_xp_next", 0);
                 if (next > now && next - now <= Math.max(rules.activeTicks(), rules.idleTicks())) continue;
                 int range = rules.radius(upgrade.kind());
                 AABB area = carrier == null ? new AABB(position).inflate(range) : carrier.getBoundingBox().inflate(range);
@@ -144,7 +146,7 @@ final class ExperienceRuntime {
                     pointBudget * FluidAmount.DROPLETS_PER_XP, transaction);
             if (available == 0) return;
             int budget = (int) Math.ceilDiv(available, FluidAmount.DROPLETS_PER_XP);
-            int possible = EnchantmentHelper.modifyDurabilityToRepairFromXp(player.level(), item, budget);
+            int possible = EnchantmentHelper.modifyDurabilityToRepairFromXp(player.serverLevel(), item, budget);
             if (possible <= 0) return;
             long budgetDroplets = budget * FluidAmount.DROPLETS_PER_XP;
             int repaired = (int) Math.min(item.getDamageValue(), possible * available / budgetDroplets);
@@ -236,7 +238,7 @@ final class ExperienceRuntime {
                 access.fabricatedBackpacks$setCount(1);
                 access.fabricatedBackpacks$setValue(value - partial);
             } else {
-                ExperienceOrb remainder = new ExperienceOrb(level, orb.position(), net.minecraft.world.phys.Vec3.ZERO, value - partial);
+                ExperienceOrb remainder = new ExperienceOrb(level, orb.getX(), orb.getY(), orb.getZ(), value - partial);
                 if (!level.addFreshEntity(remainder)) return false;
                 created.add(remainder);
                 access.fabricatedBackpacks$setCount(remaining - 1);
@@ -266,7 +268,7 @@ final class ExperienceRuntime {
         private final BagInventory bag;
         private final InstalledUpgrade upgrade;
         CookingExperience(BagInventory bag, InstalledUpgrade upgrade) { this.bag = bag; this.upgrade = upgrade; }
-        private double value() { return bag.settings(upgrade).getDoubleOr("experience", 0); }
+        private double value() { return NbtAccess.getDoubleOr(bag.settings(upgrade), "experience", 0); }
         void subtract(long points, TransactionContext transaction) {
             if (points < 0 || points > value()) throw new IllegalArgumentException("Invalid cooking XP debit");
             updateSnapshots(transaction);

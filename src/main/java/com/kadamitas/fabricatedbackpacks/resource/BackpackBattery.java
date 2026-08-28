@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
@@ -31,7 +33,7 @@ public final class BackpackBattery extends SnapshotParticipant<ResourceSettingsS
     }
 
     @Override public long getAmount() {
-        long stored = attached() ? bag.settings(upgrade).getLongOr("amount", 0) : 0;
+        long stored = attached() ? NbtAccess.getLongOr(bag.settings(upgrade), "amount", 0) : 0;
         if (stored < 0) throw new IllegalStateException("Negative stored energy");
         return stored;
     }

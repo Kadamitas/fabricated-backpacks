@@ -1,9 +1,9 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
+import com.kadamitas.fabricatedbackpacks.domain.StackCapacity;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
+import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
 import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
 import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
 import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
@@ -15,27 +15,28 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-/** Fabric's generic container adapter does not consult Container.canTakeItem; these views do. */
-public final class BackpackItemStorage implements Storage<ItemVariant> {
+/** Native backpack limits and output policies exceed Fabric's vanilla inventory adapter contract. */
+public final class BackpackItemStorage implements SlottedStorage<ItemVariant> {
     private final BagInventory bag;
-    private final ContainerStorage delegate;
     private final List<View> views;
 
     public BackpackItemStorage(BagInventory bag, Direction direction) {
         this.bag = bag;
-        delegate = ContainerStorage.of(bag, direction);
         List<View> slots = new ArrayList<>();
-        for (int slot = 0; slot < bag.getContainerSize(); slot++) slots.add(new View(slot, delegate.getSlot(slot)));
+        for (int slot = 0; slot < bag.getContainerSize(); slot++) slots.add(new View(slot));
         views = List.copyOf(slots);
     }
 
     @Override public long insert(ItemVariant resource, long maximum, TransactionContext transaction) {
         StoragePreconditions.notBlankNotNegative(resource, maximum);
-        if (bag.infinityKind() == null) return delegate.insert(resource, maximum, transaction);
         long inserted = 0;
-        for (View view : views) {
-            inserted += view.insert(resource, maximum - inserted, transaction);
-            if (inserted == maximum) break;
+        // Preserve native insertion preference: grow matching stacks before occupying empty slots.
+        for (boolean empty : new boolean[]{false, true}) {
+            for (View view : views) {
+                if (view.isResourceBlank() != empty || !empty && !view.getResource().equals(resource)) continue;
+                inserted += view.insert(resource, maximum - inserted, transaction);
+                if (inserted == maximum) return inserted;
+            }
         }
         return inserted;
     }
@@ -54,30 +55,45 @@ public final class BackpackItemStorage implements Storage<ItemVariant> {
         return views.stream().map(view -> (StorageView<ItemVariant>) view).iterator();
     }
 
-    SingleSlotStorage<ItemVariant> slot(int slot) { return views.get(slot); }
+    @Override public int getSlotCount() { return views.size(); }
+    @Override public SingleSlotStorage<ItemVariant> getSlot(int slot) { return views.get(slot); }
+
+    SingleSlotStorage<ItemVariant> slot(int slot) { return getSlot(slot); }
 
     private final class View extends SnapshotParticipant<ItemStack> implements SingleSlotStorage<ItemVariant> {
         private final int slot;
-        private final SingleSlotStorage<ItemVariant> storage;
-        View(int slot, SingleSlotStorage<ItemVariant> storage) { this.slot = slot; this.storage = storage; }
+        View(int slot) { this.slot = slot; }
         @Override public boolean isResourceBlank() { return getResource().isBlank(); }
-        @Override public ItemVariant getResource() { return bag.infinityKind() != null ? ItemVariant.of(bag.getItem(slot)) : storage.getResource(); }
-        @Override public long getAmount() { return bag.infinityKind() != null ? bag.isInfiniteSlot(slot) ? Long.MAX_VALUE : 0 : storage.getAmount(); }
-        @Override public long getCapacity() { return bag.infinityKind() != null ? Long.MAX_VALUE : storage.getCapacity(); }
+        @Override public ItemVariant getResource() { return ItemVariant.of(bag.getItem(slot)); }
+        @Override public long getAmount() { return bag.isInfiniteSlot(slot) ? Long.MAX_VALUE : bag.getItem(slot).getCount(); }
+        @Override public long getCapacity() {
+            if (bag.blocked(slot)) return 0;
+            if (bag.infinityKind() != null) return Long.MAX_VALUE;
+            ItemStack current = bag.getItem(slot);
+            return current.isEmpty() ? StackCapacity.itemLimit(64, bag.multiplier()) : bag.capacity(current);
+        }
         @Override public long insert(ItemVariant resource, long maximum, TransactionContext transaction) {
             StoragePreconditions.notBlankNotNegative(resource, maximum);
-            if (bag.infinityKind() == null) return storage.insert(resource, maximum, transaction);
-            if (maximum == 0 || !bag.canPlaceItem(slot, resource.toStack())) return 0;
-            int seeded = (int) Math.min(maximum, bag.capacity(resource.toStack()));
+            ItemStack template = resource.toStack();
+            if (maximum == 0 || !bag.canPlaceItem(slot, template)) return 0;
+            ItemStack current = bag.getItem(slot);
+            if (!current.isEmpty() && !resource.matches(current)) return 0;
+            int inserted = (int) Math.min(maximum, Math.max(0L, (long) bag.capacity(template) - current.getCount()));
+            if (inserted == 0) return 0;
             updateSnapshots(transaction);
-            bag.setItem(slot, resource.toStack(seeded));
-            return seeded;
+            bag.setItem(slot, resource.toStack(current.getCount() + inserted));
+            return inserted;
         }
         @Override public long extract(ItemVariant resource, long maximum, TransactionContext transaction) {
             StoragePreconditions.notBlankNotNegative(resource, maximum);
-            if (!bag.canTakeItem(null, slot, resource.toStack())) return 0;
+            if (maximum == 0 || !bag.canTakeItem(null, slot, resource.toStack())) return 0;
             if (bag.isInfiniteSlot(slot)) return resource.equals(getResource()) ? maximum : 0;
-            return storage.extract(resource, maximum, transaction);
+            ItemStack current = bag.getItem(slot);
+            if (current.isEmpty() || !resource.matches(current)) return 0;
+            int extracted = (int) Math.min(maximum, current.getCount());
+            updateSnapshots(transaction);
+            bag.setItem(slot, current.copyWithCount(current.getCount() - extracted));
+            return extracted;
         }
         @Override protected ItemStack createSnapshot() { return bag.getItem(slot).copy(); }
         @Override protected void readSnapshot(ItemStack previous) { bag.restoreStorageSlot(slot, previous); }

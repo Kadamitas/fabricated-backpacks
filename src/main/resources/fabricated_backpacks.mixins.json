@@ -1,7 +1,21 @@
 {
   "required": true,
   "package": "com.kadamitas.fabricatedbackpacks.mixin",
-  "compatibilityLevel": "JAVA_25",
-  "mixins": ["ItemEntityMixin", "ServerPlayerGameModeMixin", "ZombieVillagerMixin", "ExperienceOrbAccessor", "PiglinSafetyMixin", "MobBackpackMixin", "CreeperCarrierMixin", "HopperBackpackRoutingMixin", "ConduitMiningMixin"],
-  "injectors": {"defaultRequire": 1}
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ItemEntityMixin",
+    "ServerPlayerGameModeMixin",
+    "ZombieVillagerMixin",
+    "ExperienceOrbAccessor",
+    "PiglinSafetyMixin",
+    "MobBackpackMixin",
+    "CreeperCarrierMixin",
+    "HopperBackpackRoutingMixin",
+    "ConduitMiningMixin",
+    "LivingEntityAccessMixin",
+    "CraftingMenuAccess"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

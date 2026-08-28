@@ -14,7 +14,7 @@ import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
+import net.fabricmc.fabric.api.transfer.v1.item.InventoryStorage;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
 import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
 import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
@@ -242,7 +242,7 @@ public final class FluidVoidGameTests {
         helper.assertTrue(ResourceRuntime.fluidFilter(restored, 1, 0).isBlank(), "Sparse typed filter holes survive serialization");
 
         SimpleContainer inventory = new SimpleContainer(restored.stack());
-        var context = ContainerItemContext.ofSingleSlot(ContainerStorage.of(inventory, null).getSlot(0));
+        var context = ContainerItemContext.ofSingleSlot(InventoryStorage.of(inventory, null).getSlot(0));
         Storage<FluidVariant> itemStorage = context.find(FluidStorage.ITEM);
         BagInventory supplyBag = bag(BackpackTier.IRON, UpgradeKind.TANK);
         BackpackTank supply = tank(supplyBag, 0);

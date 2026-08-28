@@ -13,7 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -46,10 +46,10 @@ public final class ConduitFilterGameTests {
         send(player, mode(menu, ConduitKind.FLUID, ConduitFilterMode.BLOCK));
         helper.runAfterDelay(2, () -> {
             helper.assertValueEqual(entity.filter(ConduitKind.ITEM, Direction.EAST),
-                    new ConduitFilter(ConduitFilterMode.ALLOW, Map.of(8, Identifier.withDefaultNamespace("cobblestone"))),
+                    new ConduitFilter(ConduitFilterMode.ALLOW, Map.of(8, ResourceLocation.withDefaultNamespace("cobblestone"))),
                     "The actual Fabric receiver changes the requested ghost on the physically opened face");
             helper.assertValueEqual(entity.filter(ConduitKind.FLUID, Direction.EAST),
-                    new ConduitFilter(ConduitFilterMode.BLOCK, Map.of(4, Identifier.withDefaultNamespace("water"))),
+                    new ConduitFilter(ConduitFilterMode.BLOCK, Map.of(4, ResourceLocation.withDefaultNamespace("water"))),
                     "Flowing fluid requests resolve to their registered source fluid identity");
             helper.assertValueEqual(entity.filter(ConduitKind.ITEM, Direction.NORTH), ConduitFilter.EMPTY,
                     "No packet field can redirect the action to another face");
@@ -111,7 +111,7 @@ public final class ConduitFilterGameTests {
     public static void persistedPolicyValidationAndViewerState(GameTestHelper helper) {
         Opened opened = open(helper);
         var entity = opened.entity();
-        var policy = new ConduitFilter(ConduitFilterMode.BLOCK, Map.of(8, Identifier.parse("removed_mod:fluid_or_item")));
+        var policy = new ConduitFilter(ConduitFilterMode.BLOCK, Map.of(8, ResourceLocation.parse("removed_mod:fluid_or_item")));
         entity.setFilter(ConduitKind.ITEM, Direction.EAST, policy);
         var saved = entity.saveWithFullMetadata(helper.getLevel().registryAccess());
         var restored = (ConduitBundleBlockEntity) BlockEntity.loadStatic(entity.getBlockPos(), entity.getBlockState(),
@@ -168,7 +168,7 @@ public final class ConduitFilterGameTests {
     }
     private static ConduitFilterAction entry(ConduitMenu menu, ConduitKind kind, int row, String id) {
         return new ConduitFilterAction(menu.containerId, kind, ConduitFilterAction.Operation.SET_ENTRY, row,
-                Optional.of(Identifier.parse(id)));
+                Optional.of(ResourceLocation.parse(id)));
     }
     private static ConduitFilterAction mode(ConduitMenu menu, ConduitKind kind, ConduitFilterMode mode) {
         return new ConduitFilterAction(menu.containerId, kind, ConduitFilterAction.Operation.SET_MODE, mode.ordinal(), Optional.empty());

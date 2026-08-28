@@ -7,9 +7,15 @@
     " R "
   ],
   "key": {
-    "I": "minecraft:iron_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "R": "minecraft:redstone"
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:stack_upgrade_starter_tier",

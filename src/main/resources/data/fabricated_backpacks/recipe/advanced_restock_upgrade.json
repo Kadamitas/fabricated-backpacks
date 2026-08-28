@@ -7,9 +7,15 @@
     " R "
   ],
   "key": {
-    "G": "minecraft:gold_ingot",
-    "U": "fabricated_backpacks:restock_upgrade",
-    "R": "minecraft:comparator"
+    "G": {
+      "item": "minecraft:gold_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:restock_upgrade"
+    },
+    "R": {
+      "item": "minecraft:comparator"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:advanced_restock_upgrade",

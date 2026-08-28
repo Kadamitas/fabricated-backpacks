@@ -1,6 +1,33 @@
 # Changelog
 
-## Unreleased
+## 0.5.0-alpha+mc1.21.1 — development port
+
+- Target Minecraft 1.21.1, Fabric and Java 21 on the separate
+  `codex/minecraft-1.21.1-cobblemon` branch for Cobblemon 1.7.3.
+- Port storage, upgrades, equipment, menus, rendering, data components, recipes
+  and native item/fluid/Energy API connections to the older game APIs.
+- Keep stacked conduits and per-interface searchable item/fluid allow/block
+  filters, with optional JEI 19.44.0.413 ghost ingredient integration.
+- Preserve enhanced item counts through the 1.21.1 storage API rather than
+  inheriting its ordinary 64-item container limit.
+- Keep grounded conduit routes from wasting transfer turns on solid blocks,
+  while still discovering machine interfaces that become available in place.
+- Default the built-in browser to V to avoid Cobblemon's O party-display key;
+  opening a worn backpack remains B.
+- Resolve native and registered furnace fuels, and assemble real armor-trim
+  previews for each valid armor item while keeping network payloads bounded.
+- Exclude Pokémon from the generic mob catcher through an optional entity tag;
+  Cobblemon retains control of its party, battle and capture data.
+- Add server checks using actual registered Cobblemon Poké Balls, their item
+  components, endpoint filters, and simultaneous backpack resource transfers.
+- Keep target-specific verification separate from historical 26.2 results.
+  The newer Fabric client GameTest API is unavailable on 1.21.1; rendered-client,
+  riding and multiplayer acceptance remain separate required work before release.
+
+See [1.21.1 compatibility](docs/COMPATIBILITY_1_21_1.md). This port does not replace
+the immutable published 26.2 alpha, and 26.2 worlds must not be downgraded.
+
+## Unreleased 26.2 source revision (also carried into the port)
 
 - Add native item, fluid and energy conduit lanes in a shared bundle, with
   directional endpoint controls, redstone gates, per-endpoint transfer limits,

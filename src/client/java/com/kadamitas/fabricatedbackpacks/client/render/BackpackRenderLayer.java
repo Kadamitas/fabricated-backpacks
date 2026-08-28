@@ -1,53 +1,44 @@
 package com.kadamitas.fabricatedbackpacks.client.render;
 
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
+import com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.fabricmc.fabric.api.client.rendering.v1.FabricRenderState;
-import net.minecraft.client.model.player.PlayerModel;
-import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.PlayerModel;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
-import net.minecraft.client.renderer.entity.state.AvatarRenderState;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.util.Unit;
-
+import net.minecraft.world.entity.EquipmentSlot;
 import java.util.Map;
 
-/** Independent equipment layer; uses the already-animated torso and keeps armor. */
-final class BackpackRenderLayer extends RenderLayer<AvatarRenderState, PlayerModel> {
+/** Uses the vanilla animated torso pose, including armor, crouching, swimming and riding. */
+final class BackpackRenderLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
     private final Map<BackpackTier, NativeBackpackModel> models;
-
-    BackpackRenderLayer(RenderLayerParent<AvatarRenderState, PlayerModel> parent,
+    private final BackpackDisplayState display = new BackpackDisplayState();
+    BackpackRenderLayer(RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> parent,
                         Map<BackpackTier, NativeBackpackModel> models) {
         super(parent);
         this.models = Map.copyOf(models);
     }
-
-    @Override
-    public void submit(PoseStack poses, SubmitNodeCollector collector, int light, AvatarRenderState state,
-                       float headYaw, float headPitch) {
-        BackpackVisualState backpack = ((FabricRenderState) state).getDataOrDefault(BackpackRendering.WORN, BackpackVisualState.EMPTY);
-        if (!backpack.present() || state.isSpectator || state.isInvisible) return;
-        NativeBackpackModel model = models.get(backpack.tier());
+    @Override public void render(PoseStack poses, MultiBufferSource buffers, int light, AbstractClientPlayer player,
+                                 float limbSwing, float limbAmount, float partialTick, float age, float headYaw, float headPitch) {
+        if (player.isSpectator() || player.isInvisible()) return;
+        var stack = BackpackEquipment.visual(player);
+        BackpackVisualState backpack = BackpackVisualState.from(stack);
+        NativeBackpackModel model = backpack.present() ? models.get(backpack.tier()) : null;
         if (model == null) return;
         poses.pushPose();
         try {
-            // The vanilla renderer applies entity/body scales before invoking
-            // layers. Its model already contains crouch, swim and riding pose.
             getParentModel().body.translateAndRotate(poses);
-            // Fit within the torso instead of extending the original block-depth
-            // mesh toward the knees in a rear third-person view.
-            model.applyWearTransform(poses, !state.chestEquipment.isEmpty());
-            int overlay = LivingEntityRenderer.getOverlayCoords(state, 0);
-            for (NativeBackpackModel.MaterialGroup group : model.groups()) {
-                collector.submitModel(group.model(), Unit.INSTANCE, poses, RenderTypes.entityCutout(group.texture()),
-                        light, overlay, group.color(backpack), null, state.outlineColor, null);
-            }
-            BackpackDisplayState display = ((FabricRenderState) state).getData(BackpackRendering.DISPLAY);
-            if (display != null) display.submitWorn(poses, collector, light, overlay, state.outlineColor);
-        } finally {
-            poses.popPose();
-        }
+            model.applyWearTransform(poses, !player.getItemBySlot(EquipmentSlot.CHEST).isEmpty());
+            int overlay = LivingEntityRenderer.getOverlayCoords(player, 0);
+            for (var group : model.groups()) group.model().render(poses, buffers.getBuffer(RenderType.entityCutout(group.texture())),
+                    light, overlay, group.color(backpack));
+            display.extract(stack, Minecraft.getInstance().getItemRenderer(), player.level(), player, player.getId());
+            display.renderWorn(poses, buffers, light, overlay);
+        } finally { poses.popPose(); }
     }
 }

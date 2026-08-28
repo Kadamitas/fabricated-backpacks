@@ -3,7 +3,7 @@ package com.kadamitas.fabricatedbackpacks.client.screen;
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
@@ -52,20 +52,22 @@ public final class VoidFluidFiltersScreen extends Screen {
     }
 
     @Override public void tick() {
-        if (!valid()) { minecraft.gui.setScreen(null); return; }
+        if (!valid()) { minecraft.setScreen(null); return; }
         refresh();
     }
     private boolean valid() { return minecraft.player != null && minecraft.player.isAlive() && minecraft.player.containerMenu == parent.getMenu(); }
-    @Override public void onClose() { minecraft.gui.setScreen(valid() ? parent : null); }
+    @Override public void onClose() { minecraft.setScreen(valid() ? parent : null); }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public boolean isInGameUi() { return true; }
-    @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    // This screen paints its own backdrop before its native widgets.
+    @Override public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {}
+
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         graphics.fill(0, 0, width, height, 0xc0111c24);
         graphics.fill(left, top, left + 304, top + 226, 0xffccb996);
-        graphics.outline(left, top, 304, 226, 0xff493326);
-        graphics.text(font, title, left + 10, top + 9, 0xff302a21, false);
-        graphics.textWithWordWrap(font, Component.literal("Click a row with a filled container on the cursor. Empty cursor clears the row."), left + 10, top + 26, 282, 0xff493326);
-        graphics.text(font, "Page " + (page + 1), left + 82, top + 205, 0xff493326, false);
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
+        graphics.renderOutline(left, top, 304, 226, 0xff493326);
+        graphics.drawString(font, title, left + 10, top + 9, 0xff302a21, false);
+        graphics.drawWordWrap(font, Component.literal("Click a row with a filled container on the cursor. Empty cursor clears the row."), left + 10, top + 26, 282, 0xff493326);
+        graphics.drawString(font, "Page " + (page + 1), left + 82, top + 205, 0xff493326, false);
+        super.render(graphics, mouseX, mouseY, delta);
     }
 }

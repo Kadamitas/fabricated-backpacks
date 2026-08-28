@@ -45,7 +45,7 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerConnectionListener;
@@ -89,8 +89,8 @@ public final class MultiplayerClientAcceptance {
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     private static final BlockPos SECOND_SOURCE = new BlockPos(0, 80, 6);
     private static final Duration REMOTE_AUDIO_TIMEOUT = Duration.ofSeconds(30);
-    private static final Identifier WORN_TRACK = Identifier.withDefaultNamespace("music_disc.blocks");
-    private static final Identifier PLACED_TRACK = Identifier.withDefaultNamespace("music_disc.13");
+    private static final ResourceLocation WORN_TRACK = ResourceLocation.withDefaultNamespace("music_disc.blocks");
+    private static final ResourceLocation PLACED_TRACK = ResourceLocation.withDefaultNamespace("music_disc.13");
     private MultiplayerClientAcceptance() { }
 
     public static void host(ClientGameTestContext context) {
@@ -631,7 +631,7 @@ public final class MultiplayerClientAcceptance {
         files.await(context, "automation-host-pass", Duration.ofMinutes(1));
     }
 
-    private static final Identifier FILTERED_ITEM = Identifier.withDefaultNamespace("cobblestone");
+    private static final ResourceLocation FILTERED_ITEM = ResourceLocation.withDefaultNamespace("cobblestone");
     private record FilterViewers(ConduitBundleBlockEntity entity, ConduitMenu host, ConduitMenu guest,
                                  List<ConduitFilter> policies, ItemStack hostCursor, ItemStack guestCursor) {}
 

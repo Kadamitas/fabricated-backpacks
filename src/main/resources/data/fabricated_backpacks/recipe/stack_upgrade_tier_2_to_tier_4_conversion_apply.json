@@ -2,8 +2,12 @@
   "type": "minecraft:crafting_shapeless",
   "category": "equipment",
   "ingredients": [
-    "fabricated_backpacks:stack_upgrade_tier_2",
-    "fabricated_backpacks:stack_upgrade_tier_2_to_tier_4_conversion"
+    {
+      "item": "fabricated_backpacks:stack_upgrade_tier_2"
+    },
+    {
+      "item": "fabricated_backpacks:stack_upgrade_tier_2_to_tier_4_conversion"
+    }
   ],
   "result": {
     "id": "fabricated_backpacks:stack_upgrade_tier_4",

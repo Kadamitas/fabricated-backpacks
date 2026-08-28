@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment;
@@ -23,7 +24,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -33,7 +34,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -144,7 +145,7 @@ public final class UpgradeGameTests {
                 new Example(enchanted, true, true, true, true, false), new Example(diamond, false, true, true, true, false),
                 new Example(axe, false, true, false, true, false),
                 new Example(new ItemStack(BackpackRegistry.item(BackpackTier.LEATHER)), false, false, false, false, false));
-        helper.assertTrue(ghost.typeHolder().tags().anyMatch(tag -> tag.location().toString().equals("minecraft:pickaxes")), "Matrix uses the actual vanilla pickaxes tag");
+        helper.assertTrue(ghost.getTags().anyMatch(tag -> tag.location().toString().equals("minecraft:pickaxes")), "Matrix uses the actual vanilla pickaxes tag");
         for (String primary : List.of("ITEM", "NAMESPACE", "TAGS")) for (boolean block : List.of(false, true)) {
             for (boolean damage : List.of(false, true)) for (boolean components : List.of(false, true)) {
                 bag.updateSettings(upgrade, state -> {
@@ -202,14 +203,14 @@ public final class UpgradeGameTests {
         helper.assertTrue(UpgradeEngine.action(bag, 0, "input_filter_match", player), "Automatic input supports namespace matching");
         helper.assertTrue(UpgradeEngine.action(bag, 0, "input_filter_match", player), "Automatic input supports registry tags");
         helper.assertTrue(UpgradeEngine.action(bag, 0, "input_tag:minecraft:logs", player), "Input tag action is independently prefixed");
-        helper.assertValueEqual(bag.settings(upgrade).getStringOr("input_tags", ""), "minecraft:logs", "Input tag action updates the input filter state");
-        helper.assertValueEqual(bag.settings(upgrade).getStringOr("tags", ""), "", "Input tag action never changes another filter's tags");
+        helper.assertValueEqual(NbtAccess.getStringOr(bag.settings(upgrade), "input_tags", ""), "minecraft:logs", "Input tag action updates the input filter state");
+        helper.assertValueEqual(NbtAccess.getStringOr(bag.settings(upgrade), "tags", ""), "", "Input tag action never changes another filter's tags");
         helper.assertFalse(UpgradeEngine.action(bag, 0, "fuel_tag:minecraft:logs", player), "Fuel does not expose unsupported advanced matching");
         helper.assertFalse(UpgradeEngine.action(bag, 0, "fuel_match_components", player), "Fuel has four basic ghost slots, not a fake advanced button");
         helper.assertFalse(UpgradeEngine.action(bag, 0, "input_tag:Bad Tag", player), "Malformed tag identifiers are rejected");
         helper.assertTrue(UpgradeEngine.action(bag, 0, "input_filter_mode", player), "Input mode can become a block list");
         helper.assertTrue(UpgradeEngine.action(bag, 0, "input_filter_mode", player), "Input mode can use contents");
-        helper.assertValueEqual(bag.settings(upgrade).getStringOr("input_filter_match", ""), "ITEM", "Contents mode clears an incompatible tag primary");
+        helper.assertValueEqual(NbtAccess.getStringOr(bag.settings(upgrade), "input_filter_match", ""), "ITEM", "Contents mode clears an incompatible tag primary");
         helper.assertTrue(UpgradeEngine.action(bag, 0, "input_filter_mode", player), "Input mode returns to allow");
         helper.assertTrue(UpgradeEngine.action(bag, 0, "input_filter_match", player), "Input primary cycles back to namespace");
         helper.assertTrue(UpgradeEngine.action(bag, 0, "input_filter_match", player), "Input primary cycles back to tags");
@@ -218,7 +219,7 @@ public final class UpgradeGameTests {
             helper.assertValueEqual(count(bag.upgradeInventory(upgrade), Items.OAK_LOG), 2, "Real automatic pull honors the configured input tag");
             helper.assertValueEqual(count(bag, Items.OAK_LOG), 0, "Tagged inputs move exactly once");
             helper.assertValueEqual(count(bag, Items.DIAMOND), 3, "Unrelated storage is untouched");
-            helper.assertTrue(bag.settings(upgrade).getBooleanOr("burning", false), "The empty fuel allow list accepts actual coal fuel");
+            helper.assertTrue(NbtAccess.getBooleanOr(bag.settings(upgrade), "burning", false), "The empty fuel allow list accepts actual coal fuel");
             helper.assertValueEqual(count(bag, Items.COAL) + count(bag.upgradeInventory(upgrade), Items.COAL), 0, "Exactly one coal fuels this operation");
             helper.succeed();
         });
@@ -278,14 +279,14 @@ public final class UpgradeGameTests {
             helper.assertValueEqual(count(freshAuto, Items.RAW_IRON), 1, "Fresh automatic input allow list never smelts arbitrary storage contents");
             BagInventory first = machines.getFirst();
             InstalledUpgrade upgrade = upgrade(first);
-            double before = first.settings(upgrade).getDoubleOr("experience", 0);
+            double before = NbtAccess.getDoubleOr(first.settings(upgrade), "experience", 0);
             ServerPlayer player = BackpackTestSupport.player(helper);
             player.giveExperiencePoints(-player.totalExperience);
             CookingRuntime.claimExperience(first, upgrade, player);
             int awarded = player.totalExperience;
             CookingRuntime.claimExperience(first, upgrade, player);
             helper.assertValueEqual(player.totalExperience, awarded, "Claiming cooking XP twice cannot duplicate whole points");
-            helper.assertTrue(Math.abs(awarded + first.settings(upgrade).getDoubleOr("experience", 0) - before) < 1e-6, "Fractional cooking XP is conserved");
+            helper.assertTrue(Math.abs(awarded + NbtAccess.getDoubleOr(first.settings(upgrade), "experience", 0) - before) < 1e-6, "Fractional cooking XP is conserved");
             helper.succeed();
         });
     }
@@ -316,8 +317,8 @@ public final class UpgradeGameTests {
         helper.runAfterDelay(30, () -> {
             for (PausedCooking fixture : machines) {
                 fixture.paused = fixture.bag.settings(fixture.upgrade());
-                helper.assertTrue(fixture.paused.getIntOr("cook_progress", 0) > 0, "Cooking really started before removal: " + fixture.kind);
-                helper.assertTrue(fixture.paused.getIntOr("burn_remaining", 0) > 0, "Fuel has been consumed before removal: " + fixture.kind);
+                helper.assertTrue(NbtAccess.getIntOr(fixture.paused, "cook_progress", 0) > 0, "Cooking really started before removal: " + fixture.kind);
+                helper.assertTrue(NbtAccess.getIntOr(fixture.paused, "burn_remaining", 0) > 0, "Fuel has been consumed before removal: " + fixture.kind);
                 helper.assertTrue(fixture.bag.canRemoveUpgrade(fixture.upgrade().slot(), player), "A cooking upgrade carries its own occupied auxiliary slots");
                 UpgradeEngine.stopUpgrade(fixture.bag, fixture.upgrade().slot(), helper.getLevel().getServer());
                 ItemStack removed = fixture.bag.upgrades().removeItemNoUpdate(fixture.upgrade().slot());
@@ -329,8 +330,8 @@ public final class UpgradeGameTests {
             for (PausedCooking fixture : machines) {
                 helper.assertTrue(fixture.bag.installedUpgrades().isEmpty(), "Removed machine is absent from runtime dispatch");
                 fixture.bag.upgrades().setItem(1, fixture.detached);
-                helper.assertValueEqual(fixture.bag.settings(fixture.upgrade()).getIntOr("cook_progress", -1), fixture.paused.getIntOr("cook_progress", 0), "Remove/serialize/reinsert preserves partial work: " + fixture.kind);
-                helper.assertValueEqual(fixture.bag.settings(fixture.upgrade()).getIntOr("burn_remaining", -1), fixture.paused.getIntOr("burn_remaining", 0), "Detached fuel is not silently burnt: " + fixture.kind);
+                helper.assertValueEqual(NbtAccess.getIntOr(fixture.bag.settings(fixture.upgrade()), "cook_progress", -1), NbtAccess.getIntOr(fixture.paused, "cook_progress", 0), "Remove/serialize/reinsert preserves partial work: " + fixture.kind);
+                helper.assertValueEqual(NbtAccess.getIntOr(fixture.bag.settings(fixture.upgrade()), "burn_remaining", -1), NbtAccess.getIntOr(fixture.paused, "burn_remaining", 0), "Detached fuel is not silently burnt: " + fixture.kind);
                 helper.assertValueEqual(count(fixture.bag.upgradeInventory(fixture.upgrade()), Items.COAL), 1, "Serialized fuel inventory contains only the unconsumed second coal");
             }
         });
@@ -338,20 +339,20 @@ public final class UpgradeGameTests {
             for (PausedCooking fixture : machines) {
                 helper.assertTrue(UpgradeEngine.action(fixture.bag, fixture.upgrade().slot(), "toggle", player), "Installed cooking can be paused");
                 fixture.paused = fixture.bag.settings(fixture.upgrade());
-                helper.assertFalse(fixture.paused.getBooleanOr("burning", true), "Pausing immediately clears the burning client state");
+                helper.assertFalse(NbtAccess.getBooleanOr(fixture.paused, "burning", true), "Pausing immediately clears the burning client state");
             }
         });
         helper.runAfterDelay(100, () -> {
             for (PausedCooking fixture : machines) {
                 fixture.bag = BagInventory.of(BackpackTestSupport.roundTrip(helper.getLevel(), fixture.bag.stack()));
-                helper.assertFalse(fixture.bag.settings(fixture.upgrade()).getBooleanOr("enabled", true), "Disabled state survives reconstruction");
-                helper.assertValueEqual(fixture.bag.settings(fixture.upgrade()).getIntOr("cook_progress", -1), fixture.paused.getIntOr("cook_progress", 0), "Disabled work survives a new wrapper: " + fixture.kind);
-                helper.assertValueEqual(fixture.bag.settings(fixture.upgrade()).getIntOr("burn_remaining", -1), fixture.paused.getIntOr("burn_remaining", 0), "Disabled fuel survives a new wrapper: " + fixture.kind);
+                helper.assertFalse(NbtAccess.getBooleanOr(fixture.bag.settings(fixture.upgrade()), "enabled", true), "Disabled state survives reconstruction");
+                helper.assertValueEqual(NbtAccess.getIntOr(fixture.bag.settings(fixture.upgrade()), "cook_progress", -1), NbtAccess.getIntOr(fixture.paused, "cook_progress", 0), "Disabled work survives a new wrapper: " + fixture.kind);
+                helper.assertValueEqual(NbtAccess.getIntOr(fixture.bag.settings(fixture.upgrade()), "burn_remaining", -1), NbtAccess.getIntOr(fixture.paused, "burn_remaining", 0), "Disabled fuel survives a new wrapper: " + fixture.kind);
             }
         });
         helper.runAfterDelay(120, () -> {
             for (PausedCooking fixture : machines) {
-                helper.assertValueEqual(fixture.bag.settings(fixture.upgrade()).getIntOr("cook_progress", -1), fixture.paused.getIntOr("cook_progress", 0), "Reconstructed disabled machine stays paused");
+                helper.assertValueEqual(NbtAccess.getIntOr(fixture.bag.settings(fixture.upgrade()), "cook_progress", -1), NbtAccess.getIntOr(fixture.paused, "cook_progress", 0), "Reconstructed disabled machine stays paused");
                 helper.assertTrue(UpgradeEngine.action(fixture.bag, fixture.upgrade().slot(), "toggle", player), "Reconstructed machine resumes through its normal action");
             }
         });
@@ -362,9 +363,9 @@ public final class UpgradeGameTests {
                 helper.assertValueEqual(count(fixture.bag, output) + count(inventory, output), 2, "Resumed machine completes both original inputs once: " + fixture.kind);
                 helper.assertValueEqual(count(fixture.bag, Items.COAL) + count(inventory, Items.COAL), 1, "Pause and reconstruction never charge another fuel: " + fixture.kind);
                 CompoundTag state = fixture.bag.settings(fixture.upgrade());
-                helper.assertValueEqual(state.getCompoundOrEmpty("recipes_used").keySet().stream().mapToInt(key -> state.getCompoundOrEmpty("recipes_used").getIntOr(key, 0)).sum(), 2, "Recipe use accounting survives pauses exactly");
+                helper.assertValueEqual(NbtAccess.getCompoundOrEmpty(state, "recipes_used").getAllKeys().stream().mapToInt(key -> NbtAccess.getIntOr(NbtAccess.getCompoundOrEmpty(state, "recipes_used"), key, 0)).sum(), 2, "Recipe use accounting survives pauses exactly");
                 BagInventory roundTrip = BagInventory.of(BackpackTestSupport.roundTrip(helper.getLevel(), fixture.bag.stack()));
-                helper.assertTrue(Math.abs(roundTrip.settings(upgrade(roundTrip)).getDoubleOr("experience", 0) - state.getDoubleOr("experience", 0)) < 1e-9, "Unclaimed fractional XP survives the completed machine codec");
+                helper.assertTrue(Math.abs(NbtAccess.getDoubleOr(roundTrip.settings(upgrade(roundTrip)), "experience", 0) - NbtAccess.getDoubleOr(state, "experience", 0)) < 1e-9, "Unclaimed fractional XP survives the completed machine codec");
             }
             helper.succeed();
         });
@@ -453,7 +454,7 @@ public final class UpgradeGameTests {
         player.setHealth(player.getMaxHealth());
         ItemStack held = new ItemStack(Items.DIAMOND_PICKAXE);
         held.setDamageValue(7);
-        player.getInventory().setSelectedItem(held);
+        player.getInventory().setItem(player.getInventory().selected, held);
         BagInventory bag = bag(UpgradeKind.FEEDING);
         bag.setItem(0, new ItemStack(Items.MUSHROOM_STEW));
         ConsumptionRuntime.feed(bag, upgrade(bag), helper.getLevel(), player.blockPosition(), player);
@@ -511,38 +512,38 @@ public final class UpgradeGameTests {
         BlockPos position = helper.absolutePos(new BlockPos(1, 2, 1));
         JukeboxRuntime.tick(bag, upgrade, helper.getLevel(), position, null);
         JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "play");
-        helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 0, "Playback begins at first occupied record slot");
-        long finish = bag.settings(upgrade).getLongOr("song_finish", 0);
+        helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade), "active_slot", -1), 0, "Playback begins at first occupied record slot");
+        long finish = NbtAccess.getLongOr(bag.settings(upgrade), "song_finish", 0);
         JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "play");
-        helper.assertValueEqual(bag.settings(upgrade).getLongOr("song_finish", 0), finish, "Repeated play does not restart active audio");
+        helper.assertValueEqual(NbtAccess.getLongOr(bag.settings(upgrade), "song_finish", 0), finish, "Repeated play does not restart active audio");
         JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "next");
-        helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 1, "Next selects the next physical disc");
+        helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade), "active_slot", -1), 1, "Next selects the next physical disc");
         JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "previous");
-        helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 0, "Previous uses the played history");
+        helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade), "active_slot", -1), 0, "Previous uses the played history");
         JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "shuffle");
         JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "repeat");
         JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "stop");
-        helper.assertTrue(bag.settings(upgrade).getBooleanOr("shuffle", false), "Stop preserves shuffle preference");
-        helper.assertValueEqual(bag.settings(upgrade).getStringOr("repeat", "OFF"), "ALL", "Stop preserves repeat preference");
+        helper.assertTrue(NbtAccess.getBooleanOr(bag.settings(upgrade), "shuffle", false), "Stop preserves shuffle preference");
+        helper.assertValueEqual(NbtAccess.getStringOr(bag.settings(upgrade), "repeat", "OFF"), "ALL", "Stop preserves repeat preference");
         helper.assertValueEqual((int) InventoryMoves.snapshot(discs).stream().filter(JukeboxRuntime::isDisc).count(), 12, "All twelve physical discs survive stop");
         JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "play");
-        discs.setItem(bag.settings(upgrade).getIntOr("active_slot", 0), ItemStack.EMPTY);
+        discs.setItem(NbtAccess.getIntOr(bag.settings(upgrade), "active_slot", 0), ItemStack.EMPTY);
         JukeboxRuntime.tick(bag, upgrade, helper.getLevel(), position, null);
-        helper.assertFalse(bag.settings(upgrade).getBooleanOr("playing", true), "Changing an active slot stops playback");
+        helper.assertFalse(NbtAccess.getBooleanOr(bag.settings(upgrade), "playing", true), "Changing an active slot stops playback");
 
         BagInventory timed = bag(UpgradeKind.ADVANCED_JUKEBOX);
         InstalledUpgrade timedUpgrade = upgrade(timed);
         Holder<JukeboxSong> shortSong = helper.getLevel().registryAccess().lookupOrThrow(Registries.JUKEBOX_SONG)
-                .getOrThrow(ResourceKey.create(Registries.JUKEBOX_SONG, Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "short_record")));
+                .getOrThrow(ResourceKey.create(Registries.JUKEBOX_SONG, ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "short_record")));
         ItemStack shortDisc = available.getFirst().copy();
-        shortDisc.set(DataComponents.JUKEBOX_PLAYABLE, new JukeboxPlayable(shortSong));
+        shortDisc.set(DataComponents.JUKEBOX_PLAYABLE, new JukeboxPlayable(new net.minecraft.world.item.EitherHolder<>(shortSong), true));
         timed.upgradeInventory(timedUpgrade).setItem(0, shortDisc);
         timed.upgradeInventory(timedUpgrade).setItem(1, shortDisc.copy());
         JukeboxRuntime.action(timed, timedUpgrade, helper.getLevel(), position, null, "play");
         helper.onEachTick(() -> JukeboxRuntime.tick(timed, timedUpgrade, helper.getLevel(), position, null));
-        helper.runAfterDelay(22, () -> helper.assertValueEqual(timed.settings(timedUpgrade).getIntOr("active_slot", -1), 1, "Natural completion advances to the next song"));
+        helper.runAfterDelay(22, () -> helper.assertValueEqual(NbtAccess.getIntOr(timed.settings(timedUpgrade), "active_slot", -1), 1, "Natural completion advances to the next song"));
         helper.runAfterDelay(44, () -> {
-            helper.assertFalse(timed.settings(timedUpgrade).getBooleanOr("playing", true), "Repeat OFF stops naturally at end of playlist");
+            helper.assertFalse(NbtAccess.getBooleanOr(timed.settings(timedUpgrade), "playing", true), "Repeat OFF stops naturally at end of playlist");
             JukeboxRuntime.stopUpgrade(bag, upgrade.slot(), helper.getLevel().getServer());
             JukeboxRuntime.stopUpgrade(timed, timedUpgrade.slot(), helper.getLevel().getServer());
             helper.succeed();
@@ -566,7 +567,7 @@ public final class UpgradeGameTests {
         BagInventory live = BagInventory.of(BackpackEquipment.get(player));
         helper.assertValueEqual(count(live, Items.STICK), 1, "Tool replacement stores the original held item");
         helper.assertValueEqual(count(live, Items.DIAMOND_PICKAXE), 0, "Tool movement never leaves a duplicate in the backpack");
-        var target = helper.spawn(EntityTypes.PIG, new BlockPos(5, 1, 4));
+        var target = helper.spawn(EntityType.PIG, new BlockPos(5, 1, 4));
         net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.invoker().interact(player, helper.getLevel(), InteractionHand.MAIN_HAND, target, null);
         helper.assertTrue(player.getMainHandItem().is(Items.DIAMOND_SWORD), "Real attack-entity hook selects the owned sword");
         helper.assertValueEqual(InventoryMoves.count(BagInventory.of(BackpackEquipment.get(player)), pick), 1, "Weapon swap returns the previous tool with its exact damage once");
@@ -610,11 +611,11 @@ public final class UpgradeGameTests {
             state.putString("alchemy_condition_0", condition); state.putInt("alchemy_health_0", health); preferences.accept(state);
         });
         UpgradeEngine.tick(bag, helper.getLevel(), target.blockPosition(), target);
-        helper.assertValueEqual(bag.settings(upgrade).getIntOr("alchemy_active_row", -1) == 0, expected, message);
+        helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade), "alchemy_active_row", -1) == 0, expected, message);
         BackpackTestSupport.assertStack(helper, bag.getItem(0), source, "A pending or rejected condition never removes its item: " + message);
         AlchemyRuntime.cancel(bag, 0, helper.getLevel().getServer());
-        helper.assertValueEqual(bag.settings(upgrade).getIntOr("alchemy_active_row", -1), -1, "Cancellation clears the visible active row");
-        helper.assertValueEqual(bag.settings(upgrade).getLongOr("alchemy_finish", 0), 0L, "Cancellation clears the runtime deadline");
+        helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade), "alchemy_active_row", -1), -1, "Cancellation clears the visible active row");
+        helper.assertValueEqual(NbtAccess.getLongOr(bag.settings(upgrade), "alchemy_finish", 0), 0L, "Cancellation clears the runtime deadline");
     }
 
     public static void toolModesAndDataRules(GameTestHelper helper) {
@@ -624,7 +625,7 @@ public final class UpgradeGameTests {
         advanced.setItem(0, new ItemStack(Items.DIAMOND_PICKAXE));
         advanced.setItem(1, new ItemStack(Items.DIAMOND_SWORD));
         helper.assertTrue(UpgradeEngine.action(advanced, 0, "tool_mode", player), "Advanced mode is a real server-authorized action");
-        helper.assertValueEqual(advanced.settings(control).getStringOr("tool_mode", ""), "ONLY_TOOLS", "Mode cycle exposes the third supported policy");
+        helper.assertValueEqual(NbtAccess.getStringOr(advanced.settings(control), "tool_mode", ""), "ONLY_TOOLS", "Mode cycle exposes the third supported policy");
         for (ItemStack held : List.of(new ItemStack(Items.IRON_SWORD), new ItemStack(Items.APPLE), ItemStack.EMPTY)) {
             player.setItemInHand(InteractionHand.MAIN_HAND, held.copy());
             helper.assertFalse(ToolRuntime.forBlock(advanced, player, Blocks.STONE.defaultBlockState(), false), "Only-tools mode does not replace a weapon, food, or empty hand");
@@ -635,8 +636,8 @@ public final class UpgradeGameTests {
         helper.assertTrue(player.getMainHandItem().is(Items.DIAMOND_PICKAXE), "A real faster tool is selected");
         helper.assertValueEqual(count(advanced, Items.IRON_PICKAXE), 1, "Automatic mode keeps the previous tool once");
         UpgradeEngine.action(advanced, 0, "tool_mode", player);
-        helper.assertValueEqual(advanced.settings(control).getStringOr("tool_mode", ""), "MANUAL", "Mode cycle reaches manual");
-        var pig = helper.spawn(EntityTypes.PIG, new BlockPos(5, 1, 4));
+        helper.assertValueEqual(NbtAccess.getStringOr(advanced.settings(control), "tool_mode", ""), "MANUAL", "Mode cycle reaches manual");
+        var pig = helper.spawn(EntityType.PIG, new BlockPos(5, 1, 4));
         helper.assertFalse(ToolRuntime.forEntity(advanced, player, pig, false), "Manual mode suppresses automatic entity attacks as well as block attacks");
         helper.assertFalse(ToolRuntime.forBlock(advanced, player, Blocks.STONE.defaultBlockState(), false), "Manual mode suppresses block attacks");
         helper.assertTrue(ToolRuntime.forEntity(advanced, player, pig, true), "An explicit manual entity action may select a weapon");
@@ -659,8 +660,8 @@ public final class UpgradeGameTests {
         var server = helper.getLevel().getServer();
         helper.assertFalse(com.kadamitas.fabricatedbackpacks.config.RuleMatchers.block(Blocks.AIR.defaultBlockState(), java.util.Set.of("missing_optional_mod:work_block")), "An absent optional block ID never aliases the registry's default air block");
         var rules = com.kadamitas.fabricatedbackpacks.upgrade.ToolRules.rules(server);
-        helper.assertTrue(rules.containsKey(net.minecraft.resources.Identifier.parse("fabricated_backpacks_tests:bookshelf_utility")), "Actual loaded datapack provides the block rule");
-        helper.assertTrue(rules.containsKey(net.minecraft.resources.Identifier.parse("fabricated_backpacks:shearing")), "Production utility rules load from the mod's actual datapack");
+        helper.assertTrue(rules.containsKey(net.minecraft.resources.ResourceLocation.parse("fabricated_backpacks_tests:bookshelf_utility")), "Actual loaded datapack provides the block rule");
+        helper.assertTrue(rules.containsKey(net.minecraft.resources.ResourceLocation.parse("fabricated_backpacks:shearing")), "Production utility rules load from the mod's actual datapack");
         helper.assertTrue(com.kadamitas.fabricatedbackpacks.upgrade.ToolRules.reload(server), "A complete valid resource catalog can be republished");
         helper.assertValueEqual(com.kadamitas.fabricatedbackpacks.upgrade.ToolRules.rules(server), rules, "Reload preserves the actual decoded rules and tag selectors");
 
@@ -678,11 +679,11 @@ public final class UpgradeGameTests {
         helper.assertTrue(player.getMainHandItem().is(Items.WOODEN_SHOVEL), "Explicit utility priority can select a mapped non-mining tool");
         helper.assertTrue(ToolRuntime.forBlock(mapped, player, Blocks.STONE.defaultBlockState(), true), "A correct mining tool remains selectable");
         helper.assertTrue(player.getMainHandItem().is(Items.IRON_PICKAXE), "Even a high-priority rule cannot bypass correct drops without explicit server permission");
-        var cow = helper.spawn(EntityTypes.COW, new BlockPos(5, 1, 4));
+        var cow = helper.spawn(EntityType.COW, new BlockPos(5, 1, 4));
         helper.assertTrue(ToolRuntime.forEntity(mapped, player, cow, false), "Entity tag mapping participates in actual tool-to-weapon selection");
         helper.assertTrue(player.getMainHandItem().is(Items.DIAMOND_AXE), "Server entity mapping outranks the ordinary sword preference");
         cow.discard();
-        var sheep = helper.spawn(EntityTypes.SHEEP, new BlockPos(5, 1, 4));
+        var sheep = helper.spawn(EntityType.SHEEP, new BlockPos(5, 1, 4));
         helper.assertTrue(ToolRuntime.forEntity(mapped, player, sheep, true), "The production shearing rule supplies a manual entity utility choice");
         helper.assertTrue(player.getMainHandItem().is(Items.SHEARS), "Manual shearing selects real shears instead of a sword");
         helper.assertValueEqual(count(mapped, Items.SHEARS) + count(player.getInventory(), Items.SHEARS), 1, "Mapped utility swaps never duplicate items");
@@ -731,7 +732,7 @@ public final class UpgradeGameTests {
                 conditionProbe(helper, player, "HURT", 100, true, "One hundred percent permits any actual missing health");
                 player.setHealth(player.getMaxHealth());
                 conditionProbe(helper, player, "HURT", 100, false, "Full health still never triggers HURT");
-                player.addEffect(new MobEffectInstance(MobEffects.SPEED, 200));
+                player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 200));
                 conditionProbe(helper, player, "NEGATIVE_EFFECT", 75, false, "A beneficial effect is not a harmful-status condition");
                 player.addEffect(new MobEffectInstance(MobEffects.POISON, 200));
                 conditionProbe(helper, player, "NEGATIVE_EFFECT", 75, true, "Actual harmful status activates NEGATIVE_EFFECT");
@@ -740,12 +741,12 @@ public final class UpgradeGameTests {
                 BlockPos mining = helper.absolutePos(new BlockPos(5, 1, 6));
                 helper.getLevel().setBlockAndUpdate(mining, Blocks.OBSIDIAN.defaultBlockState());
                 player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
-                player.gameMode.handleBlockBreakAction(mining, ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, Direction.UP, helper.getLevel().getMaxY(), 1);
+                player.gameMode.handleBlockBreakAction(mining, ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, Direction.UP, helper.getLevel().getMaxBuildHeight(), 1);
                 helper.assertTrue(((UpgradeAccess.Mining) player.gameMode).fabricatedBackpacks$isDestroyingBlock(), "Vanilla block-break handling started an actual mining attempt");
                 conditionProbe(helper, player, "MINING", 75, true, "MINING observes the vanilla server destruction state");
-                player.gameMode.handleBlockBreakAction(mining, ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, Direction.UP, helper.getLevel().getMaxY(), 2);
+                player.gameMode.handleBlockBreakAction(mining, ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, Direction.UP, helper.getLevel().getMaxBuildHeight(), 2);
                 conditionProbe(helper, player, "MINING", 75, false, "Aborting the block break stops the mining condition");
-                var pig = helper.spawn(EntityTypes.PIG, new BlockPos(4, 1, 4));
+                var pig = helper.spawn(EntityType.PIG, new BlockPos(4, 1, 4));
                 conditionProbe(helper, pig, "MINING", 75, false, "Nonplayer carriers cannot satisfy server-player mining");
                 pig.discard();
 
@@ -779,12 +780,12 @@ public final class UpgradeGameTests {
         helper.onEachTick(() -> {
             if (helper.getLevel().getGameTime() % 5 != 0) return;
             player.removeAllEffects();
-            ItemStack ghost = effectPotion(new MobEffectInstance(MobEffects.SPEED, 600), new MobEffectInstance(MobEffects.REGENERATION, 600));
-            ItemStack duration = effectPotion(new MobEffectInstance(MobEffects.SPEED, 1200), new MobEffectInstance(MobEffects.REGENERATION, 600));
-            ItemStack amplifier = effectPotion(new MobEffectInstance(MobEffects.SPEED, 600, 1), new MobEffectInstance(MobEffects.REGENERATION, 600));
-            ItemStack onlyFirst = effectPotion(new MobEffectInstance(MobEffects.SPEED, 600));
+            ItemStack ghost = effectPotion(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 600), new MobEffectInstance(MobEffects.REGENERATION, 600));
+            ItemStack duration = effectPotion(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 1200), new MobEffectInstance(MobEffects.REGENERATION, 600));
+            ItemStack amplifier = effectPotion(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 600, 1), new MobEffectInstance(MobEffects.REGENERATION, 600));
+            ItemStack onlyFirst = effectPotion(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 600));
             ItemStack unrelated = effectPotion(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 600));
-            ItemStack extra = effectPotion(new MobEffectInstance(MobEffects.SPEED, 600), new MobEffectInstance(MobEffects.REGENERATION, 600), new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 600));
+            ItemStack extra = effectPotion(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 600), new MobEffectInstance(MobEffects.REGENERATION, 600), new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 600));
             ItemStack named = ghost.copy(); named.set(DataComponents.CUSTOM_NAME, Component.literal("Named formula"));
             List<ItemStack> candidates = List.of(ghost, duration, amplifier, onlyFirst, unrelated, extra, named);
             for (boolean matchDuration : List.of(false, true)) for (boolean matchAmplifier : List.of(false, true)) for (boolean all : List.of(false, true)) {
@@ -803,13 +804,13 @@ public final class UpgradeGameTests {
                     }, expected, "Alchemy effect matrix duration=" + matchDuration + "/amplifier=" + matchAmplifier + "/all=" + all + "/variant=" + index);
                 }
             }
-            player.addEffect(new MobEffectInstance(MobEffects.SPEED, 100, 1));
+            player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 100, 1));
             alchemyProbe(helper, player, ghost, ghost, "ALWAYS", 75, state -> { }, false, "Equal or stronger present effects block default all-missing use");
             alchemyProbe(helper, player, ghost, ghost, "ALWAYS", 75, state -> state.putBoolean("alchemy_all_missing", false), true, "Any-missing mode permits a missing regeneration effect");
             player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 100));
             alchemyProbe(helper, player, ghost, ghost, "ALWAYS", 75, state -> state.putBoolean("alchemy_all_missing", false), false, "Any-missing mode still rejects a fully covered formula");
             player.removeAllEffects();
-            player.addEffect(new MobEffectInstance(MobEffects.SPEED, 100));
+            player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 100));
             alchemyProbe(helper, player, amplifier, amplifier, "ALWAYS", 75, state -> { }, true, "A weaker active amplifier can be upgraded");
             player.removeAllEffects();
 
@@ -817,29 +818,29 @@ public final class UpgradeGameTests {
             InstalledUpgrade upgrade = upgrade(rows);
             ItemStack fire = PotionContents.createItemStack(Items.POTION, Potions.FIRE_RESISTANCE);
             rows.setFilter(upgrade, 0, fire);
-            helper.assertValueEqual(rows.settings(upgrade).getStringOr("alchemy_condition_0", AlchemyRuntime.defaultCondition(rows.ghost(upgrade, 0)).name()), "ON_FIRE", "First ghost selects its effect-specific default");
+            helper.assertValueEqual(NbtAccess.getStringOr(rows.settings(upgrade), "alchemy_condition_0", AlchemyRuntime.defaultCondition(rows.ghost(upgrade, 0)).name()), "ON_FIRE", "First ghost selects its effect-specific default");
             rows.updateSettings(upgrade, state -> state.putString("alchemy_condition_0", "HURT"));
             rows.setFilter(upgrade, 0, PotionContents.createItemStack(Items.POTION, Potions.WATER_BREATHING));
-            helper.assertValueEqual(rows.settings(upgrade).getStringOr("alchemy_condition_0", ""), "HURT", "Replacing a nonempty ghost preserves the chosen condition");
+            helper.assertValueEqual(NbtAccess.getStringOr(rows.settings(upgrade), "alchemy_condition_0", ""), "HURT", "Replacing a nonempty ghost preserves the chosen condition");
             rows.setFilter(upgrade, 0, ItemStack.EMPTY);
             rows.setFilter(upgrade, 0, fire);
-            helper.assertValueEqual(rows.settings(upgrade).getStringOr("alchemy_condition_0", ""), "ON_FIRE", "Removing and readding a ghost does not reuse a stale explicit condition");
+            helper.assertValueEqual(NbtAccess.getStringOr(rows.settings(upgrade), "alchemy_condition_0", ""), "ON_FIRE", "Removing and readding a ghost does not reuse a stale explicit condition");
             helper.assertFalse(UpgradeEngine.action(rows, 0, "alchemy_health:0:NaN", player), "Noninteger health adjustments are rejected");
             helper.assertFalse(UpgradeEngine.action(rows, 0, "alchemy_health:0:2147483647", player), "Only a bounded five-point health step is accepted");
             for (int n = 0; n < 30; n++) UpgradeEngine.action(rows, 0, "alchemy_health:0:5", player);
-            helper.assertValueEqual(rows.settings(upgrade).getIntOr("alchemy_health_0", -1), 100, "Repeated health steps clamp at one hundred");
+            helper.assertValueEqual(NbtAccess.getIntOr(rows.settings(upgrade), "alchemy_health_0", -1), 100, "Repeated health steps clamp at one hundred");
             for (int n = 0; n < 30; n++) UpgradeEngine.action(rows, 0, "alchemy_health:0:-5", player);
-            helper.assertValueEqual(rows.settings(upgrade).getIntOr("alchemy_health_0", -1), 0, "Repeated health steps clamp at zero");
+            helper.assertValueEqual(NbtAccess.getIntOr(rows.settings(upgrade), "alchemy_health_0", -1), 0, "Repeated health steps clamp at zero");
             rows.updateSettings(upgrade, state -> { state.putInt("alchemy_active_row", 3); state.putLong("alchemy_finish", Long.MAX_VALUE); state.putString("alchemy_condition_0", "NEVER"); });
             BagInventory restored = BagInventory.of(BackpackTestSupport.roundTrip(helper.getLevel(), rows.stack()));
             UpgradeEngine.tick(restored, helper.getLevel(), player.blockPosition(), player);
-            helper.assertValueEqual(restored.settings(upgrade(restored)).getIntOr("alchemy_active_row", -1), -1, "Restored preferences cannot resurrect a runtime consumption timer");
+            helper.assertValueEqual(NbtAccess.getIntOr(restored.settings(upgrade(restored)), "alchemy_active_row", -1), -1, "Restored preferences cannot resurrect a runtime consumption timer");
             helper.succeed();
         });
     }
 
     public static void alchemyConsumableFamilies(GameTestHelper helper) {
-        record Dose(BagInventory bag, ServerPlayer player, ItemStack item, Item remainder) { }
+        record Dose(BagInventory bag, net.minecraft.world.entity.LivingEntity player, ItemStack item, Item remainder) { }
         List<Dose> doses = new ArrayList<>();
         List<ItemStack> items = List.of(PotionContents.createItemStack(Items.POTION, Potions.FIRE_RESISTANCE),
                 new ItemStack(Items.MILK_BUCKET), new ItemStack(Items.HONEY_BOTTLE), new ItemStack(Items.OMINOUS_BOTTLE), new ItemStack(Items.GOLDEN_APPLE));
@@ -852,18 +853,27 @@ public final class UpgradeGameTests {
             bag.setFilter(upgrade, 0, item);
             boolean remover = item.is(Items.MILK_BUCKET) || item.is(Items.HONEY_BOTTLE);
             if (remover) player.addEffect(new MobEffectInstance(MobEffects.POISON, 400));
-            if (item.is(Items.MILK_BUCKET)) player.addEffect(new MobEffectInstance(MobEffects.SPEED, 400));
+            if (item.is(Items.MILK_BUCKET)) player.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 400));
             bag.updateSettings(upgrade, state -> state.putString("alchemy_condition_0", remover ? "NEGATIVE_EFFECT" : "ALWAYS"));
             Item remainder = item.is(Items.POTION) || item.is(Items.HONEY_BOTTLE) ? Items.GLASS_BOTTLE : item.is(Items.MILK_BUCKET) ? Items.BUCKET : Items.AIR;
             helper.assertTrue(AlchemyRuntime.supported(item), "Actual effect-bearing consumable is supported: " + item);
             doses.add(new Dose(bag, player, item, remainder));
         }
+        var milkTarget = helper.spawn(EntityType.PIG, new BlockPos(2, 1, 2));
+        milkTarget.setNoAi(true);
+        milkTarget.addEffect(new MobEffectInstance(MobEffects.POISON, 400));
+        BagInventory mobMilk = BackpackTestSupport.bag(BackpackTier.NETHERITE, UpgradeKind.ALCHEMY, UpgradeKind.STACK_UPGRADE_TIER_1);
+        ItemStack milk = new ItemStack(Items.MILK_BUCKET);
+        mobMilk.setItem(0, milk.copyWithCount(2));
+        mobMilk.setFilter(upgrade(mobMilk), 0, milk);
+        mobMilk.updateSettings(upgrade(mobMilk), state -> state.putString("alchemy_condition_0", "NEGATIVE_EFFECT"));
+        doses.add(new Dose(mobMilk, milkTarget, milk, Items.BUCKET));
         helper.assertValueEqual(AlchemyRuntime.defaultCondition(PotionContents.createItemStack(Items.POTION, Potions.WATER_BREATHING)), AlchemyRuntime.Condition.UNDER_WATER, "Water breathing defaults to underwater");
         helper.assertValueEqual(AlchemyRuntime.defaultCondition(PotionContents.createItemStack(Items.POTION, Potions.HEALING)), AlchemyRuntime.Condition.HURT, "Healing defaults to hurt");
         helper.assertValueEqual(AlchemyRuntime.defaultCondition(PotionContents.createItemStack(Items.POTION, Potions.REGENERATION)), AlchemyRuntime.Condition.HURT, "Regeneration defaults to hurt");
         helper.assertValueEqual(AlchemyRuntime.defaultCondition(PotionContents.createItemStack(Items.POTION, Potions.SWIFTNESS)), AlchemyRuntime.Condition.SPRINTING, "Swiftness defaults to sprinting");
         helper.assertValueEqual(AlchemyRuntime.defaultCondition(PotionContents.createItemStack(Items.POTION, Potions.SLOW_FALLING)), AlchemyRuntime.Condition.FALLING, "Slow falling defaults to falling");
-        helper.assertValueEqual(AlchemyRuntime.defaultCondition(effectPotion(new MobEffectInstance(MobEffects.HASTE, 600))), AlchemyRuntime.Condition.MINING, "An actual haste effect defaults to mining");
+        helper.assertValueEqual(AlchemyRuntime.defaultCondition(effectPotion(new MobEffectInstance(MobEffects.DIG_SPEED, 600))), AlchemyRuntime.Condition.MINING, "An actual haste effect defaults to mining");
         helper.assertValueEqual(AlchemyRuntime.defaultCondition(new ItemStack(Items.MILK_BUCKET)), AlchemyRuntime.Condition.NEGATIVE_EFFECT, "Status removal defaults to a negative-effect condition");
         helper.assertValueEqual(AlchemyRuntime.defaultCondition(PotionContents.createItemStack(Items.POTION, Potions.WATER)), AlchemyRuntime.Condition.NEVER, "Effectless water defaults to never");
         long start = helper.getLevel().getGameTime();
@@ -891,7 +901,7 @@ public final class UpgradeGameTests {
             helper.assertTrue(splashBag.getItem(0).isEmpty(), "A splash spends exactly its physical potion");
             helper.assertValueEqual(count(splashBag, Items.GLASS_BOTTLE), 0, "A broken splash bottle is not returned as a drinking remainder");
 
-            var villager = helper.spawn(EntityTypes.ZOMBIE_VILLAGER, new BlockPos(2, 1, 2));
+            var villager = helper.spawn(EntityType.ZOMBIE_VILLAGER, new BlockPos(2, 1, 2));
             villager.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 400));
             BagInventory appleBag = bag(UpgradeKind.ALCHEMY);
             appleBag.setItem(0, new ItemStack(Items.GOLDEN_APPLE, 2));

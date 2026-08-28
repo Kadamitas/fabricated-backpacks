@@ -12,14 +12,13 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
-import java.util.function.Consumer;
+import java.util.List;
 
 public final class BackpackItem extends BlockItem {
     public BackpackItem(Block block, Properties properties) { super(block, properties); }
@@ -40,22 +39,20 @@ public final class BackpackItem extends BlockItem {
         return InteractionResult.PASS;
     }
 
-    @Override public InteractionResult use(Level level, Player player, InteractionHand hand) {
+    @Override public net.minecraft.world.InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         if (player instanceof ServerPlayer serverPlayer) BackpackMenus.openHeld(serverPlayer, hand);
-        return InteractionResult.SUCCESS;
+        return net.minecraft.world.InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide());
     }
     @Override public InteractionResult useOn(UseOnContext context) {
         Player player = context.getPlayer();
         BlockState clicked = context.getLevel().getBlockState(context.getClickedPos());
-        var colors = context.getItemInHand().getOrDefault(net.minecraft.core.component.DataComponents.CUSTOM_MODEL_DATA,
-                net.minecraft.world.item.component.CustomModelData.EMPTY);
-        boolean dyed = colors.getColor(0) != null && colors.getColor(0) != 0xB97843
-                || colors.getColor(1) != null && colors.getColor(1) != 0x503B36;
+        ItemStack held = context.getItemInHand();
+        boolean dyed = BackpackColors.color(held, 0, BackpackColors.DEFAULT_BODY) != BackpackColors.DEFAULT_BODY
+                || BackpackColors.color(held, 1, BackpackColors.DEFAULT_TRIM) != BackpackColors.DEFAULT_TRIM;
         if (player != null && dyed && clicked.is(net.minecraft.world.level.block.Blocks.WATER_CAULDRON)
                 && context.getLevel().mayInteract(player, context.getClickedPos())) {
             if (!context.getLevel().isClientSide()) {
-                context.getItemInHand().set(net.minecraft.core.component.DataComponents.CUSTOM_MODEL_DATA,
-                        new net.minecraft.world.item.component.CustomModelData(colors.floats(), colors.flags(), colors.strings(), java.util.List.of(0xB97843, 0x503B36)));
+                BackpackColors.set(held, BackpackColors.DEFAULT_BODY, BackpackColors.DEFAULT_TRIM);
                 net.minecraft.world.level.block.LayeredCauldronBlock.lowerFillLevel(clicked, context.getLevel(), context.getClickedPos());
             }
             return InteractionResult.SUCCESS;
@@ -69,13 +66,13 @@ public final class BackpackItem extends BlockItem {
             boolean deposit = bag.installedUpgrades().stream().anyMatch(upgrade -> upgrade.kind().family().equals("deposit"));
             boolean restock = bag.installedUpgrades().stream().anyMatch(upgrade -> upgrade.kind().family().equals("restock"));
             if (deposit || restock) {
-                com.kadamitas.fabricatedbackpacks.world.MobLoot.materialize(bag, serverPlayer.level(), context.getClickedPos(), serverPlayer);
+                com.kadamitas.fabricatedbackpacks.world.MobLoot.materialize(bag, serverPlayer.serverLevel(), context.getClickedPos(), serverPlayer);
                 com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine.transfer(bag, target, deposit);
                 return InteractionResult.SUCCESS;
             }
         }
         if (player == null || player.isShiftKeyDown()) return super.useOn(context);
-        return use(context.getLevel(), player, context.getHand());
+        return use(context.getLevel(), player, context.getHand()).getResult();
     }
     @Override protected boolean placeBlock(BlockPlaceContext context, BlockState state) {
         boolean placed = super.placeBlock(context, state);
@@ -93,18 +90,17 @@ public final class BackpackItem extends BlockItem {
     @Override public java.util.Optional<net.minecraft.world.inventory.tooltip.TooltipComponent> getTooltipImage(ItemStack stack) {
         return java.util.Optional.of(BackpackTooltip.from(stack));
     }
-    @Override public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display,
-                                           Consumer<Component> lines, TooltipFlag flags) {
+    @Override public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flags) {
         BackpackRegistry.tier(stack).ifPresent(tier -> {
             var configured = com.kadamitas.fabricatedbackpacks.config.BackpackConfig.get().capacity(tier);
             int slots = Math.max(configured.slots(), stack.getOrDefault(com.kadamitas.fabricatedbackpacks.storage.BagComponents.CONTENTS,
                     com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot.EMPTY).size());
             int upgrades = Math.max(configured.upgrades(), stack.getOrDefault(com.kadamitas.fabricatedbackpacks.storage.BagComponents.UPGRADES,
                     com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot.EMPTY).size());
-            lines.accept(Component.translatable("tooltip.fabricated_backpacks.capacity", slots));
-            lines.accept(Component.translatable("tooltip.fabricated_backpacks.upgrade_slots", upgrades));
+            lines.add(Component.translatable("tooltip.fabricated_backpacks.capacity", slots));
+            lines.add(Component.translatable("tooltip.fabricated_backpacks.upgrade_slots", upgrades));
         });
-        lines.accept(Component.translatable("tooltip.fabricated_backpacks.open"));
-        lines.accept(Component.translatable("tooltip.fabricated_backpacks.equip"));
+        lines.add(Component.translatable("tooltip.fabricated_backpacks.open"));
+        lines.add(Component.translatable("tooltip.fabricated_backpacks.equip"));
     }
 }

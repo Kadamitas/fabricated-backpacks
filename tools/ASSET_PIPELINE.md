@@ -10,7 +10,7 @@ It does not fetch, read or depend on an external mod's artwork or code.
 ```powershell
 python tools/generate_assets.py
 python tools/generate_assets.py --check --review
-python tools/test_assets.py --minecraft-jar '<Minecraft 26.2 client JAR>'
+python tools/test_assets.py --minecraft-jar '<Minecraft 1.21.1 client JAR>'
 ```
 
 `--check` compares bytes without changing resources. The generator writes only
@@ -111,7 +111,7 @@ an original teal backdrop, and exact 4× pixel enlargement from a 128-pixel rend
 It is branding artwork, not a game screenshot or evidence of runtime rendering.
 
 Before release, inspect placed, opened, held, dropped, inventory and worn bags
-in the actual 26.2 client, including armor, dyes, lighting and another player's
+in the actual 1.21.1 client, including armor, dyes, lighting and another player's
 view. Check the bottom, sides and facing transitions. Inspect icons at ordinary
 GUI scales and verify that resource loading produces no missing-model warnings.
 For flap captures, an observing client can inspect

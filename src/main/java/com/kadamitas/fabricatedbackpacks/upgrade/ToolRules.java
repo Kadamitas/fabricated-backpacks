@@ -3,7 +3,7 @@ package com.kadamitas.fabricatedbackpacks.upgrade;
 import com.kadamitas.fabricatedbackpacks.FabricatedBackpacks;
 import com.kadamitas.fabricatedbackpacks.config.RuleMatchers;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
@@ -25,8 +25,8 @@ public final class ToolRules {
     private static final int MAX_RULES = 1_024;
     private static final Map<MinecraftServer, Catalog> CATALOGS = Collections.synchronizedMap(new WeakHashMap<>());
     private static boolean initialized;
-    private record Entry(Identifier id, ToolRule rule) { }
-    private record Catalog(List<Entry> ordered, Map<Identifier, ToolRule> byId) { }
+    private record Entry(ResourceLocation id, ToolRule rule) { }
+    private record Catalog(List<Entry> ordered, Map<ResourceLocation, ToolRule> byId) { }
     private ToolRules() { }
 
     public static void initialize() {
@@ -48,7 +48,7 @@ public final class ToolRules {
         }
     }
 
-    public static Map<Identifier, ToolRule> rules(MinecraftServer server) { return catalog(server).byId(); }
+    public static Map<ResourceLocation, ToolRule> rules(MinecraftServer server) { return catalog(server).byId(); }
 
     static boolean recognizes(MinecraftServer server, ItemStack item) {
         return catalog(server).ordered().stream().anyMatch(entry -> RuleMatchers.item(item, entry.rule().items()));
@@ -84,8 +84,8 @@ public final class ToolRules {
         if (resources.size() > MAX_RULES) throw new IOException("Tool rule catalog exceeds 1024 files");
         List<Entry> entries = new ArrayList<>();
         for (var source : resources.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList()) {
-            Identifier path = source.getKey();
-            Identifier id = Identifier.fromNamespaceAndPath(path.getNamespace(), path.getPath().substring(DIRECTORY.length() + 1, path.getPath().length() - 5));
+            ResourceLocation path = source.getKey();
+            ResourceLocation id = ResourceLocation.fromNamespaceAndPath(path.getNamespace(), path.getPath().substring(DIRECTORY.length() + 1, path.getPath().length() - 5));
             try (var stream = source.getValue().open()) {
                 byte[] bytes = stream.readNBytes(ToolRule.MAX_BYTES + 1);
                 if (bytes.length > ToolRule.MAX_BYTES) throw new IOException("Tool rule exceeds 64 KiB: " + path);
@@ -93,7 +93,7 @@ public final class ToolRules {
             } catch (RuntimeException invalid) { throw new IOException("Invalid tool rule " + path + ": " + invalid.getMessage(), invalid); }
         }
         entries.sort(Comparator.<Entry>comparingInt(entry -> entry.rule().priority()).reversed().thenComparing(Entry::id));
-        Map<Identifier, ToolRule> rules = new LinkedHashMap<>();
+        Map<ResourceLocation, ToolRule> rules = new LinkedHashMap<>();
         entries.forEach(entry -> rules.put(entry.id(), entry.rule()));
         return new Catalog(List.copyOf(entries), Collections.unmodifiableMap(rules));
     }

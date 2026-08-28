@@ -4,7 +4,7 @@ import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitKind;
 import com.kadamitas.fabricatedbackpacks.config.AutomationConfig;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
-import net.fabricmc.fabric.api.menu.v1.ExtendedMenuProvider;
+import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
@@ -16,9 +16,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
-import net.minecraft.core.component.DataComponentGetter;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
@@ -33,13 +33,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.storage.ValueInput;
-import net.minecraft.world.level.storage.ValueOutput;
 import team.reborn.energy.api.EnergyStorage;
 
 /** A water boiler, vanilla fuel chamber and finite generator buffer in one persistent machine. */
-public final class SteamEngineBlockEntity extends BaseContainerBlockEntity implements WorldlyContainer, ExtendedMenuProvider<BlockPos> {
+public final class SteamEngineBlockEntity extends BaseContainerBlockEntity implements WorldlyContainer, ExtendedScreenHandlerFactory<BlockPos> {
     public static final int FUEL = 0, WATER_INPUT = 1, FUEL_REMAINDER = 2, WATER_REMAINDER = 3, SLOT_COUNT = 4;
     private static final int[] ALL_SLOTS = {FUEL, WATER_INPUT, FUEL_REMAINDER, WATER_REMAINDER};
     private NonNullList<ItemStack> items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
@@ -130,10 +129,9 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
 
     private boolean generate(ServerLevel level) {
         ItemStack fuel = getItem(FUEL);
-        int duration = state.burnRemaining() > 0 ? 0 : level.fuelValues().burnDuration(fuel);
+        int duration = state.burnRemaining() > 0 || fuel.isEmpty() ? 0 : AbstractFurnaceBlockEntity.getFuel().getOrDefault(fuel.getItem(), 0);
         ItemStack remainder = ItemStack.EMPTY;
-        if (duration > 0 && fuel.getItem().getCraftingRemainder() != null)
-            remainder = fuel.getItem().getCraftingRemainder().create();
+        if (duration > 0) remainder = fuel.getRecipeRemainder();
         boolean remainderFits = storage.remainderFits(FUEL_REMAINDER, remainder);
         AutomationConfig.Engine config = rules();
         SteamEngineCycle.Result next = SteamEngineCycle.step(state,
@@ -160,7 +158,7 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
 
     /** Client mechanics consume only the public block state, never private water/fuel/energy data. */
     public static void clientTick(Level level, BlockPos position, BlockState blockState, SteamEngineBlockEntity engine) {
-        if (!level.isClientSide() || engine.animationTick == level.getGameTime()) return;
+        if (!level.isClientSide || engine.animationTick == level.getGameTime()) return;
         engine.animationTick = level.getGameTime();
         engine.previousAngle = engine.angle;
         if (blockState.getValue(SteamEngineBlock.ACTIVE)) engine.angle += (float) (Math.PI / 10);
@@ -184,7 +182,7 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
     @Override public void clearContent() { items.clear(); setChanged(); }
     @Override public boolean canPlaceItem(int slot, ItemStack stack) {
         if (stack.isEmpty()) return false;
-        return slot == FUEL ? level instanceof ServerLevel server && server.fuelValues().isFuel(stack)
+        return slot == FUEL ? level instanceof ServerLevel && AbstractFurnaceBlockEntity.isFuel(stack)
                 : slot == WATER_INPUT && SteamEngineStorage.containsWater(stack);
     }
     @Override public int[] getSlotsForFace(Direction side) {
@@ -224,28 +222,28 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
                 || !sides.equals(SteamEngineSides.DEFAULT);
     }
 
-    @Override protected void saveAdditional(ValueOutput output) {
-        super.saveAdditional(output);
-        ContainerHelper.saveAllItems(output, items);
-        output.store("engine", SteamEngineState.CODEC, state);
-        output.store("ports", SteamEngineSides.CODEC, sides);
+    @Override protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
+        super.saveAdditional(output, registries);
+        ContainerHelper.saveAllItems(output, items, registries);
+        output.put("engine", SteamEngineState.CODEC.encodeStart(NbtOps.INSTANCE, state).getOrThrow());
+        output.put("ports", SteamEngineSides.CODEC.encodeStart(NbtOps.INSTANCE, sides).getOrThrow());
     }
-    @Override protected void loadAdditional(ValueInput input) {
-        super.loadAdditional(input);
+    @Override protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        super.loadAdditional(input, registries);
         items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
-        ContainerHelper.loadAllItems(input, items);
-        state = input.read("engine", SteamEngineState.CODEC).orElse(SteamEngineState.EMPTY);
+        ContainerHelper.loadAllItems(input, items, registries);
+        state = input.contains("engine") ? SteamEngineState.CODEC.parse(NbtOps.INSTANCE, input.get("engine")).result().orElse(SteamEngineState.EMPTY) : SteamEngineState.EMPTY;
         SteamEngineSides previousSides = sides;
-        sides = input.read("ports", SteamEngineSides.CODEC).orElse(SteamEngineSides.DEFAULT);
+        sides = input.contains("ports") ? SteamEngineSides.CODEC.parse(NbtOps.INSTANCE, input.get("ports")).result().orElse(SteamEngineSides.DEFAULT) : SteamEngineSides.DEFAULT;
         lastTick = outputTick = Long.MIN_VALUE;
         outputUsed = 0;
         if (!sides.equals(previousSides)) {
             if (currentServer()) synchronizeSides();
-            else if (level != null && level.isClientSide() && current())
+            else if (level != null && level.isClientSide && current())
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
         }
     }
-    @Override protected void applyImplicitComponents(DataComponentGetter components) {
+    @Override protected void applyImplicitComponents(DataComponentInput components) {
         super.applyImplicitComponents(components);
         state = components.getOrDefault(SteamEngineComponents.STATE, SteamEngineState.EMPTY);
         SteamEngineSides previousSides = sides;
@@ -257,10 +255,10 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
         components.set(SteamEngineComponents.STATE, state);
         components.set(SteamEngineComponents.SIDES, sides);
     }
-    @Override public void removeComponentsFromTag(ValueOutput output) {
+    @Override public void removeComponentsFromTag(CompoundTag output) {
         super.removeComponentsFromTag(output);
-        output.discard("engine");
-        output.discard("ports");
+        output.remove("engine");
+        output.remove("ports");
     }
     @Override public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
@@ -268,9 +266,6 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
         return tag;
     }
     @Override public ClientboundBlockEntityDataPacket getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }
-    @Override public void preRemoveSideEffects(BlockPos position, BlockState state) {
-        // The single stateful engine drop already owns every physical slot and resource.
-    }
 
     ContainerData data() {
         return new ContainerData() {

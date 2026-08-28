@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -16,8 +16,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ConduitFilterTest {
-    private static final Identifier COBBLE = Identifier.withDefaultNamespace("cobblestone");
-    private static final Identifier IRON = Identifier.withDefaultNamespace("iron_ingot");
+    private static final ResourceLocation COBBLE = ResourceLocation.withDefaultNamespace("cobblestone");
+    private static final ResourceLocation IRON = ResourceLocation.withDefaultNamespace("iron_ingot");
 
     @ParameterizedTest
     @EnumSource(ConduitFilterMode.class)
@@ -31,7 +31,7 @@ class ConduitFilterTest {
 
     @Test
     void ghostEditsPreserveSparsePositionsAndDoNotMutateEarlierPolicies() {
-        Map<Integer, Identifier> supplied = new LinkedHashMap<>();
+        Map<Integer, ResourceLocation> supplied = new LinkedHashMap<>();
         supplied.put(8, IRON);
         supplied.put(0, COBBLE);
         var original = new ConduitFilter(ConduitFilterMode.BLOCK, supplied);
@@ -60,19 +60,19 @@ class ConduitFilterTest {
                 () -> ConduitFilter.EMPTY.withEntry(0, COBBLE).withEntry(8, COBBLE));
         assertThrows(NullPointerException.class, () -> new ConduitFilter(null, Map.of()));
         assertThrows(NullPointerException.class, () -> ConduitFilter.EMPTY.withEntry(0, null));
-        Identifier maximum = Identifier.fromNamespaceAndPath("m", "x".repeat(254));
+        ResourceLocation maximum = ResourceLocation.fromNamespaceAndPath("m", "x".repeat(254));
         assertEquals(256, maximum.toString().length());
         assertEquals(Optional.of(maximum), ConduitFilter.EMPTY.withEntry(8, maximum).entry(8));
-        Identifier oversized = Identifier.fromNamespaceAndPath("m", "x".repeat(255));
+        ResourceLocation oversized = ResourceLocation.fromNamespaceAndPath("m", "x".repeat(255));
         assertThrows(IllegalArgumentException.class, () -> ConduitFilter.EMPTY.withEntry(0, oversized));
     }
 
     @ParameterizedTest
     @EnumSource(ConduitFilterMode.class)
     void diskCodecPreservesAllNinePositionsAndMissingModIdentities(ConduitFilterMode mode) {
-        Map<Integer, Identifier> entries = new LinkedHashMap<>();
+        Map<Integer, ResourceLocation> entries = new LinkedHashMap<>();
         for (int slot = 8; slot >= 0; slot--)
-            entries.put(slot, Identifier.fromNamespaceAndPath("removed_mod", "fluid_or_item_" + slot));
+            entries.put(slot, ResourceLocation.fromNamespaceAndPath("removed_mod", "fluid_or_item_" + slot));
         var expected = new ConduitFilter(mode, entries);
         var encoded = ConduitFilter.CODEC.encodeStart(JsonOps.INSTANCE, expected).getOrThrow();
         assertEquals(expected, ConduitFilter.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow());

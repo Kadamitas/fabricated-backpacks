@@ -5,7 +5,7 @@ import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -93,7 +93,7 @@ public final class ConduitMenu extends AbstractContainerMenu {
             next = switch (action.operation()) {
                 case SET_MODE -> previous.withMode(ConduitFilterMode.values()[action.index()]);
                 case SET_ENTRY -> {
-                    Optional<Identifier> id = registeredResource(serverPlayer, action.kind(), action.resource().orElseThrow());
+                    Optional<ResourceLocation> id = registeredResource(serverPlayer, action.kind(), action.resource().orElseThrow());
                     yield id.isPresent() ? previous.withEntry(action.index(), id.orElseThrow()) : previous;
                 }
                 case CLEAR_ENTRY -> previous.withoutEntry(action.index());
@@ -109,7 +109,7 @@ public final class ConduitMenu extends AbstractContainerMenu {
         if (!changed) sendFilters(true);
         return changed;
     }
-    private static Optional<Identifier> registeredResource(ServerPlayer player, ConduitKind kind, Identifier id) {
+    private static Optional<ResourceLocation> registeredResource(ServerPlayer player, ConduitKind kind, ResourceLocation id) {
         if (kind == ConduitKind.ITEM) return BuiltInRegistries.ITEM.getOptional(id)
                 .filter(item -> item != Items.AIR && new ItemStack(item).isItemEnabled(player.level().enabledFeatures()))
                 .map(BuiltInRegistries.ITEM::getKey);
@@ -139,7 +139,7 @@ public final class ConduitMenu extends AbstractContainerMenu {
         }
     }
     @Override public boolean stillValid(Player player) {
-        return player == owner && (entity == null ? player.level().isClientSide() : entity.stillValid(player));
+        return player == owner && (entity == null ? player.level().isClientSide : entity.stillValid(player));
     }
     @Override public ItemStack quickMoveStack(Player player, int slot) { return ItemStack.EMPTY; }
     @Override public boolean clickMenuButton(Player player, int button) {

@@ -7,10 +7,18 @@
     "SCS"
   ],
   "key": {
-    "S": "minecraft:string",
-    "C": "minecraft:copper_ingot",
-    "I": "minecraft:iron_nugget",
-    "P": "minecraft:paper"
+    "S": {
+      "item": "minecraft:string"
+    },
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "I": {
+      "item": "minecraft:iron_nugget"
+    },
+    "P": {
+      "item": "minecraft:paper"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:upgrade_base",

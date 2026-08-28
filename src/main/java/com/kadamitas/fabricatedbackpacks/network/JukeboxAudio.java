@@ -9,7 +9,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.JukeboxSong;
 
@@ -17,7 +17,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /** Named songs resolve in each level's registry; bootstrap holder identities never cross the wire. */
-public record JukeboxAudio(String identity, Optional<Identifier> song, int entityId,
+public record JukeboxAudio(String identity, Optional<ResourceLocation> song, int entityId,
                            BlockPos position, int remainingTicks) implements CustomPacketPayload {
     public static final int MAX_IDENTITY_LENGTH = 160;
     public static final int MAX_SONG_KEY_LENGTH = 256;
@@ -27,7 +27,7 @@ public record JukeboxAudio(String identity, Optional<Identifier> song, int entit
     public static final StreamCodec<RegistryFriendlyByteBuf, JukeboxAudio> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.stringUtf8(MAX_IDENTITY_LENGTH), JukeboxAudio::identity,
             ByteBufCodecs.optional(ByteBufCodecs.stringUtf8(MAX_SONG_KEY_LENGTH)
-                    .map(Identifier::parse, Identifier::toString)), JukeboxAudio::song,
+                    .map(ResourceLocation::parse, ResourceLocation::toString)), JukeboxAudio::song,
             ByteBufCodecs.VAR_INT, JukeboxAudio::entityId, BlockPos.STREAM_CODEC, JukeboxAudio::position,
             ByteBufCodecs.VAR_INT, JukeboxAudio::remainingTicks, JukeboxAudio::new);
     public JukeboxAudio {
@@ -56,13 +56,13 @@ public record JukeboxAudio(String identity, Optional<Identifier> song, int entit
         Objects.requireNonNull(registries, "registries");
         Objects.requireNonNull(song, "song");
         return song.unwrapKey().filter(key -> key.isFor(Registries.JUKEBOX_SONG))
-                .filter(key -> key.identifier().toString().length() <= MAX_SONG_KEY_LENGTH)
+                .filter(key -> key.location().toString().length() <= MAX_SONG_KEY_LENGTH)
                 .flatMap(key -> registries.lookup(Registries.JUKEBOX_SONG).flatMap(registry -> registry.get(key)))
                 .filter(named -> validLength(named.value()))
                 .flatMap(named -> {
                     int ticks = Math.min(remainingTicks, boundedLengthTicks(named.value()));
                     return ticks <= 0 ? Optional.empty() : Optional.of(new JukeboxAudio(
-                            identity, Optional.of(named.key().identifier()), entityId, position, ticks));
+                            identity, Optional.of(named.key().location()), entityId, position, ticks));
                 });
     }
 

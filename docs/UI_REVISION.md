@@ -1,3 +1,5 @@
+> Historical **26.2** evidence only. For this branch, see [1.21.1 compatibility](COMPATIBILITY_1_21_1.md); these results do not certify the port.
+
 # Interface and worn-model revision
 
 Status: **unreleased; local verification passed on 2026-08-28**. This revision

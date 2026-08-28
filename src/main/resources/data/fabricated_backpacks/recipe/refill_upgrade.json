@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:dispenser",
-    "T": "minecraft:iron_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:redstone"
+    "M": {
+      "item": "minecraft:dispenser"
+    },
+    "T": {
+      "item": "minecraft:iron_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:redstone"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:refill_upgrade",

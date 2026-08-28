@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.network;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackRuntime;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenus;
@@ -12,7 +14,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -24,11 +26,14 @@ import net.minecraft.world.phys.BlockHitResult;
 public final class BackpackNetworking {
     private BackpackNetworking() {}
     public static void initialize() {
-        PayloadTypeRegistry.serverboundPlay().register(MenuAction.TYPE, MenuAction.STREAM_CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(JukeboxAudio.TYPE, JukeboxAudio.STREAM_CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(BagSettings.TYPE, BagSettings.STREAM_CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(WorkstationState.TYPE, WorkstationState.STREAM_CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(ServerRules.TYPE, ServerRules.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(PickBackpackItem.TYPE, PickBackpackItem.STREAM_CODEC);
+        ServerPlayNetworking.registerGlobalReceiver(PickBackpackItem.TYPE,
+                (request, context) -> BackpackRuntime.pickBlock(context.player(), request.pos(), request.includeData()));
+        PayloadTypeRegistry.playC2S().register(MenuAction.TYPE, MenuAction.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(JukeboxAudio.TYPE, JukeboxAudio.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(BagSettings.TYPE, BagSettings.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(WorkstationState.TYPE, WorkstationState.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(ServerRules.TYPE, ServerRules.STREAM_CODEC);
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 sender.sendPacket(new ServerRules(com.kadamitas.fabricatedbackpacks.config.ConfigFile.encode(
                         com.kadamitas.fabricatedbackpacks.config.BackpackConfig.get()))));
@@ -87,7 +92,7 @@ public final class BackpackNetworking {
             return;
         }
         if (packet.action().equals("workstation_choice")) {
-            Identifier recipe = Identifier.tryParse(packet.text());
+            ResourceLocation recipe = ResourceLocation.tryParse(packet.text());
             if (recipe != null && player.containerMenu.containerId == packet.containerId())
                 com.kadamitas.fabricatedbackpacks.menu.WorkstationMenus.selectRecipe(player, recipe);
             return;
@@ -106,7 +111,7 @@ public final class BackpackNetworking {
                 if (upgrade == null || packet.index() < 0 || packet.index() >= menu.bag().filterSlots(upgrade)) return;
                 ItemStack ghost = packet.value() == 1 ? ItemStack.EMPTY : menu.getCarried().copyWithCount(1);
                 if (packet.action().equals("ghost_registry")) {
-                    Identifier itemId = Identifier.tryParse(packet.text());
+                    ResourceLocation itemId = ResourceLocation.tryParse(packet.text());
                     if (itemId == null) return;
                     ghost = BuiltInRegistries.ITEM.getOptional(itemId).map(ItemStack::new).orElse(ItemStack.EMPTY);
                 }
@@ -123,7 +128,7 @@ public final class BackpackNetworking {
                 if (name.isEmpty()) menu.bag().stack().remove(net.minecraft.core.component.DataComponents.CUSTOM_NAME);
                 else menu.bag().stack().set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, net.minecraft.network.chat.Component.literal(name));
             }
-            case "memory_components" -> menu.bag().updateSettings(tag -> tag.putBoolean("memory_components", !tag.getBooleanOr("memory_components", false)));
+            case "memory_components" -> menu.bag().updateSettings(tag -> tag.putBoolean("memory_components", !NbtAccess.getBooleanOr(tag, "memory_components", false)));
             default -> {
                 if (!com.kadamitas.fabricatedbackpacks.settings.SettingsRuntime.action(menu.bag(), player, packet.action(), packet.value(), packet.text())) return;
             }

@@ -1,9 +1,9 @@
 # Native conduits and steam engine
 
-This describes the automation feature under development for Minecraft 26.2
-on the working branch. It is not included in the immutable `v0.5.0-alpha`
-download. Executed verification results will be recorded separately from
-the intended behavior below.
+This describes the automation feature on the Minecraft 1.21.1 compatibility
+branch. It is not included in the immutable 26.2 `v0.5.0-alpha` download.
+Executed checks and remaining client work are recorded in
+[1.21.1 compatibility](COMPATIBILITY_1_21_1.md), separately from the behavior below.
 
 ## Shared conduit bundles
 

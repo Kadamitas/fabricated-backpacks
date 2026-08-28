@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:iron_pickaxe",
-    "T": "minecraft:iron_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:redstone"
+    "M": {
+      "item": "minecraft:iron_pickaxe"
+    },
+    "T": {
+      "item": "minecraft:iron_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:redstone"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:tool_swapper_upgrade",

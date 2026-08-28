@@ -18,7 +18,7 @@ final class AdminDelivery {
             ItemStack archived = copy.copy();
             recipient.getInventory().add(copy);
             if (!copy.isEmpty() && recipient.drop(copy, false) == null) continue;
-            BackpackArchives.record(recipient.level(), BagInventory.of(archived), recipient);
+            BackpackArchives.record(recipient.serverLevel(), BagInventory.of(archived), recipient);
             recipient.containerMenu.broadcastChanges();
             delivered++;
         }

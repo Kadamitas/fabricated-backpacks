@@ -1,7 +1,7 @@
 {
   "required": true,
-  "package": "com.kadamitas.fabricatedbackpacks.gametest.mixin",
-  "compatibilityLevel": "JAVA_25",
-  "client": ["TestInputModifiersMixin", "TestWidgetTooltipAccess", "TestBackpackMeshUpdatesMixin"],
+  "package": "com.kadamitas.fabricatedbackpacks.gametest.compat",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["GameTestInfoAccess"],
   "injectors": {"defaultRequire": 1}
 }

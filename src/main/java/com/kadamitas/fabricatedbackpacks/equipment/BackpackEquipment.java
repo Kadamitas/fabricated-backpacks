@@ -9,7 +9,7 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraft.world.level.GameRules;
 
 /** One native backpack slot, independent of the player's armor and hands. */
 public final class BackpackEquipment {
@@ -60,7 +60,7 @@ public final class BackpackEquipment {
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> synchronizeVisual(handler.player));
         net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> synchronizeVisual(newPlayer));
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
-            if (!(entity instanceof ServerPlayer player) || player.level().getGameRules().get(GameRules.KEEP_INVENTORY)) return;
+            if (!(entity instanceof ServerPlayer player) || player.serverLevel().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY)) return;
             ItemStack equipped = get(player);
             if (equipped.isEmpty()) return;
             set(player, ItemStack.EMPTY);

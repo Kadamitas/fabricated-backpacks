@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.admin.AdminNames;
 import com.kadamitas.fabricatedbackpacks.admin.AdminSavedData;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
@@ -19,19 +20,25 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.ServerOpListEntry;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
+import com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -73,6 +80,117 @@ public final class IdentityGameTests {
         entity.setDeltaMovement(Vec3.ZERO);
         helper.getLevel().addFreshEntity(entity);
         return entity;
+    }
+
+    private static void assertCopyRejected(GameTestHelper helper, ServerPlayer player, BlockPos position, String message) {
+        int selected = player.getInventory().selected;
+        List<ItemStack> before = new ArrayList<>();
+        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) before.add(player.getInventory().getItem(slot).copy());
+        helper.assertFalse(BackpackRuntime.pickBlock(player, position, true), message);
+        helper.assertValueEqual(player.getInventory().selected, selected, "Rejected copy preserves the selected hotbar slot");
+        for (int slot = 0; slot < before.size(); slot++)
+            assertStack(helper, player.getInventory().getItem(slot), before.get(slot), "Rejected copy preserves inventory slot " + slot);
+    }
+
+    public static void creativePickCopiesAreAuthorizedAndIndependent(GameTestHelper helper) {
+        ServerPlayer player = player(helper);
+        var players = helper.getLevel().getServer().getPlayerList();
+        clear(player);
+        player.getInventory().setItem(0, new ItemStack(Items.STICK, 3));
+        player.getInventory().selected = 0;
+        Vec3 standing = helper.absoluteVec(new Vec3(3.5, 1, 6.5));
+        player.setPos(standing);
+        BagInventory original = bag(BackpackTier.NETHERITE, UpgradeKind.INCEPTION, UpgradeKind.STACK_UPGRADE_TIER_4);
+        original.stack().set(DataComponents.CUSTOM_NAME, Component.literal("Private expedition"));
+        original.dye(0x123456, 0xABCDEF);
+        original.setItem(0, new ItemStack(Items.DIAMOND, 999));
+        original.remember(10, new ItemStack(Items.LAPIS_LAZULI));
+        original.updateSettings(tag -> tag.putString("last_search", "private query"));
+        BagInventory child = bag(BackpackTier.COPPER);
+        child.setItem(0, new ItemStack(Items.EMERALD, 29));
+        ItemStack tool = new ItemStack(Items.DIAMOND_PICKAXE);
+        tool.setDamageValue(73);
+        tool.set(DataComponents.CUSTOM_NAME, Component.literal("Private survey pick"));
+        child.setItem(4, tool);
+        original.setItem(2, child.stack());
+        BlockPos position = helper.absolutePos(new BlockPos(3, 1, 3));
+        BlockPos decoy = helper.absolutePos(new BlockPos(5, 1, 3));
+        helper.getLevel().setBlockAndUpdate(position, BackpackRegistry.block(BackpackTier.NETHERITE).defaultBlockState());
+        helper.getLevel().setBlockAndUpdate(decoy, Blocks.STONE.defaultBlockState());
+        BackpackBlockEntity placed = (BackpackBlockEntity) helper.getLevel().getBlockEntity(position);
+        placed.setStack(original.stack());
+        placed.inventory().save();
+        ItemStack source = placed.stack().copy();
+        player.lookAt(EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(position));
+        helper.assertTrue(player.pick(player.blockInteractionRange(), 1, false) instanceof BlockHitResult hit && hit.getBlockPos().equals(position),
+                "The connected player's actual ray reaches the placed backpack");
+        try {
+            players.deop(player.getGameProfile());
+            helper.assertFalse(player.hasPermissions(2), "The ordinary fixture has no operator authority");
+            assertCopyRejected(helper, player, position, "A survival client cannot spoof an include-data copy request");
+            players.getOps().add(new ServerOpListEntry(player.getGameProfile(), 2, false));
+            assertCopyRejected(helper, player, position, "Operator authority alone cannot grant a survival copy");
+            player.setGameMode(GameType.CREATIVE);
+            players.deop(player.getGameProfile());
+            assertCopyRejected(helper, player, position, "Creative mode without operator authority cannot copy private contents");
+            players.getOps().add(new ServerOpListEntry(player.getGameProfile(), 1, false));
+            assertCopyRejected(helper, player, position, "An operator below level two cannot copy private contents");
+            players.getOps().add(new ServerOpListEntry(player.getGameProfile(), 2, false));
+            helper.assertTrue(player.isCreative() && player.hasPermissions(2), "The authorized fixture has both required privileges");
+
+            player.lookAt(EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(decoy));
+            helper.assertTrue(player.pick(player.blockInteractionRange(), 1, false) instanceof BlockHitResult hit && hit.getBlockPos().equals(decoy),
+                    "The wrong-ray fixture really targets a different loaded block");
+            assertCopyRejected(helper, player, position, "A nearby backpack outside the current ray cannot be copied");
+            assertCopyRejected(helper, player, decoy, "A correctly targeted block without a backpack entity cannot supply private data");
+            player.setPos(helper.absoluteVec(new Vec3(3.5, 1, 12.5)));
+            player.lookAt(EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(position));
+            assertCopyRejected(helper, player, position, "A creative operator cannot copy beyond the server's interaction reach");
+            player.setPos(standing);
+            player.lookAt(EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(position));
+            assertStack(helper, placed.stack(), source, "Rejected requests leave every placed-backpack component unchanged");
+
+            helper.assertTrue(BackpackRuntime.pickBlock(player, position, true), "An authorized exact-ray request copies the real server backpack");
+            ItemStack firstStack = player.getMainHandItem();
+            helper.assertTrue(firstStack.is(BackpackRegistry.item(BackpackTier.NETHERITE)), "Native pick selects the copied backpack in the hotbar");
+            BagInventory first = BagInventory.of(firstStack);
+            assertStack(helper, withoutTreeIdentities(first.stack()), withoutTreeIdentities(source),
+                    "Creative copy preserves private contents, enhanced counts, upgrades, memory, names, damage, colors and settings");
+            helper.assertTrue(BackpackRuntime.pickBlock(player, position, true), "Repeating an authorized request makes a second physical copy");
+            BagInventory second = BagInventory.of(player.getMainHandItem());
+            helper.assertTrue(first.stack() != second.stack(), "Repeated picks do not reuse the first physical stack");
+            helper.assertValueEqual(count(player.getInventory(), BackpackRegistry.item(BackpackTier.NETHERITE)), 2,
+                    "Native inventory insertion retains both independent copies");
+            helper.assertValueEqual(count(player.getInventory(), Items.STICK), 3, "Picking preserves unrelated player items");
+            List<String> identities = List.of(placed.inventory().identity(), placed.inventory().getItem(2).get(BagComponents.IDENTITY),
+                    first.identity(), first.getItem(2).get(BagComponents.IDENTITY), second.identity(), second.getItem(2).get(BagComponents.IDENTITY));
+            helper.assertValueEqual(new HashSet<>(identities).size(), 6, "Source and both copies have six distinct root and child identities");
+            helper.assertTrue(identities.stream().allMatch(AdminNames::isIdentity), "Every forked identity is a canonical UUID");
+            assertStack(helper, withoutTreeIdentities(roundTrip(helper.getLevel(), second.stack())), withoutTreeIdentities(source),
+                    "The complete second copy survives the actual item component codec");
+
+            ItemStack secondBefore = second.stack().copy();
+            first.setItem(0, new ItemStack(Items.COAL, 7));
+            BagInventory.of(first.getItem(2)).setItem(0, new ItemStack(Items.GOLD_INGOT, 5));
+            first.save();
+            assertStack(helper, second.stack(), secondBefore, "Editing the first root and child cannot mutate the second copy");
+            ItemStack firstAfter = first.stack().copy();
+            second.setItem(0, new ItemStack(Items.REDSTONE, 11));
+            BagInventory.of(second.getItem(2)).setItem(0, new ItemStack(Items.AMETHYST_SHARD, 13));
+            second.save();
+            assertStack(helper, first.stack(), firstAfter, "Editing the second root and child cannot mutate the first copy");
+            assertStack(helper, placed.stack(), source, "Copies and subsequent edits never change the placed source or its identities");
+            assertStack(helper, placed.inventory().getItem(0), Items.DIAMOND, 999, "The placed source retains its full enhanced count");
+            assertStack(helper, BagInventory.of(placed.inventory().getItem(2)).getItem(0), Items.EMERALD, 29,
+                    "The placed source retains its independent nested contents");
+            players.deop(player.getGameProfile());
+            assertCopyRejected(helper, player, position, "Revoking operator authority immediately blocks further private copies");
+        } finally {
+            players.deop(player.getGameProfile());
+            clear(player);
+            player.setGameMode(GameType.SURVIVAL);
+        }
+        helper.succeed();
     }
 
     public static void duplicateCarriedIdentities(GameTestHelper helper) {
@@ -137,7 +255,7 @@ public final class IdentityGameTests {
                 assertStack(helper, withoutIdentity(bags.get(index).stack()), withoutIdentity(before.get(index)), "Identity repair preserves every other component for bag " + index);
             helper.assertValueEqual(tank.getAmount(), 1234567L, "Fluid, including fractional units, is conserved");
             helper.assertValueEqual(battery.getAmount(), 2345L, "Energy is conserved");
-            helper.assertValueEqual(smaller.settings(upgrade(smaller, 3)).getLongOr("feeding_next", 0), Long.MAX_VALUE - 1, "A repair never resets a saved clock");
+            helper.assertValueEqual(NbtAccess.getLongOr(smaller.settings(upgrade(smaller, 3)), "feeding_next", 0), Long.MAX_VALUE - 1, "A repair never resets a saved clock");
             List<ItemStack> repaired = bags.stream().map(bag -> bag.stack().copy()).toList();
             helper.assertValueEqual(BackpackIdentities.scan(helper.getLevel().getServer()), 0, "Repeating a completed scan is idempotent");
             for (int index = 0; index < bags.size(); index++) assertStack(helper, bags.get(index).stack(), repaired.get(index), "Repeated scan leaves the repaired stack unchanged");
@@ -276,7 +394,7 @@ public final class IdentityGameTests {
                 assertStack(helper, firstArchive.backpack(), first.stack(), "Archive runs after identity repair and retains current contents");
                 helper.assertTrue(data.archive(placed.inventory().identity()).isPresent(), "An actual ticking placed backpack gets an archive");
                 helper.assertTrue(data.archive(child.identity()).isPresent(), "Placed child storage is archived at one bounded level");
-                helper.assertValueEqual(first.settings(upgrade(first, 0)).getLongOr("feeding_next", 0), future, "Collision recovery does not turn a future clock into immediate automation");
+                helper.assertValueEqual(NbtAccess.getLongOr(first.settings(upgrade(first, 0)), "feeding_next", 0), future, "Collision recovery does not turn a future clock into immediate automation");
             } finally { clear(player); }
             helper.succeed();
         });

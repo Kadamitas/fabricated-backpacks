@@ -72,7 +72,7 @@ final class BlockGameTests {
         bag.updateSettings(tag -> { tag.putInt("display_slot", 0); tag.putInt("display_rotation", 90); tag.putString("last_search", "private query"); });
         block.setStack(bag.stack());
         var update = block.getUpdateTag(helper.getLevel().registryAccess());
-        ItemStack visible = net.minecraft.world.item.ItemStackTemplate.CODEC.parse(net.minecraft.resources.RegistryOps.create(
+        ItemStack visible = com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate.CODEC.parse(net.minecraft.resources.RegistryOps.create(
                 net.minecraft.nbt.NbtOps.INSTANCE, helper.getLevel().registryAccess()), update.get("backpack")).getOrThrow().create();
         helper.assertFalse(visible.has(BagComponents.UPGRADES), "Chunk observers do not receive physical upgrade contents");
         var snapshot = visible.get(BagComponents.CONTENTS);
@@ -90,7 +90,7 @@ final class BlockGameTests {
         bag.remember(0, nested.stack());
         bag.stack().set(com.kadamitas.fabricatedbackpacks.world.WorldComponents.EXTRA_ITEMS,
                 new com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot(1, java.util.List.of(
-                        new com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot.Entry(0, net.minecraft.world.item.ItemStackTemplate.fromNonEmptyStack(privateItem), 41))));
+                        new com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot.Entry(0, com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate.fromNonEmptyStack(privateItem), 41))));
         bag.stack().set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(secret));
         var expected = bag.stack().copy();
         block.setStack(bag.stack());
@@ -134,7 +134,9 @@ final class BlockGameTests {
             var loaded = (BackpackBlockEntity) BlockEntity.loadStatic(position, state, block.saveWithFullMetadata(level.registryAccess()), level.registryAccess());
             helper.assertTrue(loaded != null, "Backpack block entity loads through its registered type");
             assertStack(helper, loaded.stack(), expected, "Block entity save/load retains the exact backpack item");
-            var picked = state.getCloneItemStack(level, position, true);
+            var picked = state.getBlock().getCloneItemStack(level, position, state);
+            // Native 1.21 Ctrl-pick adds components through the block entity after cloning its item.
+            block.saveToItem(picked, level.registryAccess());
             helper.assertFalse(picked.has(BagComponents.IDENTITY), "Creative clone cannot duplicate a live backpack identity");
             helper.assertValueEqual(count(BagInventory.of(picked), Items.DIAMOND), 100 + tested, "Pick-block preserves requested item data");
             assertPouchRayHits(helper, position);
@@ -149,6 +151,10 @@ final class BlockGameTests {
         helper.succeed();
     }
 
+    private static boolean sameShape(net.minecraft.world.phys.shapes.VoxelShape first, net.minecraft.world.phys.shapes.VoxelShape second) {
+        return !Shapes.joinIsNotEmpty(first, second, net.minecraft.world.phys.shapes.BooleanOp.NOT_SAME);
+    }
+
     private static void assertPouchRayHits(GameTestHelper helper, BlockPos position) {
         var level = helper.getLevel();
         var original = level.getBlockState(position);
@@ -157,12 +163,12 @@ final class BlockGameTests {
                 var closed = original.setValue(BackpackBlock.FACING, facing).setValue(BackpackBlock.OPEN, false);
                 var outline = closed.getShape(level, position);
                 var collision = closed.getCollisionShape(level, position);
-                helper.assertTrue(Shapes.equal(outline, collision), "Selection and collision cover the same closed backpack");
+                helper.assertTrue(sameShape(outline, collision), "Selection and collision cover the same closed backpack");
                 for (boolean open : new boolean[]{false, true}) {
                     var state = closed.setValue(BackpackBlock.OPEN, open);
                     level.setBlockAndUpdate(position, state);
-                    helper.assertTrue(Shapes.equal(outline, state.getShape(level, position))
-                                    && Shapes.equal(collision, state.getCollisionShape(level, position)),
+                    helper.assertTrue(sameShape(outline, state.getShape(level, position))
+                                    && sameShape(collision, state.getCollisionShape(level, position)),
                             "Opening the rendered lid does not move selection or collision in " + facing);
                     for (ClipContext.Block mode : new ClipContext.Block[]{ClipContext.Block.OUTLINE, ClipContext.Block.COLLIDER}) {
                         assertShapeHit(helper, position, facing, mode, new Vec3(-4, 5.25, 8.25),
@@ -213,9 +219,9 @@ final class BlockGameTests {
         var block = (BackpackBlockEntity) level.getBlockEntity(position);
         BagInventory original = bag(BackpackTier.LEATHER, UpgradeKind.STACK_UPGRADE_TIER_1);
         block.setStack(original.stack());
-        helper.assertValueEqual(level.getBlockState(position).getAnalogOutputSignal(level, position, Direction.NORTH), 0, "Empty storage comparator is zero");
+        helper.assertValueEqual(level.getBlockState(position).getAnalogOutputSignal(level, position), 0, "Empty storage comparator is zero");
         for (int slot = 0; slot < block.getContainerSize(); slot++) block.setItem(slot, new ItemStack(Items.COBBLESTONE, 128));
-        helper.assertValueEqual(level.getBlockState(position).getAnalogOutputSignal(level, position, Direction.NORTH), 15, "Comparator measures upgraded capacity, not vanilla stack size");
+        helper.assertValueEqual(level.getBlockState(position).getAnalogOutputSignal(level, position), 15, "Comparator measures upgraded capacity, not vanilla stack size");
         var first = player(helper);
         var second = player(helper);
         first.setShiftKeyDown(false);

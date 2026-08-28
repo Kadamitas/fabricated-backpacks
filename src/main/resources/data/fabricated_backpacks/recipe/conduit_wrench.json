@@ -7,8 +7,12 @@
     " C "
   ],
   "key": {
-    "I": "minecraft:iron_ingot",
-    "C": "minecraft:copper_ingot"
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "C": {
+      "item": "minecraft:copper_ingot"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:conduit_wrench",

@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
@@ -17,7 +18,7 @@ import net.minecraft.network.protocol.game.ServerboundContainerButtonClickPacket
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.ContainerListener;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -93,26 +94,26 @@ final class MenuGameTests {
         button(player, menu.containerId, 1);
         button(player, menu.containerId, 1);
         helper.assertValueEqual(menu.page(), 3, "The partially filled last page remains reachable");
-        menu.clicked(menuSlot(menu, player.getInventory(), 9), 0, ContainerInput.PICKUP, player);
-        menu.clicked(119, 0, ContainerInput.PICKUP, player);
+        menu.clicked(menuSlot(menu, player.getInventory(), 9), 0, ClickType.PICKUP, player);
+        menu.clicked(119, 0, ClickType.PICKUP, player);
         helper.assertValueEqual(menu.getCarried().getCount(), 7, "The active last-page slot transfers its real items");
         button(player, menu.containerId, 205);
         button(player, menu.containerId, 206);
         helper.assertFalse(menu.getSlot(119).isActive(), "A later resize can make that physical cell inactive");
-        menu.clicked(119, 0, ContainerInput.PICKUP, player);
+        menu.clicked(119, 0, ClickType.PICKUP, player);
         helper.assertTrue(bag.getItem(119).isEmpty() && menu.getCarried().getCount() == 7, "A stale hidden-slot placement is rejected without losing the cursor");
         button(player, menu.containerId, 212);
         helper.assertValueEqual(synchronizedRows[0], 12, "The authoritative data retains the accepted request");
         helper.assertValueEqual(menu.visibleRows(), 10, "Actual visible rows cannot exceed the bag's ten rows");
         helper.assertValueEqual(menu.pages(), 1, "A full-height view clamps back to its only page");
         helper.assertValueEqual(menu.imageHeight(), 294, "A ten-row view has the agreed complete inventory height");
-        menu.clicked(119, 0, ContainerInput.PICKUP, player);
+        menu.clicked(119, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty(), "Returning to the now-active slot consumes the cursor exactly once");
         assertStack(helper, bag.stack(), expected, "The full resize and transfer sequence conserves the original backpack snapshot");
         helper.assertValueEqual(count(player.getInventory(), Items.GOLD_INGOT), 3, "The original carried gold is returned intact to player inventory");
         helper.assertTrue(physicalSlots.equals(menu.slots), "Row changes never replace or reorder slot ownership");
 
-        menu.clicked(menuSlot(menu, player.getInventory(), 9), 0, ContainerInput.PICKUP, player);
+        menu.clicked(menuSlot(menu, player.getInventory(), 9), 0, ClickType.PICKUP, player);
         startDrag(menu, player, 60);
         button(player, menu.containerId, 210);
         button(player, menu.containerId, 1);
@@ -120,8 +121,8 @@ final class MenuGameTests {
         assertStack(helper, bag.getItem(60), Items.GOLD_INGOT, 3,
                 "A clamped row request and a one-page cycle keep an unchanged view's valid drag intact");
         helper.assertTrue(menu.getCarried().isEmpty(), "The unchanged-view drag consumes exactly its three items");
-        menu.clicked(60, 0, ContainerInput.PICKUP, player);
-        menu.clicked(menuSlot(menu, player.getInventory(), 9), 0, ContainerInput.PICKUP, player);
+        menu.clicked(60, 0, ClickType.PICKUP, player);
+        menu.clicked(menuSlot(menu, player.getInventory(), 9), 0, ClickType.PICKUP, player);
         assertStack(helper, bag.stack(), expected, "Returning a valid drag's items restores the exact backpack snapshot");
         helper.assertValueEqual(count(player.getInventory(), Items.GOLD_INGOT), 3, "Both cancelled and completed drags conserve the original gold");
 
@@ -153,12 +154,12 @@ final class MenuGameTests {
         button(player, menu.containerId, 1);
         button(player, menu.containerId, 1);
         helper.assertTrue(menu.getSlot(96).isActive() && !menu.getSlot(95).isActive(), "The last filtered page maps to the correct physical cells");
-        menu.clicked(95, 0, ContainerInput.PICKUP, player);
+        menu.clicked(95, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty(), "A hidden but matching cell cannot be picked up through its old address");
         button(player, menu.containerId, 205);
         helper.assertValueEqual(menu.page(), 1, "Resizing anchors the previous first filtered rank");
         helper.assertTrue(menu.getSlot(84).isActive() && menu.getSlot(96).isActive() && !menu.getSlot(83).isActive(), "The new filtered range does not confuse ranks with storage indices");
-        menu.clicked(96, 0, ContainerInput.PICKUP, player);
+        menu.clicked(96, 0, ClickType.PICKUP, player);
         helper.assertValueEqual(menu.getCarried().getCount(), 13, "An active filtered address transfers the actual matching stack");
         startDrag(menu, player, 96);
         send(player, new MenuAction(menu.containerId, "storage_view", 0, 0, "0".repeat(120)));
@@ -169,7 +170,7 @@ final class MenuGameTests {
         helper.assertValueEqual(menu.pages(), 1, "Zero filtered results still have one safe page");
         helper.assertValueEqual(menu.page(), 0, "An empty filtered view cannot retain an out-of-bounds page");
         helper.assertTrue(menu.slots.subList(0, bag.getContainerSize()).stream().noneMatch(slot -> slot.isActive()), "Growing an empty view cannot authorize any storage cell");
-        menu.clicked(96, 0, ContainerInput.PICKUP, player);
+        menu.clicked(96, 0, ClickType.PICKUP, player);
         helper.assertValueEqual(menu.getCarried().getCount(), 13, "A hidden filtered destination cannot consume carried items");
         send(player, new MenuAction(menu.containerId, "storage_view", 0, 0, mask));
         startDrag(menu, player, 96);
@@ -227,7 +228,7 @@ final class MenuGameTests {
         helper.assertValueEqual(menu.pages(), 2, "Rows beyond the viewport remain paged rather than discarded");
         button(player, menu.containerId, 1);
         helper.assertTrue(menu.getSlot(255).isActive(), "The final retained storage cell remains accessible");
-        menu.clicked(255, 0, ContainerInput.QUICK_MOVE, player);
+        menu.clicked(255, 0, ClickType.QUICK_MOVE, player);
         helper.assertValueEqual(count(player.getInventory(), Items.IRON_INGOT), 5, "A retained last-page cell transfers its exact physical stack");
         helper.assertValueEqual(count(bag, Items.IRON_INGOT), 0, "The original retained source is consumed exactly once");
         helper.assertValueEqual(bag.upgrades().getContainerSize(), 128, "Rail paging and selections preserve the saved upgrade extent");
@@ -236,16 +237,16 @@ final class MenuGameTests {
         savedRecords.setItem(63, new ItemStack(Items.MUSIC_DISC_CAT));
         retainedPlayer.set(BagComponents.CONTENTS, InventorySnapshot.capture(savedRecords));
         menu.setCarried(retainedPlayer);
-        menu.clicked(menu.upgradeSlotStart() + 2, 0, ContainerInput.PICKUP, player);
+        menu.clicked(menu.upgradeSlotStart() + 2, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty(), "A saved larger upgrade installs through the already-open physical rail");
         button(player, menu.containerId, 1002);
         helper.assertTrue(menu.getSlot(menu.auxiliaryStart() + 63).isActive(),
                 "A newly installed retained inventory exposes its final physical slot without reopening");
-        menu.clicked(menu.auxiliaryStart() + 63, 0, ContainerInput.PICKUP, player);
+        menu.clicked(menu.auxiliaryStart() + 63, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().is(Items.MUSIC_DISC_CAT) && menu.getCarried().getCount() == 1
                         && bag.upgradeInventory(upgrade(bag, 2)).getItem(63).isEmpty(),
                 "The final retained record can be picked up exactly once from the unchanged menu");
-        menu.clicked(menu.auxiliaryStart() + 63, 0, ContainerInput.PICKUP, player);
+        menu.clicked(menu.auxiliaryStart() + 63, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty() && bag.upgradeInventory(upgrade(bag, 2)).getItem(63).is(Items.MUSIC_DISC_CAT),
                 "Returning the final retained record preserves its original slot and count");
         ItemStack sameUpgrade = bag.upgrades().getItem(2);
@@ -316,14 +317,14 @@ final class MenuGameTests {
         send(player, new MenuAction(menu.containerId, "storage_view", 0, 0, mask));
         helper.assertTrue(menu.getSlot(110).isActive() && !menu.getSlot(0).isActive(), "A bounded search mask selects the actual physical cell on the first filtered page");
         helper.assertValueEqual(menu.pages(), 1, "Filtered pagination counts results, not original cell addresses");
-        menu.clicked(0, 0, ContainerInput.PICKUP, player);
+        menu.clicked(0, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty(), "A hidden search result cannot be clicked through the server menu");
         send(player, new MenuAction(menu.containerId, "storage_view", 0, 0, "1"));
         send(player, new MenuAction(menu.containerId, "storage_view", 0, 0, "x".repeat(bag.getContainerSize())));
         helper.assertTrue(menu.getSlot(110).isActive() && !menu.getSlot(0).isActive(), "Malformed search masks cannot change the authorized view");
-        menu.clicked(110, 0, ContainerInput.PICKUP, player);
+        menu.clicked(110, 0, ClickType.PICKUP, player);
         helper.assertValueEqual(menu.getCarried().getCount(), 17, "The selected cell transfers its real count exactly once");
-        menu.clicked(110, 0, ContainerInput.PICKUP, player);
+        menu.clicked(110, 0, ClickType.PICKUP, player);
         send(player, new MenuAction(menu.containerId, "storage_view", 0, 0, ""));
         helper.assertTrue(menu.getSlot(0).isActive() && !menu.getSlot(110).isActive(), "Clearing the view restores original physical pagination");
         helper.assertValueEqual(count(bag, Items.EMERALD), 17, "Searching and clearing do not move inventory contents");
@@ -343,19 +344,19 @@ final class MenuGameTests {
         helper.assertValueEqual(memory.entries().size(), 2, "Remember occupied cells preserves existing depleted reservations");
         helper.assertTrue(memory.entries().stream().allMatch(entry -> entry.count() == 1), "Bulk memory stores normalized ghosts rather than physical quantities");
         menu.clickMenuButton(player, 8);
-        helper.assertValueEqual(bag.settings().getIntArray("no_sort").orElseThrow().length, bag.getContainerSize(), "Select-all protects every accessible cell, including empty cells");
+        helper.assertValueEqual(NbtAccess.getIntArray(bag.settings(), "no_sort").orElseThrow().length, bag.getContainerSize(), "Select-all protects every accessible cell, including empty cells");
         send(player, new MenuAction(menu.containerId, "no_sort_color", 0, 0, "#12ABEF"));
-        helper.assertValueEqual(bag.settings().getIntOr("no_sort_color", 0), 0x12abef, "The configured overlay color is server validated");
+        helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(), "no_sort_color", 0), 0x12abef, "The configured overlay color is server validated");
         send(player, new MenuAction(menu.containerId, "no_sort_color", 0, 0, "../secret"));
-        helper.assertValueEqual(bag.settings().getIntOr("no_sort_color", 0), 0x12abef, "An invalid color is inert");
+        helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(), "no_sort_color", 0), 0x12abef, "An invalid color is inert");
         var template = com.kadamitas.fabricatedbackpacks.settings.SettingsTemplate.capture(bag);
         var other = bag(BackpackTier.LEATHER);
         template.apply(other);
-        helper.assertValueEqual(other.settings().getIntOr("no_sort_color", 0), 0x12abef, "Settings templates retain the overlay color");
+        helper.assertValueEqual(NbtAccess.getIntOr(other.settings(), "no_sort_color", 0), 0x12abef, "Settings templates retain the overlay color");
         menu.clickMenuButton(player, 7);
         menu.clickMenuButton(player, 9);
         helper.assertTrue(bag.stack().get(com.kadamitas.fabricatedbackpacks.storage.BagComponents.MEMORY).entries().isEmpty(), "Clear-all removes memory only");
-        helper.assertValueEqual(bag.settings().getIntArray("no_sort").orElseThrow().length, 0, "Clear-all removes exclusions");
+        helper.assertValueEqual(NbtAccess.getIntArray(bag.settings(), "no_sort").orElseThrow().length, 0, "Clear-all removes exclusions");
         helper.assertValueEqual(count(bag, Items.DIAMOND), 29, "Bulk settings never consume, duplicate or move actual storage");
 
         var defaults = bag(BackpackTier.LEATHER);
@@ -369,7 +370,7 @@ final class MenuGameTests {
         menu.setCarried(cursor.copy());
         for (String expected : List.of("name", "count", "mod", "tags", "name")) {
             button(player, menu.containerId, 10);
-            helper.assertValueEqual(bag.settings().getStringOr("sort_order", ""), expected,
+            helper.assertValueEqual(NbtAccess.getStringOr(bag.settings(), "sort_order", ""), expected,
                     "The native button cycles the effective sort order and persists a bag override");
             helper.assertTrue(physical.equals(bag.stack().get(BagComponents.CONTENTS))
                             && upgrades.equals(bag.stack().get(BagComponents.UPGRADES)),
@@ -377,11 +378,11 @@ final class MenuGameTests {
             assertStack(helper, menu.getCarried(), cursor, "Selecting an order preserves the exact cursor stack");
         }
         var saved = BagInventory.of(roundTrip(helper.getLevel(), bag.stack()));
-        helper.assertValueEqual(saved.settings().getStringOr("sort_order", ""), "name",
+        helper.assertValueEqual(NbtAccess.getStringOr(saved.settings(), "sort_order", ""), "name",
                 "The selected sort order survives the real item codec");
         helper.assertTrue(physical.equals(saved.stack().get(BagComponents.CONTENTS)),
                 "Saving the order does not reorder physical storage");
-        helper.assertValueEqual(SettingsRuntime.effective(bag(BackpackTier.LEATHER), player).getStringOr("sort_order", ""), "tags",
+        helper.assertValueEqual(NbtAccess.getStringOr(SettingsRuntime.effective(bag(BackpackTier.LEATHER), player), "sort_order", ""), "tags",
                 "A bag-specific order change leaves the player's defaults intact");
         helper.succeed();
     }
@@ -426,7 +427,7 @@ final class MenuGameTests {
         BagInventory source = bag(BackpackTier.NETHERITE, UpgradeKind.STACK_UPGRADE_TIER_4);
         source.setItem(0, new ItemStack(Items.COBBLESTONE, 900));
         source.setItem(90, new ItemStack(Items.DIAMOND, 7));
-        player.getInventory().setSelectedSlot(0);
+        player.getInventory().selected = 0;
         player.setItemInHand(InteractionHand.MAIN_HAND, source.stack());
         player.getInventory().setItem(9, new ItemStack(Items.COBBLESTONE, 64));
         player.getMainHandItem().use(helper.getLevel(), player, InteractionHand.MAIN_HAND);
@@ -434,38 +435,38 @@ final class MenuGameTests {
         var menu = (BackpackMenu) player.containerMenu;
         BagInventory bag = menu.bag();
         int input = menuSlot(menu, player.getInventory(), 9);
-        menu.clicked(input, 0, ContainerInput.QUICK_MOVE, player);
+        menu.clicked(input, 0, ClickType.QUICK_MOVE, player);
         helper.assertValueEqual(count(bag, Items.COBBLESTONE), 964, "Shift-click joins a physical oversized bag stack");
         helper.assertValueEqual(count(player.getInventory(), Items.COBBLESTONE), 0, "Shift-click removes only the transferred player source");
-        menu.clicked(bag.getContainerSize(), 0, ContainerInput.PICKUP, player);
+        menu.clicked(bag.getContainerSize(), 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty(), "Unsafe capacity upgrade cannot be picked up through the real slot");
         helper.assertTrue(bag.has(UpgradeKind.STACK_UPGRADE_TIER_4), "Rejected upgrade removal preserves installed state");
-        menu.clicked(90, 0, ContainerInput.PICKUP, player);
+        menu.clicked(90, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.quickMoveStack(player, 90).isEmpty(), "Hidden-page shift-click is rejected");
         helper.assertValueEqual(bag.getItem(90).getCount(), 7, "Inactive page content remains untouched");
         var beforeForeign = bag.stack().copy();
-        menu.clicked(0, 0, ContainerInput.PICKUP, foreign);
+        menu.clicked(0, 0, ClickType.PICKUP, foreign);
         helper.assertTrue(menu.quickMoveStack(foreign, 0).isEmpty(), "Foreign quick move is rejected");
         assertStack(helper, bag.stack(), beforeForeign, "Both foreign-player slot paths leave all bag state unchanged");
         helper.assertTrue(foreign.getMainHandItem().isEmpty() && menu.getCarried().isEmpty(), "Unauthorized attempts create no cursor or hand items");
         int carrier = menuSlot(menu, player.getInventory(), 0);
-        menu.clicked(carrier, 0, ContainerInput.PICKUP, player);
-        menu.clicked(1, 0, ContainerInput.SWAP, player);
+        menu.clicked(carrier, 0, ClickType.PICKUP, player);
+        menu.clicked(1, 0, ClickType.SWAP, player);
         helper.assertTrue(player.getMainHandItem() == source.stack(), "Neither pickup nor number-key swapping can move the owning bag");
-        menu.clicked(Integer.MAX_VALUE, 0, ContainerInput.PICKUP, player);
-        menu.clicked(-1000, 0, ContainerInput.PICKUP, player);
+        menu.clicked(Integer.MAX_VALUE, 0, ClickType.PICKUP, player);
+        menu.clicked(-1000, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty(), "Invalid indices are inert");
-        menu.clicked(0, 0, ContainerInput.QUICK_MOVE, player);
+        menu.clicked(0, 0, ClickType.QUICK_MOVE, player);
         helper.assertValueEqual(count(player.getInventory(), Items.COBBLESTONE) + count(bag, Items.COBBLESTONE), 964, "Exporting an oversized stack conserves every item");
         for (int slot = 0; slot < 36; slot++) helper.assertTrue(player.getInventory().getItem(slot).getCount() <= player.getInventory().getItem(slot).getMaxStackSize(), "Export never creates an oversized ordinary inventory stack");
         helper.assertTrue(menu.clickMenuButton(player, 1), "Page control is handled by the server menu");
-        menu.clicked(90, 0, ContainerInput.QUICK_MOVE, player);
+        menu.clicked(90, 0, ClickType.QUICK_MOVE, player);
         helper.assertValueEqual(count(player.getInventory(), Items.DIAMOND), 7, "The same slot becomes accessible on its actual page");
         ItemStack prior = bag.stack().copy();
         player.getInventory().setItem(0, ItemStack.EMPTY);
         player.getInventory().setItem(1, source.stack());
         helper.assertFalse(menu.stillValid(player), "Moving the owning item invalidates the inventory session");
-        menu.clicked(90, 0, ContainerInput.PICKUP, player);
+        menu.clicked(90, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.quickMoveStack(player, 90).isEmpty(), "Stale direct transfers are rejected");
         assertStack(helper, bag.stack(), prior, "A stale session cannot change the old bag snapshot");
         player.closeContainer();
@@ -548,7 +549,7 @@ final class MenuGameTests {
         var guestMenu = (BackpackMenu) guest.containerMenu;
         helper.assertTrue(guestMenu.bag() == ownerMenu.bag(), "Both viewers use one authoritative inventory handle");
         guestMenu.setCarried(new ItemStack(Items.EMERALD, 3));
-        guestMenu.clicked(1, 0, ContainerInput.PICKUP, guest);
+        guestMenu.clicked(1, 0, ClickType.PICKUP, guest);
         helper.assertTrue(guestMenu.getCarried().isEmpty(), "Shared insertion consumes the guest cursor exactly once");
         helper.assertValueEqual(ownerMenu.bag().getItem(1).getCount(), 3, "Owner immediately observes the shared insertion");
         helper.assertTrue(ownerMenu.stillValid(owner) && guestMenu.stillValid(guest), "Publishing attachment copies preserves the live shared handle");
@@ -565,7 +566,7 @@ final class MenuGameTests {
         BagInventory.of(replacement).setItem(1, new ItemStack(Items.EMERALD, 29));
         com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.set(owner, replacement);
         helper.assertFalse(ownerMenu.stillValid(owner) || stale.stillValid(guest), "A real replacement invalidates both old viewers even when UUIDs match");
-        stale.clicked(0, 0, ContainerInput.PICKUP, guest);
+        stale.clicked(0, 0, ClickType.PICKUP, guest);
         helper.assertTrue(stale.getCarried().isEmpty(), "An old guest menu cannot extract from a replaced backpack");
         guest.closeContainer();
         owner.closeContainer();
@@ -582,10 +583,10 @@ final class MenuGameTests {
         var live = com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.inventory(player).orElseThrow();
         live.setItem(0, new ItemStack(Items.DIAMOND, 17));
         com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.setFromInventory(player, live);
-        menu.clicked(0, 0, ContainerInput.PICKUP, player);
+        menu.clicked(0, 0, ClickType.PICKUP, player);
         helper.assertTrue(com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.get(player).isEmpty(), "Taking the native slot removes exactly its current equipped item");
         helper.assertValueEqual(count(BagInventory.of(menu.getCarried()), Items.DIAMOND), 17, "Equipment screen cannot return an old snapshot from before automation updated the bag");
-        menu.clicked(0, 0, ContainerInput.PICKUP, player);
+        menu.clicked(0, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty(), "Putting back the backpack clears its cursor");
         helper.assertValueEqual(count(com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.inventory(player).orElseThrow(), Items.DIAMOND), 17, "Re-equipping preserves the latest contents");
         player.closeContainer();
@@ -603,12 +604,12 @@ final class MenuGameTests {
         var menu = (BackpackMenu) player.containerMenu;
         helper.assertValueEqual(menu.nestedDepth(), 1, "Child view records its bounded nesting depth");
         menu.setCarried(new ItemStack(Items.EMERALD, 7));
-        menu.clicked(0, 0, ContainerInput.PICKUP, player);
+        menu.clicked(0, 0, ClickType.PICKUP, player);
         int ancestorSlot = menuSlot(menu, player.getInventory(), 0);
-        menu.clicked(ancestorSlot, 0, ContainerInput.THROW, player);
+        menu.clicked(ancestorSlot, 0, ClickType.THROW, player);
         helper.assertTrue(player.getInventory().getItem(0) == outer.stack(), "An active child view locks its physical ancestor against throwing");
         menu.setCarried(new ItemStack(BackpackRegistry.item(UpgradeKind.INCEPTION)));
-        menu.clicked(menu.bag().getContainerSize(), 0, ContainerInput.PICKUP, player);
+        menu.clicked(menu.bag().getContainerSize(), 0, ClickType.PICKUP, player);
         helper.assertFalse(menu.bag().has(UpgradeKind.INCEPTION), "A nested view cannot install a second nesting level");
         helper.assertTrue(menu.getCarried().is(BackpackRegistry.item(UpgradeKind.INCEPTION)), "Denied nested upgrade installation retains the cursor item");
         menu.setCarried(ItemStack.EMPTY);
@@ -620,7 +621,7 @@ final class MenuGameTests {
         var stale = (BackpackMenu) player.containerMenu;
         outer.setItem(5, outer.getItem(5).copy());
         helper.assertFalse(stale.stillValid(player), "Replacing a nested source with an identical copy invalidates its old view");
-        stale.clicked(0, 0, ContainerInput.PICKUP, player);
+        stale.clicked(0, 0, ClickType.PICKUP, player);
         helper.assertTrue(stale.getCarried().isEmpty(), "A stale child view cannot extract from a replacement");
         player.closeContainer();
         helper.succeed();
@@ -636,7 +637,7 @@ final class MenuGameTests {
         helper.assertTrue(BackpackMenus.openSlot(player, 0), "A backpack in a real chest can be opened without taking it out");
         var menu = (BackpackMenu) player.containerMenu;
         menu.setCarried(new ItemStack(Items.IRON_INGOT, 4));
-        menu.clicked(0, 0, ContainerInput.PICKUP, player);
+        menu.clicked(0, 0, ClickType.PICKUP, player);
         player.closeContainer();
         helper.assertValueEqual(count(BagInventory.of(chest.getItem(0)), Items.IRON_INGOT), 4, "External-container edits persist into the physical source item");
         player.openMenu(chest);
@@ -644,7 +645,7 @@ final class MenuGameTests {
         var stale = (BackpackMenu) player.containerMenu;
         ItemStack moved = chest.removeItemNoUpdate(0);
         helper.assertFalse(stale.stillValid(player), "Removing the source item closes external-container access");
-        stale.clicked(0, 0, ContainerInput.PICKUP, player);
+        stale.clicked(0, 0, ClickType.PICKUP, player);
         helper.assertTrue(stale.getCarried().isEmpty(), "Moved-source access cannot create a duplicate cursor stack");
         player.closeContainer();
         helper.assertValueEqual(count(BagInventory.of(moved), Items.IRON_INGOT), 4, "The removed physical item retains all stored items");
@@ -680,15 +681,15 @@ final class MenuGameTests {
         player.getInventory().setItem(9, new ItemStack(Items.DIAMOND, 32));
         var menu = player.inventoryMenu;
         int bagSlot = menuSlot(menu, player.getInventory(), 0), items = menuSlot(menu, player.getInventory(), 9);
-        menu.clicked(bagSlot, 0, ContainerInput.PICKUP, player);
-        menu.clicked(items, 0, ContainerInput.PICKUP, player);
+        menu.clicked(bagSlot, 0, ClickType.PICKUP, player);
+        menu.clicked(items, 0, ClickType.PICKUP, player);
         helper.assertTrue(BackpackRegistry.isBackpack(menu.getCarried()), "Stashing with a held backpack keeps the backpack on the cursor");
         helper.assertTrue(player.getInventory().getItem(9).isEmpty(), "Cursor-backpack stash consumes exactly the actual source stack");
         helper.assertValueEqual(count(BagInventory.of(menu.getCarried()), Items.DIAMOND), 32, "Cursor-backpack stash inserts the entire fitting stack");
-        menu.clicked(bagSlot, 0, ContainerInput.PICKUP, player);
+        menu.clicked(bagSlot, 0, ClickType.PICKUP, player);
         player.getInventory().setItem(9, new ItemStack(Items.EMERALD, 7));
-        menu.clicked(items, 0, ContainerInput.PICKUP, player);
-        menu.clicked(bagSlot, 0, ContainerInput.PICKUP, player);
+        menu.clicked(items, 0, ClickType.PICKUP, player);
+        menu.clicked(bagSlot, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty(), "Cursor-item stash consumes its fitting carried stack");
         helper.assertValueEqual(count(BagInventory.of(player.getInventory().getItem(0)), Items.EMERALD), 7, "Cursor-item stash preserves the physical backpack in its slot");
         helper.assertValueEqual(count(BagInventory.of(player.getInventory().getItem(0)), Items.DIAMOND), 32, "Second-direction stash preserves prior contents");
@@ -710,7 +711,7 @@ final class MenuGameTests {
         helper.assertTrue(view.stillValid(player), "Closing the workstation preserves its input-source lease");
         helper.assertValueEqual(view.nestedDepth(), 1, "Portable input views retain containment depth");
         view.setCarried(new ItemStack(Items.EMERALD, 11));
-        view.clicked(0, 0, ContainerInput.PICKUP, player);
+        view.clicked(0, 0, ClickType.PICKUP, player);
         player.closeContainer();
         var restored = BagInventory.of(roundTrip(helper.getLevel(), outer.stack()));
         var storedChild = restored.upgradeInventory(upgrade(restored, 0)).getItem(0);
@@ -726,7 +727,7 @@ final class MenuGameTests {
         bag.setItem(0, new ItemStack(Items.DIAMOND, 63));
         player.getInventory().setItem(0, bag.stack());
         player.inventoryMenu.setCarried(new ItemStack(Items.DIAMOND, 5));
-        player.inventoryMenu.clicked(menuSlot(player.inventoryMenu, player.getInventory(), 0), 0, ContainerInput.PICKUP, player);
+        player.inventoryMenu.clicked(menuSlot(player.inventoryMenu, player.getInventory(), 0), 0, ClickType.PICKUP, player);
         helper.assertValueEqual(bag.getItem(0).getCount(), 64, "Partial stash fills only the one remaining unit of capacity");
         helper.assertValueEqual(player.inventoryMenu.getCarried().getCount(), 4, "Unaccepted items remain on the cursor");
         helper.assertValueEqual(bag.getItem(0).getCount() + player.inventoryMenu.getCarried().getCount(), 68, "Partial transfer conserves every item");
@@ -746,12 +747,12 @@ final class MenuGameTests {
 
     private static void startDrag(BackpackMenu menu, ServerPlayer player, int... slots) {
         // Exercise the real server menu drag protocol; input/display timing remains a client-test concern.
-        menu.clicked(-999, AbstractContainerMenu.getQuickcraftMask(0, 0), ContainerInput.QUICK_CRAFT, player);
+        menu.clicked(-999, AbstractContainerMenu.getQuickcraftMask(0, 0), ClickType.QUICK_CRAFT, player);
         for (int slot : slots)
-            menu.clicked(slot, AbstractContainerMenu.getQuickcraftMask(1, 0), ContainerInput.QUICK_CRAFT, player);
+            menu.clicked(slot, AbstractContainerMenu.getQuickcraftMask(1, 0), ClickType.QUICK_CRAFT, player);
     }
 
     private static void finishDrag(BackpackMenu menu, ServerPlayer player) {
-        menu.clicked(-999, AbstractContainerMenu.getQuickcraftMask(2, 0), ContainerInput.QUICK_CRAFT, player);
+        menu.clicked(-999, AbstractContainerMenu.getQuickcraftMask(2, 0), ClickType.QUICK_CRAFT, player);
     }
 }

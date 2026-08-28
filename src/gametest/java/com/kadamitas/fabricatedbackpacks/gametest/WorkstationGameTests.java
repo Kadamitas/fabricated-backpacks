@@ -2,6 +2,7 @@ package com.kadamitas.fabricatedbackpacks.gametest;
 
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlock;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
@@ -13,22 +14,23 @@ import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.upgrade.InventoryMoves;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.game.ServerboundRenameItemPacket;
-import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AnvilMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.SmithingMenu;
 import net.minecraft.world.inventory.StonecutterMenu;
 import net.minecraft.world.item.ItemStack;
@@ -38,8 +40,8 @@ import net.minecraft.world.item.crafting.CraftingBookCategory;
 import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.PlacementInfo;
 import net.minecraft.world.item.crafting.RecipeSerializer;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -54,22 +56,30 @@ final class WorkstationGameTests {
     private static RecipeSerializer<ChoiceRecipe> secondChoice;
     static void registerFixtures() {
         ChoiceRecipe first = new ChoiceRecipe(false), second = new ChoiceRecipe(true);
-        firstChoice = Registry.register(BuiltInRegistries.RECIPE_SERIALIZER, Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "choice_a"),
-                new RecipeSerializer<>(MapCodec.unit(first), StreamCodec.unit(first)));
-        secondChoice = Registry.register(BuiltInRegistries.RECIPE_SERIALIZER, Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "choice_b"),
-                new RecipeSerializer<>(MapCodec.unit(second), StreamCodec.unit(second)));
+        firstChoice = Registry.register(BuiltInRegistries.RECIPE_SERIALIZER, ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "choice_a"),
+                choiceSerializer(first));
+        secondChoice = Registry.register(BuiltInRegistries.RECIPE_SERIALIZER, ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "choice_b"),
+                choiceSerializer(second));
+    }
+    private static RecipeSerializer<ChoiceRecipe> choiceSerializer(ChoiceRecipe recipe) {
+        return new RecipeSerializer<>() {
+            @Override public MapCodec<ChoiceRecipe> codec() { return MapCodec.unit(recipe); }
+            @Override public StreamCodec<RegistryFriendlyByteBuf, ChoiceRecipe> streamCodec() { return StreamCodec.unit(recipe); }
+        };
     }
     private record ChoiceRecipe(boolean second) implements CraftingRecipe {
         @Override public boolean matches(CraftingInput input, Level level) { return input.size() == 1 && input.getItem(0).is(Items.NAUTILUS_SHELL); }
-        @Override public ItemStack assemble(CraftingInput input) { return new ItemStack(second ? Items.COPPER_INGOT : Items.AMETHYST_SHARD); }
+        @Override public ItemStack assemble(CraftingInput input, HolderLookup.Provider registries) { return getResultItem(registries); }
+        @Override public ItemStack getResultItem(HolderLookup.Provider registries) { return new ItemStack(second ? Items.COPPER_INGOT : Items.AMETHYST_SHARD); }
+        @Override public boolean canCraftInDimensions(int width, int height) { return width >= 1 && height >= 1; }
         @Override public NonNullList<ItemStack> getRemainingItems(CraftingInput input) {
             return NonNullList.withSize(input.size(), new ItemStack(second ? Items.IRON_NUGGET : Items.GOLD_NUGGET));
         }
         @Override public CraftingBookCategory category() { return CraftingBookCategory.MISC; }
-        @Override public String group() { return ""; }
+        @Override public String getGroup() { return ""; }
         @Override public boolean isSpecial() { return false; }
         @Override public boolean showNotification() { return false; }
-        @Override public PlacementInfo placementInfo() { return PlacementInfo.create(Ingredient.of(Items.NAUTILUS_SHELL)); }
+        @Override public NonNullList<Ingredient> getIngredients() { return NonNullList.of(Ingredient.EMPTY, Ingredient.of(Items.NAUTILUS_SHELL)); }
         @Override public RecipeSerializer<ChoiceRecipe> getSerializer() { return second ? secondChoice : firstChoice; }
     }
 
@@ -83,7 +93,7 @@ final class WorkstationGameTests {
     }
 
     static void teach(ServerPlayer player, String recipe) {
-        player.awardRecipesByKey(List.of(ResourceKey.create(Registries.RECIPE, Identifier.parse(recipe))));
+        player.awardRecipesByKey(List.of(ResourceLocation.parse(recipe)));
     }
 
     static void craftingRemaindersAndPersistence(GameTestHelper helper) {
@@ -98,7 +108,7 @@ final class WorkstationGameTests {
         grid.setItem(5, new ItemStack(Items.SUGAR));
         for (int slot = 6; slot < 9; slot++) grid.setItem(slot, new ItemStack(Items.WHEAT));
         helper.assertTrue(menu.getSlot(0).getItem().is(Items.CAKE), "Vanilla recipes compute the portable crafting output");
-        menu.clicked(0, 0, ContainerInput.PICKUP, player);
+        menu.clicked(0, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().is(Items.CAKE) && menu.getCarried().getCount() == 1, "Taking the real result creates one cake");
         helper.assertValueEqual(count(grid, Items.BUCKET), 3, "All three milk bucket crafting remainders remain owned");
         helper.assertValueEqual(count(grid, Items.MILK_BUCKET) + count(grid, Items.SUGAR) + count(grid, Items.EGG) + count(grid, Items.WHEAT), 0, "Crafting consumes exactly the declared ingredients");
@@ -120,12 +130,11 @@ final class WorkstationGameTests {
         var bag = bag(BackpackTier.NETHERITE, UpgradeKind.STONECUTTER);
         bag.upgradeInventory(upgrade(bag, 0)).setItem(0, new ItemStack(Items.STONE, 3));
         var menu = (StonecutterMenu) open(player, bag);
-        helper.assertTrue(menu.getNumberOfVisibleRecipes() > 0, "Stonecutter loads real enabled recipe displays");
-        Identifier slabId = Identifier.withDefaultNamespace("stone_slab_from_stone_stonecutting");
+        helper.assertTrue(menu.getNumRecipes() > 0, "Stonecutter loads real enabled recipe displays");
+        ResourceLocation slabId = ResourceLocation.withDefaultNamespace("stone_slab_from_stone_stonecutting");
         int selected = -1;
-        for (int index = 0; index < menu.getNumberOfVisibleRecipes(); index++) {
-            if (menu.getVisibleRecipes().entries().get(index).recipe().recipe()
-                    .map(recipe -> recipe.id().identifier().equals(slabId)).orElse(false)) {
+        for (int index = 0; index < menu.getNumRecipes(); index++) {
+            if (menu.getRecipes().get(index).id().equals(slabId)) {
                 menu.clickMenuButton(player, index);
                 selected = index;
                 break;
@@ -136,8 +145,8 @@ final class WorkstationGameTests {
                 && menu.getSlot(StonecutterMenu.RESULT_SLOT).getItem().getCount() == 2,
                 "The exact vanilla identity previews two slabs despite other recipes with the same result item");
         var choiceState = WorkstationMenus.view(player);
-        List<String> choiceIds = List.of(choiceState.getStringOr("choices", "").split(","));
-        var previews = choiceState.getListOrEmpty("choice_results");
+        List<String> choiceIds = List.of(NbtAccess.getStringOr(choiceState, "choices", "").split(","));
+        var previews = NbtAccess.getListOrEmpty(choiceState, "choice_results");
         helper.assertValueEqual(previews.size(), choiceIds.size(), "Stonecutting previews align exactly with recipe identities");
         int slabChoice = choiceIds.indexOf(slabId.toString());
         helper.assertTrue(slabChoice >= 0, "The current stonecutting identity appears in the modal choices");
@@ -150,13 +159,13 @@ final class WorkstationGameTests {
         var ops = helper.getLevel().registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE);
         ItemStack slabPreview = ItemStack.OPTIONAL_CODEC.parse(ops, previews.get(slabChoice)).getOrThrow();
         helper.assertTrue(ItemStack.matches(slabPreview, menu.getSlot(StonecutterMenu.RESULT_SLOT).getItem()), "Encoded stone result previews use the actual recipe output");
-        helper.assertFalse(WorkstationMenus.selectRecipe(player, Identifier.withDefaultNamespace("cake")), "Crafting identities cannot select a stonecutting result");
+        helper.assertFalse(WorkstationMenus.selectRecipe(player, ResourceLocation.withDefaultNamespace("cake")), "Crafting identities cannot select a stonecutting result");
         helper.assertFalse(menu.clickMenuButton(player, WorkstationMenus.CHOICE_RECIPE_BUTTON + WorkstationMenus.MAX_CHOICES - 1), "A missing modal choice is rejected without guessing a native recipe index");
         int recipe = selected;
-        helper.assertFalse(menu.clickMenuButton(foreign, (recipe + 1) % menu.getNumberOfVisibleRecipes()), "A foreign player cannot change a portable stonecutter selection");
+        helper.assertFalse(menu.clickMenuButton(foreign, (recipe + 1) % menu.getNumRecipes()), "A foreign player cannot change a portable stonecutter selection");
         helper.assertValueEqual(menu.getSelectedRecipeIndex(), recipe, "Rejected selection preserves the chosen recipe");
         int experience = player.totalExperience;
-        menu.clicked(StonecutterMenu.RESULT_SLOT, 0, ContainerInput.PICKUP, player);
+        menu.clicked(StonecutterMenu.RESULT_SLOT, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().is(Items.STONE_SLAB) && menu.getCarried().getCount() == 2, "Stonecutting uses the actual two-slab recipe yield");
         helper.assertValueEqual(menu.container.getItem(0).getCount(), 2, "One stone is consumed per output batch");
         helper.assertValueEqual(player.totalExperience, experience, "Stonecutting introduces no invented XP charge");
@@ -191,13 +200,13 @@ final class WorkstationGameTests {
         int cost = menu.getCost();
         helper.assertValueEqual(preview.getDamageValue(), 0, "Three diamonds repair the damaged pick through vanilla logic");
         helper.assertValueEqual(preview.getHoverName().getString(), "Restored survey pick", "Actual vanilla rename packet updates the result");
-        menu.clicked(AnvilMenu.RESULT_SLOT, 0, ContainerInput.PICKUP, player);
+        menu.clicked(AnvilMenu.RESULT_SLOT, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().isEmpty(), "Insufficient XP cannot take the anvil preview");
         helper.assertValueEqual(menu.getSlot(0).getItem().getDamageValue(), 800, "Failed take leaves the original tool unchanged");
         helper.assertValueEqual(menu.getSlot(1).getItem().getCount(), 3, "Failed take leaves every repair material untouched");
         player.giveExperienceLevels(20);
         int levels = player.experienceLevel;
-        menu.clicked(AnvilMenu.RESULT_SLOT, 0, ContainerInput.PICKUP, player);
+        menu.clicked(AnvilMenu.RESULT_SLOT, 0, ClickType.PICKUP, player);
         assertStack(helper, menu.getCarried(), preview, "Paid anvil operation preserves the exact computed item components");
         helper.assertValueEqual(player.experienceLevel, levels - cost, "Anvil deducts the vanilla level cost exactly once");
         helper.assertTrue(menu.getSlot(0).getItem().isEmpty() && menu.getSlot(1).getItem().isEmpty(), "Successful repair consumes one base and the three used materials");
@@ -211,7 +220,7 @@ final class WorkstationGameTests {
         saved.setItem(1, new ItemStack(Items.DIAMOND));
         var costly = (AnvilMenu) open(player, bag);
         helper.assertTrue(costly.getSlot(AnvilMenu.RESULT_SLOT).getItem().isEmpty(), "Survival anvil honors the vanilla too-expensive rule");
-        costly.clicked(AnvilMenu.RESULT_SLOT, 0, ContainerInput.PICKUP, player);
+        costly.clicked(AnvilMenu.RESULT_SLOT, 0, ClickType.PICKUP, player);
         helper.assertTrue(costly.getCarried().isEmpty() && costly.getSlot(0).hasItem(), "Forbidden expensive work cannot consume or return a result");
         player.closeContainer();
         helper.succeed();
@@ -235,7 +244,7 @@ final class WorkstationGameTests {
         helper.assertValueEqual(preview.getHoverName().getString(), "Original sword", "Smithing preserves custom names");
         helper.assertValueEqual(preview.get(DataComponents.ENCHANTMENTS), base.get(DataComponents.ENCHANTMENTS), "Smithing preserves enchantments");
         int xp = player.totalExperience;
-        menu.clicked(SmithingMenu.RESULT_SLOT, 0, ContainerInput.PICKUP, player);
+        menu.clicked(SmithingMenu.RESULT_SLOT, 0, ClickType.PICKUP, player);
         assertStack(helper, menu.getCarried(), preview, "Taking smithing output returns exactly its preview");
         helper.assertTrue(menu.getSlot(0).getItem().isEmpty() && menu.getSlot(1).getItem().isEmpty() && menu.getSlot(2).getItem().isEmpty(), "Smithing consumes template, base, and addition once");
         helper.assertValueEqual(player.totalExperience, xp, "Smithing introduces no XP cost");
@@ -253,7 +262,7 @@ final class WorkstationGameTests {
         inputs.setItem(SmithingMenu.ADDITIONAL_SLOT, new ItemStack(Items.NETHERITE_INGOT));
         var transforming = (SmithingMenu) open(player, bag);
         assertStack(helper, transforming.getSlot(SmithingMenu.RESULT_SLOT).getItem(), expected, "Actual preserving backpack smithing recipe retains all base components");
-        transforming.clicked(SmithingMenu.RESULT_SLOT, 0, ContainerInput.PICKUP, player);
+        transforming.clicked(SmithingMenu.RESULT_SLOT, 0, ClickType.PICKUP, player);
         BagInventory result = BagInventory.of(roundTrip(helper.getLevel(), transforming.getCarried()));
         helper.assertValueEqual(result.getContainerSize(), 120, "Smithing unlocks the new tier's storage slots");
         helper.assertValueEqual(result.getItem(107).getCount(), 999, "Smithing and serialization preserve enhanced counts at the old final slot");
@@ -294,7 +303,7 @@ final class WorkstationGameTests {
         bag.updateSettings(upgrade(bag, 2), state -> state.putBoolean("enabled", false));
         bag.setItem(0, new ItemStack(Items.OAK_LOG, 1000));
         int before = count(bag, Items.OAK_PLANKS);
-        menu.clicked(0, 0, ContainerInput.QUICK_MOVE, player);
+        menu.clicked(0, 0, ClickType.QUICK_MOVE, player);
         helper.assertValueEqual(count(bag, Items.OAK_PLANKS) - before, 256, "A shift operation has a strict 64-batch work bound even with large refill storage");
         helper.assertValueEqual(bag.getItem(0).getCount(), 936, "Bounded shift consumes exactly the 64 replenished ingredients");
         helper.assertValueEqual(menu.grid().getItem(0).getCount(), 1, "The final refill remains an owned physical ingredient");
@@ -306,8 +315,8 @@ final class WorkstationGameTests {
         helper.assertTrue(menu.stillValid(player), "Refill and shifts preserve the physical source stack");
         player.closeContainer();
         BagInventory loaded = BagInventory.of(roundTrip(helper.getLevel(), bag.stack()));
-        helper.assertTrue(loaded.settings(upgrade(loaded, 0)).getBooleanOr("grid_refill", false), "Refill preference survives serialization");
-        helper.assertValueEqual(loaded.settings(upgrade(loaded, 0)).getStringOr("result_destination", ""), "PLAYER", "Destination preference survives serialization");
+        helper.assertTrue(NbtAccess.getBooleanOr(loaded.settings(upgrade(loaded, 0)), "grid_refill", false), "Refill preference survives serialization");
+        helper.assertValueEqual(NbtAccess.getStringOr(loaded.settings(upgrade(loaded, 0)), "result_destination", ""), "PLAYER", "Destination preference survives serialization");
 
         BagInventory full = bag(BackpackTier.NETHERITE, UpgradeKind.CRAFTING);
         for (int slot = 0; slot < full.getContainerSize(); slot++) full.setItem(slot, new ItemStack(Items.DIRT, 64));
@@ -365,8 +374,8 @@ final class WorkstationGameTests {
         teach(player, "fabricated_backpacks_tests:choice_b");
         var menu = (WorkstationMenus.PortableCrafting) open(player, bag);
         menu.grid().setItem(4, new ItemStack(Items.NAUTILUS_SHELL));
-        helper.assertValueEqual(WorkstationMenus.view(player).getStringOr("choices", "").split(",").length, 2, "Every matching registered recipe is exposed as a validated choice");
-        var previews = WorkstationMenus.view(player).getListOrEmpty("choice_results");
+        helper.assertValueEqual(NbtAccess.getStringOr(WorkstationMenus.view(player), "choices", "").split(",").length, 2, "Every matching registered recipe is exposed as a validated choice");
+        var previews = NbtAccess.getListOrEmpty(WorkstationMenus.view(player), "choice_results");
         var ops = helper.getLevel().registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE);
         helper.assertValueEqual(previews.size(), 2, "Every conflict choice includes one bounded real-item preview");
         helper.assertTrue(ItemStack.OPTIONAL_CODEC.parse(ops, previews.get(0)).getOrThrow().is(Items.AMETHYST_SHARD)
@@ -376,11 +385,11 @@ final class WorkstationGameTests {
         helper.assertTrue(menu.getSlot(0).getItem().is(Items.COPPER_INGOT), "The selected recipe recomputes its own result");
         helper.assertTrue(menu.clickMenuButton(player, WorkstationMenus.PREVIOUS_RECIPE_BUTTON), "Previous returns to the first matching recipe");
         helper.assertTrue(menu.getSlot(0).getItem().is(Items.AMETHYST_SHARD), "Previous restores the original result");
-        Identifier secondId = Identifier.parse("fabricated_backpacks_tests:choice_b");
+        ResourceLocation secondId = ResourceLocation.parse("fabricated_backpacks_tests:choice_b");
         helper.assertTrue(WorkstationMenus.selectRecipe(player, secondId), "A modal identity selects the second matching recipe");
-        helper.assertFalse(WorkstationMenus.selectRecipe(player, Identifier.withDefaultNamespace("cake")), "A forged unrelated identity is rejected");
+        helper.assertFalse(WorkstationMenus.selectRecipe(player, ResourceLocation.withDefaultNamespace("cake")), "A forged unrelated identity is rejected");
         helper.assertFalse(menu.clickMenuButton(player, 100_099), "Forged choice buttons cannot select a nonmatching recipe");
-        menu.clicked(0, 0, ContainerInput.PICKUP, player);
+        menu.clicked(0, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().is(Items.COPPER_INGOT), "Taking the chosen result uses the selected recipe");
         helper.assertTrue(menu.grid().getItem(4).is(Items.IRON_NUGGET), "Remainders come from the selected recipe, not the recipe manager's first match");
         helper.assertValueEqual(count(menu.grid(), Items.GOLD_NUGGET) + count(player.getInventory(), Items.GOLD_NUGGET), 0, "The other recipe's remainder is never created");
@@ -388,15 +397,15 @@ final class WorkstationGameTests {
         bag.upgradeInventory(upgrade(bag, 0)).setItem(4, new ItemStack(Items.NAUTILUS_SHELL));
         var reopened = (WorkstationMenus.PortableCrafting) open(player, bag);
         helper.assertTrue(reopened.getSlot(0).getItem().is(Items.COPPER_INGOT), "Recipe ID preference survives a real close and reopen");
-        boolean prior = helper.getLevel().getGameRules().get(net.minecraft.world.level.gamerules.GameRules.LIMITED_CRAFTING);
+        boolean prior = helper.getLevel().getGameRules().getBoolean(GameRules.RULE_LIMITED_CRAFTING);
         try {
-            helper.getLevel().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.LIMITED_CRAFTING, true, helper.getLevel().getServer());
-            player.resetRecipes(List.of(helper.getLevel().recipeAccess().byKey(ResourceKey.create(Registries.RECIPE, secondId)).orElseThrow()));
+            helper.getLevel().getGameRules().getRule(GameRules.RULE_LIMITED_CRAFTING).set(true, helper.getLevel().getServer());
+            player.resetRecipes(List.of(helper.getLevel().getRecipeManager().byKey(secondId).orElseThrow()));
             helper.assertFalse(WorkstationMenus.selectRecipe(player, secondId), "A previously displayed choice is rechecked against current recipe unlocks");
             helper.assertTrue(reopened.grid().getItem(4).is(Items.NAUTILUS_SHELL), "Locked selection cannot consume the crafting ingredient");
             teach(player, secondId.toString());
             helper.assertTrue(WorkstationMenus.selectRecipe(player, secondId), "The same identity succeeds after its actual server unlock");
-        } finally { helper.getLevel().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.LIMITED_CRAFTING, prior, helper.getLevel().getServer()); }
+        } finally { helper.getLevel().getGameRules().getRule(GameRules.RULE_LIMITED_CRAFTING).set(prior, helper.getLevel().getServer()); }
         player.closeContainer();
         helper.succeed();
     }
@@ -412,7 +421,7 @@ final class WorkstationGameTests {
         var menu = (WorkstationMenus.PortableCrafting) open(player, bag);
         cake(menu.grid());
         menu.clickMenuButton(player, WorkstationMenus.REFILL_BUTTON);
-        menu.clicked(0, 0, ContainerInput.PICKUP, player);
+        menu.clicked(0, 0, ClickType.PICKUP, player);
         helper.assertTrue(menu.getCarried().is(Items.CAKE), "Real cake result is taken before refill");
         helper.assertValueEqual(count(menu.grid(), Items.MILK_BUCKET), 3, "Refill restores all three consumed milk containers");
         helper.assertValueEqual(count(bag, Items.MILK_BUCKET), 0, "Restored milk buckets are removed from their actual source");
@@ -430,7 +439,7 @@ final class WorkstationGameTests {
         for (int slot = 1; slot < 36; slot++) player.getInventory().setItem(slot, new ItemStack(Items.DIRT, 64));
         cake(blocked.grid());
         blocked.clickMenuButton(player, WorkstationMenus.REFILL_BUTTON);
-        blocked.clicked(0, 0, ContainerInput.PICKUP, player);
+        blocked.clicked(0, 0, ClickType.PICKUP, player);
         helper.assertTrue(blocked.getCarried().is(Items.CAKE), "Full remainder destinations cannot undo an already valid craft");
         helper.assertValueEqual(count(blocked.grid(), Items.BUCKET), 3, "A remainder without a safe destination stays in its crafting cell");
         helper.assertValueEqual(count(full, Items.MILK_BUCKET), 2, "Failed refill rolls back the staged source extraction");
@@ -456,15 +465,15 @@ final class WorkstationGameTests {
         menu.clickMenuButton(player, WorkstationMenus.REFILL_BUTTON);
         java.util.ArrayList<Integer> choices = new java.util.ArrayList<>();
         java.util.HashSet<Item> outputs = new java.util.HashSet<>();
-        for (int index = 0; index < menu.getNumberOfVisibleRecipes() && choices.size() < 5; index++) {
+        for (int index = 0; index < menu.getNumRecipes() && choices.size() < 5; index++) {
             menu.clickMenuButton(player, index);
             if (outputs.add(menu.getSlot(StonecutterMenu.RESULT_SLOT).getItem().getItem())) choices.add(index);
         }
         helper.assertValueEqual(choices.size(), 5, "Vanilla stone supplies enough distinct results to exercise recent eviction");
-        java.util.ArrayList<Identifier> crafted = new java.util.ArrayList<>();
+        java.util.ArrayList<ResourceLocation> crafted = new java.util.ArrayList<>();
         for (int chosen : choices) {
             menu.clickMenuButton(player, chosen);
-            crafted.add(menu.getVisibleRecipes().entries().get(chosen).recipe().recipe().orElseThrow().id().identifier());
+            crafted.add(menu.getRecipes().get(chosen).id());
             ItemStack output = menu.getSlot(StonecutterMenu.RESULT_SLOT).getItem().copy();
             int before = count(bag, output.getItem());
             menu.quickMoveStack(player, StonecutterMenu.RESULT_SLOT);
@@ -472,20 +481,20 @@ final class WorkstationGameTests {
             helper.assertTrue(menu.container.getItem(0).is(Items.STONE) && menu.container.getItem(0).getCount() == 1, "Stone refill leaves one physical input ready");
         }
         helper.assertValueEqual(bag.getItem(0).getCount(), 15, "Five completed recipes consume exactly five refills");
-        Identifier stoneType = Identifier.withDefaultNamespace("stonecutting");
+        ResourceLocation stoneType = ResourceLocation.withDefaultNamespace("stonecutting");
         WorkstationHistory history = WorkstationHistory.get(player);
-        List<Identifier> recent = history.recipes(player, stoneType, new ItemStack(Items.STONE));
+        List<ResourceLocation> recent = history.recipes(player, stoneType, new ItemStack(Items.STONE));
         helper.assertValueEqual(recent, List.of(crafted.get(4), crafted.get(3), crafted.get(2), crafted.get(1)), "Only the last four distinct outputs remain, newest first");
         helper.assertTrue(history.recipes(foreign, stoneType, new ItemStack(Items.STONE)).isEmpty(), "Recent results are private to each player");
         helper.assertTrue(history.recipes(player, stoneType, new ItemStack(Items.ANDESITE)).isEmpty(), "Different ingredients have separate recent history");
-        helper.assertTrue(history.recipes(player, Identifier.withDefaultNamespace("smelting"), new ItemStack(Items.STONE)).isEmpty(), "Different recipe types have separate recent history");
+        helper.assertTrue(history.recipes(player, ResourceLocation.withDefaultNamespace("smelting"), new ItemStack(Items.STONE)).isEmpty(), "Different recipe types have separate recent history");
         menu.clickMenuButton(player, choices.get(2));
         menu.quickMoveStack(player, StonecutterMenu.RESULT_SLOT);
         helper.assertValueEqual(history.recipes(player, stoneType, new ItemStack(Items.STONE)), List.of(crafted.get(2), crafted.get(4), crafted.get(3), crafted.get(1)), "Recrafting moves one result to the front without a duplicate");
         helper.assertTrue(menu.clickMenuButton(player, WorkstationMenus.RECENT_RECIPE_BUTTON + 1), "A recent result selects its currently available real recipe");
-        helper.assertValueEqual(menu.getVisibleRecipes().entries().get(menu.getSelectedRecipeIndex()).recipe().recipe().orElseThrow().id().identifier(), crafted.get(4), "Recent selection resolves by recipe ID");
+        helper.assertValueEqual(menu.getRecipes().get(menu.getSelectedRecipeIndex()).id(), crafted.get(4), "Recent selection resolves by recipe ID");
         helper.assertFalse(menu.clickMenuButton(foreign, WorkstationMenus.RECENT_RECIPE_BUTTON), "Another player cannot use this session's recent controls");
-        String selected = WorkstationMenus.view(player).getStringOr("selected_recipe_id", "");
+        String selected = NbtAccess.getStringOr(WorkstationMenus.view(player), "selected_recipe_id", "");
         menu.clickMenuButton(player, WorkstationMenus.DESTINATION_BUTTON);
         ItemStack output = menu.getSlot(StonecutterMenu.RESULT_SLOT).getItem().copy();
         int playerBefore = count(player.getInventory(), output.getItem());
@@ -499,9 +508,9 @@ final class WorkstationGameTests {
         player.closeContainer();
         bag.updateSettings(upgrade(bag, 0), state -> state.putInt("selected_recipe", Integer.MAX_VALUE));
         var reopened = (StonecutterMenu) open(player, bag);
-        helper.assertValueEqual(reopened.getVisibleRecipes().entries().get(reopened.getSelectedRecipeIndex()).recipe().recipe().orElseThrow().id().identifier().toString(), selected, "Saved recipe identity wins over a stale numerical index");
+        helper.assertValueEqual(reopened.getRecipes().get(reopened.getSelectedRecipeIndex()).id().toString(), selected, "Saved recipe identity wins over a stale numerical index");
         reopened.container.setItem(0, new ItemStack(Items.ANDESITE));
-        helper.assertValueEqual(WorkstationMenus.view(player).getStringOr("recent_recipes", ""), "", "Changing ingredients does not leak unrelated recents into the UI");
+        helper.assertValueEqual(NbtAccess.getStringOr(WorkstationMenus.view(player), "recent_recipes", ""), "", "Changing ingredients does not leak unrelated recents into the UI");
         player.closeContainer();
         helper.succeed();
     }
@@ -523,7 +532,7 @@ final class WorkstationGameTests {
         crafting.grid().setItem(0, new ItemStack(Items.DIAMOND, 5));
         ItemStack before = placed.stack().copy();
         helper.assertTrue(crafting.quickMoveStack(foreign, 1).isEmpty(), "Foreign direct quick moves cannot mutate a portable crafting session");
-        crafting.clicked(Integer.MAX_VALUE, 0, ContainerInput.PICKUP, player);
+        crafting.clicked(Integer.MAX_VALUE, 0, ClickType.PICKUP, player);
         assertStack(helper, placed.stack(), before, "Invalid index and foreign actions preserve all workstation data");
         player.closeContainer();
         helper.assertValueEqual(placed.viewers(), 0, "Closing the workstation releases its final placed viewer");
@@ -540,7 +549,7 @@ final class WorkstationGameTests {
             player.getInventory().setItem(0, ItemStack.EMPTY);
             player.getInventory().setItem(1, bag.stack());
             helper.assertFalse(menu.stillValid(player), "Moving the owning bag invalidates " + kind);
-            menu.clicked(index, 0, ContainerInput.PICKUP, player);
+            menu.clicked(index, 0, ClickType.PICKUP, player);
             helper.assertTrue(menu.quickMoveStack(player, index).isEmpty(), "Stale direct quick move is rejected for " + kind);
             assertStack(helper, bag.stack(), snapshot, "Every stale workstation action leaves owned data unchanged for " + kind);
             player.closeContainer();

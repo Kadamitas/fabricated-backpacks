@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.network.JukeboxAudio;
@@ -14,6 +15,7 @@ import io.netty.channel.embedded.EmbeddedChannel;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.impl.networking.RegistrationPayload;
+import net.fabricmc.fabric.mixin.networking.accessor.ServerChunkLoadingManagerAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.Connection;
@@ -26,11 +28,12 @@ import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundChunkBatchFinishedPacket;
 import net.minecraft.network.protocol.game.ServerboundChunkBatchReceivedPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerLoadedPacket;
+import net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
-import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -96,9 +99,9 @@ public final class AudioTrackingGameTests {
                     listener.pump();
                     helper.assertValueEqual(listener.audio(affected.identity(), true).size(), 1, "Initial tracked source sends one playback packet");
                     helper.assertValueEqual(listener.audio(unrelated.identity(), true).size(), 1, "Independent tracked source sends its own playback packet");
-                    start = affected.bag.settings(affected.upgrade).getLongOr("song_started", -1);
-                    finish = affected.bag.settings(affected.upgrade).getLongOr("song_finish", -1);
-                    unrelatedFinish = unrelated.bag.settings(unrelated.upgrade).getLongOr("song_finish", -1);
+                    start = NbtAccess.getLongOr(affected.bag.settings(affected.upgrade), "song_started", -1);
+                    finish = NbtAccess.getLongOr(affected.bag.settings(affected.upgrade), "song_finish", -1);
+                    unrelatedFinish = NbtAccess.getLongOr(unrelated.bag.settings(unrelated.upgrade), "song_finish", -1);
                     helper.assertValueEqual(start, now, "Initial playback starts at the server game time");
                     helper.assertTrue(finish > start + 20, "The actual registry song has a nonempty playback interval");
                     playing = true;
@@ -125,7 +128,8 @@ public final class AudioTrackingGameTests {
             // This invokes vanilla ServerEntity.removePairing/addPairing through ChunkMap,
             // without discarding the live carrier or substituting a SoundBridge.
             level.getChunkSource().removeEntity(affected.carrier);
-            helper.assertTrue(!level.getChunkSource().hasEntityWithId(affected.carrier.getId()), "The affected carrier really leaves the chunk tracker");
+            helper.assertFalse(((ServerChunkLoadingManagerAccessor) level.getChunkSource().chunkMap)
+                    .getEntityTrackers().containsKey(affected.carrier.getId()), "The affected carrier really leaves the chunk tracker");
             helper.assertTrue(level.getEntity(affected.carrier.getId()) == affected.carrier, "Tracking removal does not remove the live carrier from the level");
             level.getChunkSource().addEntity(affected.carrier);
             listener.pump();
@@ -168,17 +172,17 @@ public final class AudioTrackingGameTests {
             listener.pump();
             helper.assertTrue(tracked(affected), "The stopped carrier is actually paired again");
             helper.assertValueEqual(listener.audio(affected.identity()).size(), 0, "Tracking a stopped playlist never resurrects its audio");
-            helper.assertTrue(!affected.bag.settings(affected.upgrade).getBooleanOr("playing", true), "Stopped playlist state remains stopped");
-            helper.assertTrue(unrelated.bag.settings(unrelated.upgrade).getBooleanOr("playing", false), "The independent playlist remains playing");
-            helper.assertValueEqual(unrelated.bag.settings(unrelated.upgrade).getLongOr("song_finish", -1), unrelatedFinish,
+            helper.assertTrue(!NbtAccess.getBooleanOr(affected.bag.settings(affected.upgrade), "playing", true), "Stopped playlist state remains stopped");
+            helper.assertTrue(NbtAccess.getBooleanOr(unrelated.bag.settings(unrelated.upgrade), "playing", false), "The independent playlist remains playing");
+            helper.assertValueEqual(NbtAccess.getLongOr(unrelated.bag.settings(unrelated.upgrade), "song_finish", -1), unrelatedFinish,
                     "Stopping and retracking another carrier preserves the independent finish time");
             helper.assertValueEqual(listener.audio(unrelated.identity()).size(), 0, "Explicitly stopped source tracking does not replay the independent source");
         }
 
         private void assertDeadlines() {
-            helper.assertValueEqual(affected.bag.settings(affected.upgrade).getLongOr("song_started", -1), start,
+            helper.assertValueEqual(NbtAccess.getLongOr(affected.bag.settings(affected.upgrade), "song_started", -1), start,
                     "Listener churn does not restart the song clock");
-            helper.assertValueEqual(affected.bag.settings(affected.upgrade).getLongOr("song_finish", -1), finish,
+            helper.assertValueEqual(NbtAccess.getLongOr(affected.bag.settings(affected.upgrade), "song_finish", -1), finish,
                     "Listener churn preserves the original finish deadline");
         }
 
@@ -192,7 +196,7 @@ public final class AudioTrackingGameTests {
     }
 
     private static Source source(GameTestHelper helper, BlockPos position) {
-        Mob carrier = helper.spawn(EntityTypes.PIG, position);
+        Mob carrier = helper.spawn(EntityType.PIG, position);
         carrier.setNoAi(true);
         carrier.setNoGravity(true);
         carrier.setInvulnerable(true);
@@ -205,7 +209,7 @@ public final class AudioTrackingGameTests {
     private record Source(Mob carrier, BagInventory bag, InstalledUpgrade upgrade) {
         void tick(ServerLevel level) { JukeboxRuntime.tick(bag, upgrade, level, carrier.blockPosition(), carrier); }
         void play(ServerLevel level) { JukeboxRuntime.action(bag, upgrade, level, carrier.blockPosition(), carrier, "play"); }
-        String identity() { return bag.identity() + ":" + upgrade.slot() + ":" + bag.settings(upgrade).getStringOr("jukebox_identity", ""); }
+        String identity() { return bag.identity() + ":" + upgrade.slot() + ":" + NbtAccess.getStringOr(bag.settings(upgrade), "jukebox_identity", ""); }
     }
 
     private static final class PacketFixture implements AutoCloseable {
@@ -214,6 +218,7 @@ public final class AudioTrackingGameTests {
         final EmbeddedChannel channel = new EmbeddedChannel(connection);
         final List<Packet<?>> packets = new ArrayList<>();
         int pendingAcknowledgments;
+        final List<Integer> pendingTeleports = new ArrayList<>();
 
         PacketFixture(GameTestHelper helper) {
             UUID id = UUID.randomUUID();
@@ -227,7 +232,7 @@ public final class AudioTrackingGameTests {
             });
             helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
             player.setGameMode(GameType.SURVIVAL);
-            player.connection.handleAcceptPlayerLoad(new ServerboundPlayerLoadedPacket());
+            pump(); // Acknowledge only the initial native teleport actually observed by this recipient.
             player.setPos(helper.absoluteVec(new Vec3(3.5, 1, 5.5)));
             player.connection.handleCustomPayload(new ServerboundCustomPayloadPacket(
                     new RegistrationPayload(RegistrationPayload.REGISTER, List.of(JukeboxAudio.TYPE.id()))));
@@ -239,11 +244,14 @@ public final class AudioTrackingGameTests {
             } else {
                 packets.add(packet);
                 if (packet instanceof ClientboundChunkBatchFinishedPacket) pendingAcknowledgments++;
+                if (packet instanceof ClientboundPlayerPositionPacket teleport) pendingTeleports.add(teleport.getId());
             }
         }
 
         void pump() {
             channel.runPendingTasks();
+            for (int id : List.copyOf(pendingTeleports)) player.connection.handleAcceptTeleportPacket(new ServerboundAcceptTeleportationPacket(id));
+            pendingTeleports.clear();
             while (pendingAcknowledgments > 0) {
                 pendingAcknowledgments--;
                 player.connection.handleChunkBatchReceived(new ServerboundChunkBatchReceivedPacket(64));

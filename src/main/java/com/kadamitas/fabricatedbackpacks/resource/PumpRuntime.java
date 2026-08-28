@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal;
@@ -28,7 +30,6 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -55,20 +56,20 @@ final class PumpRuntime {
         CompoundTag settings = bag.settings(upgrade);
         long now = level.getGameTime();
         var rules = BackpackConfig.get().upgrades().pump();
-        long next = settings.getLongOr("next_work", 0);
-        if (!settings.getBooleanOr("enabled", true) || now < next && next - now <= Math.max(rules.idleTicks(),
+        long next = NbtAccess.getLongOr(settings, "next_work", 0);
+        if (!NbtAccess.getBooleanOr(settings, "enabled", true) || now < next && next - now <= Math.max(rules.idleTicks(),
                 rules.handlerTicks() + rules.worldRange() * rules.worldRange())) return;
         boolean advanced = upgrade.kind() == UpgradeKind.ADVANCED_PUMP;
-        boolean output = settings.getStringOr("direction", "input").equals("output");
+        boolean output = NbtAccess.getStringOr(settings, "direction", "input").equals("output");
         Predicate<FluidVariant> filter = filter(bag, upgrade);
-        long fastUntil = settings.getLongOr("fast_until", 0);
+        long fastUntil = NbtAccess.getLongOr(settings, "fast_until", 0);
         int cooldown = fastUntil > now && fastUntil - now <= rules.handGraceTicks() ? rules.handTicks() : rules.idleTicks();
-        if (advanced && settings.getBooleanOr("hands", true) && hands(bag, level, position, carrier, output, filter)) {
+        if (advanced && NbtAccess.getBooleanOr(settings, "hands", true) && hands(bag, level, position, carrier, output, filter)) {
             bag.updateSettings(upgrade, tag -> tag.putLong("fast_until", now + rules.handGraceTicks()));
             cooldown = rules.handTicks();
-        } else if (settings.getBooleanOr("handlers", true) && handlers(bag, level, position, output, filter)) {
+        } else if (NbtAccess.getBooleanOr(settings, "handlers", true) && handlers(bag, level, position, output, filter)) {
             cooldown = rules.handlerTicks();
-        } else if (advanced && settings.getBooleanOr("world", false)) {
+        } else if (advanced && NbtAccess.getBooleanOr(settings, "world", false)) {
             ServerPlayer actor = carrier instanceof ServerPlayer player ? player : FakePlayer.get(level, PROFILE);
             if (actor instanceof FakePlayer) actor.setPos(net.minecraft.world.phys.Vec3.atCenterOf(position));
             int distance = output ? worldOutput(bag, level, position, actor, filter)
@@ -82,13 +83,13 @@ final class PumpRuntime {
     static void action(BagInventory bag, InstalledUpgrade upgrade, String action) {
         bag.updateSettings(upgrade, tag -> {
             if (action.equals("direction")) {
-                tag.putString("direction", tag.getStringOr("direction", "input").equals("input") ? "output" : "input");
+                tag.putString("direction", NbtAccess.getStringOr(tag, "direction", "input").equals("input") ? "output" : "input");
             } else if (action.equals("handlers")) {
-                tag.putBoolean("handlers", !tag.getBooleanOr("handlers", true));
+                tag.putBoolean("handlers", !NbtAccess.getBooleanOr(tag, "handlers", true));
             } else if (upgrade.kind() == UpgradeKind.ADVANCED_PUMP && action.equals("hands")) {
-                tag.putBoolean("hands", !tag.getBooleanOr("hands", true));
+                tag.putBoolean("hands", !NbtAccess.getBooleanOr(tag, "hands", true));
             } else if (upgrade.kind() == UpgradeKind.ADVANCED_PUMP && action.equals("world")) {
-                tag.putBoolean("world", !tag.getBooleanOr("world", false));
+                tag.putBoolean("world", !NbtAccess.getBooleanOr(tag, "world", false));
             }
         });
     }
@@ -183,7 +184,7 @@ final class PumpRuntime {
         Storage<FluidVariant> tanks = ResourceRuntime.fluids(bag, false);
         FluidVariant fluid = StorageUtil.findStoredResource(tanks,
                 candidate -> candidate.getFluid() instanceof FlowingFluid && filter.test(candidate)
-                        && candidate.getComponentsPatch().isEmpty());
+                        && candidate.getComponents().isEmpty());
         if (fluid == null) return -1;
         for (Direction side : Direction.values()) {
             if (side == Direction.UP) continue;
@@ -191,7 +192,7 @@ final class PumpRuntime {
             if (!level.hasChunkAt(target) || !permitted(bag, level, actor, target)) continue;
             BlockState state = level.getBlockState(target);
             if (!state.isAir() && (!(state.getBlock() instanceof LiquidBlock) || state.getFluidState().isSource())) continue;
-            boolean evaporates = level.environmentAttributes().getValue(EnvironmentAttributes.WATER_EVAPORATES, target)
+            boolean evaporates = level.dimensionType().ultraWarm()
                     && fluid.getFluid().is(FluidTags.WATER);
             try (Transaction transaction = Transaction.openOuter()) {
                 if (tanks.extract(fluid, FluidConstants.BUCKET, transaction) != FluidConstants.BUCKET) continue;

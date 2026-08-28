@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:smithing_table",
-    "T": "minecraft:iron_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:diamond"
+    "M": {
+      "item": "minecraft:smithing_table"
+    },
+    "T": {
+      "item": "minecraft:iron_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:diamond"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:smithing_upgrade",

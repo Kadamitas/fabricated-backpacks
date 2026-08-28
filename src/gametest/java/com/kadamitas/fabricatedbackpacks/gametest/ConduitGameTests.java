@@ -26,7 +26,7 @@ import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityT
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
+import net.fabricmc.fabric.api.transfer.v1.item.InventoryStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
@@ -46,7 +46,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -103,9 +103,9 @@ public final class ConduitGameTests {
 
     public static void registerFixtures() {
         if (machineBlock != null) return;
-        Identifier id = Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "conduit_machine");
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "conduit_machine");
         machineBlock = Registry.register(BuiltInRegistries.BLOCK, id,
-                new MachineBlock(Block.Properties.of().setId(ResourceKey.create(Registries.BLOCK, id))));
+                new MachineBlock(Block.Properties.of()));
         machineType = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, id,
                 FabricBlockEntityTypeBuilder.create(Machine::new, machineBlock).build());
         ItemStorage.SIDED.registerForBlockEntity((machine, side) -> machine.itemEnabled && machine.itemSides.contains(side)
@@ -123,7 +123,7 @@ public final class ConduitGameTests {
         @Override protected MapCodec<MachineBlock> codec() { return CODEC; }
         @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new Machine(pos, state); }
         @Override public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-            return level.isClientSide() ? null : createTickerHelper(type, machineType, (world, position, blockState, machine) -> {
+            return level.isClientSide ? null : createTickerHelper(type, machineType, (world, position, blockState, machine) -> {
                 Runnable action = machine.nextTick;
                 machine.nextTick = null;
                 if (action != null) action.run();
@@ -180,7 +180,7 @@ public final class ConduitGameTests {
     }
     private static final class Machine extends BlockEntity {
         final ItemBuffer items = new ItemBuffer();
-        final ContainerStorage itemStorage = ContainerStorage.of(items, null);
+        final InventoryStorage itemStorage = InventoryStorage.of(items, null);
         final Tank tank = new Tank();
         final Energy energy = new Energy();
         boolean itemEnabled, fluidEnabled, energyEnabled;
@@ -376,7 +376,7 @@ public final class ConduitGameTests {
         helper.assertTrue(mined.stillValid(player), "The mining fixture is alive, in range and permitted to interact: " + player.position());
         helper.assertTrue(player.gameMode.destroyBlock(minedPosition), "Native Survival completion follows the latest look despite stale head yaw; ray="
                 + miningRay.getType() + "/" + miningRay.getLocation() + "; target=" + minedPosition
-                + "; eye=" + player.getEyePosition() + "; range=" + player.isWithinBlockInteractionRange(minedPosition, 0)
+                + "; eye=" + player.getEyePosition() + "; range=" + player.canInteractWithBlock(minedPosition, 0)
                 + "; spawnProtected=" + level.getServer().isUnderSpawnProtection(level, minedPosition, player));
         helper.assertTrue(level.getBlockEntity(minedPosition) == mined && mined.installedMask() == 5,
                 "Normal mining preserves the same bundle and its two untouched strands");
@@ -424,6 +424,8 @@ public final class ConduitGameTests {
         var first = conduit(helper, new BlockPos(2, 2, 2), ConduitKind.values());
         var middle = conduit(helper, new BlockPos(3, 2, 2), ConduitKind.values());
         var last = conduit(helper, new BlockPos(4, 2, 2), ConduitKind.values());
+        for (var pipe : List.of(first, middle, last))
+            helper.getLevel().setBlockAndUpdate(pipe.getBlockPos().below(), Blocks.STONE.defaultBlockState());
         port(first, Direction.WEST, ConduitMode.EXTRACT); port(last, Direction.EAST, ConduitMode.INSERT);
         helper.runAfterDelay(12, () -> {
             helper.assertValueEqual(count(target.items, Items.DIAMOND), 0, "Wrong-sided item capabilities cannot be bypassed");
@@ -437,18 +439,19 @@ public final class ConduitGameTests {
             long isolatedWater = source.tank.amount;
             source.itemSides.clear(); source.itemSides.add(Direction.EAST);
             helper.getLevel().updateNeighborsAt(source.getBlockPos(), machineBlock);
-            helper.runAfterDelay(45, () -> {
-                helper.assertValueEqual(source.tank.amount, isolatedWater, "Removing only the middle fluid lane breaks only fluid connectivity");
+            // All fixtures share the world's bounded routing work. Wait for the five
+            // item operations within this test's timeout, not a theoretical idle-world deadline.
+            helper.startSequence().thenWaitUntil(() -> {
                 helper.assertValueEqual(count(target.items, Items.DIAMOND), 33, "The item lane continues through the mixed bundle");
                 helper.assertValueEqual(target.energy.amount, 4_096L, "The energy lane continues independently");
+            }).thenExecute(() -> {
+                helper.assertValueEqual(source.tank.amount, isolatedWater, "Removing only the middle fluid lane breaks only fluid connectivity");
                 helper.assertTrue(middle.install(ConduitKind.FLUID), "A removed lane can be reinstalled once");
-                helper.runAfterDelay(25, () -> {
-                    helper.assertValueEqual(source.tank.amount, 0L, "Rejoining the loaded fluid component resumes transfer");
-                    helper.assertValueEqual(target.tank.amount, mb(1_300), "No fluid was trapped or lost in the disconnected conduit");
-                    helper.assertValueEqual(count(source.items, Items.DIAMOND) + count(target.items, Items.DIAMOND), 33, "Item conservation survives removal/rejoin");
-                    helper.succeed();
-                });
-            });
+            }).thenExecuteAfter(25, () -> {
+                helper.assertValueEqual(source.tank.amount, 0L, "Rejoining the loaded fluid component resumes transfer");
+                helper.assertValueEqual(target.tank.amount, mb(1_300), "No fluid was trapped or lost in the disconnected conduit");
+                helper.assertValueEqual(count(source.items, Items.DIAMOND) + count(target.items, Items.DIAMOND), 33, "Item conservation survives removal/rejoin");
+            }).thenSucceed();
         });
     }
 
@@ -553,15 +556,24 @@ public final class ConduitGameTests {
 
     public static void forwardingAndSharedBudgets(GameTestHelper helper) {
         Machine source = machine(helper, new BlockPos(2, 2, 2)), target = machine(helper, new BlockPos(1, 2, 0));
-        source.energyEnabled = target.energyEnabled = true;
+        source.energyEnabled = true;
+        target.energyEnabled = false;
         source.exportEnergy = false; target.exportEnergy = false; source.energy.amount = 2_000;
         var west = conduit(helper, new BlockPos(1, 2, 2), ConduitKind.ENERGY);
         var north = conduit(helper, new BlockPos(2, 2, 1), ConduitKind.ENERGY);
         var joint = conduit(helper, new BlockPos(1, 2, 1), ConduitKind.ENERGY);
+        for (var pipe : List.of(west, north, joint))
+            helper.getLevel().setBlockAndUpdate(pipe.getBlockPos().below(), Blocks.STONE.defaultBlockState());
         west.setMode(ConduitKind.ENERGY, Direction.EAST, ConduitMode.EXTRACT);
         north.setMode(ConduitKind.ENERGY, Direction.SOUTH, ConduitMode.EXTRACT);
         joint.setMode(ConduitKind.ENERGY, Direction.NORTH, ConduitMode.INSERT);
         helper.runAfterDelay(12, () -> onMachineTick(helper, source, () -> {
+            helper.assertTrue(EnergyStorage.SIDED.find(helper.getLevel(), target.getBlockPos(), Direction.SOUTH) == null,
+                    "The existing physical destination initially exposes no energy handler");
+            BlockState targetState = target.getBlockState();
+            target.energyEnabled = true; // Deliberately no block replacement, mode edit or neighbor notification.
+            helper.assertTrue(helper.getLevel().getBlockEntity(target.getBlockPos()) == target && target.getBlockState() == targetState,
+                    "The destination capability appears on the same physical block without invalidating its candidates");
             var first = EnergyStorage.SIDED.find(helper.getLevel(), west.getBlockPos(), Direction.EAST);
             var alias = EnergyStorage.SIDED.find(helper.getLevel(), north.getBlockPos(), Direction.SOUTH);
             helper.assertTrue(first != null && alias != null, "Both faces expose forwarding receivers");
@@ -690,7 +702,7 @@ public final class ConduitGameTests {
                 try (Transaction transaction = Transaction.openOuter()) {
                     helper.assertValueEqual(held.insert(ItemVariant.of(Items.EMERALD), 1, transaction), 0L, "The unload callback immediately fences a retained network route");
                     transaction.commit();
-                } finally { ServerChunkEvents.CHUNK_LOAD.invoker().onChunkLoad(helper.getLevel(), chunk, false); }
+                } finally { ServerChunkEvents.CHUNK_LOAD.invoker().onChunkLoad(helper.getLevel(), chunk); }
                 helper.assertValueEqual((long) count(source.items, Items.EMERALD), sourceBefore, "Lifecycle invalidation cannot withdraw a source item");
                 BlockPos unloaded = new BlockPos(20_000_000, 100, 20_000_000);
                 helper.assertFalse(helper.getLevel().hasChunkAt(unloaded), "The distant test coordinate is actually unloaded");
@@ -803,7 +815,7 @@ public final class ConduitGameTests {
         source.fluidHandler = () -> originalFluids;
         var replacementItems = new SimpleContainer(2);
         replacementItems.setItem(0, new ItemStack(Items.EMERALD, 2));
-        var replacementItemStorage = ContainerStorage.of(replacementItems, null);
+        var replacementItemStorage = InventoryStorage.of(replacementItems, null);
         var bundle = conduit(helper, new BlockPos(2, 2, 2), ConduitKind.ITEM, ConduitKind.FLUID);
         for (ConduitKind kind : bundle.installed()) for (Direction side : Direction.values())
             bundle.setMode(kind, side, side == Direction.WEST ? ConduitMode.EXTRACT
@@ -813,7 +825,7 @@ public final class ConduitGameTests {
         freshSource.itemEnabled = freshTarget.itemEnabled = true;
         var largeInventory = new SimpleContainer(80);
         largeInventory.setItem(73, new ItemStack(Items.AMETHYST_SHARD, 3));
-        var largeStorage = ContainerStorage.of(largeInventory, null);
+        var largeStorage = InventoryStorage.of(largeInventory, null);
         int[] freshLookups = {0};
         freshSource.itemHandler = () -> {
             freshLookups[0]++;
@@ -1043,7 +1055,7 @@ public final class ConduitGameTests {
 
     private static ConduitFilter backpackFilter(ConduitFilterMode mode, String... names) {
         ConduitFilter filter = ConduitFilter.EMPTY.withMode(mode);
-        for (int row = 0; row < names.length; row++) filter = filter.withEntry(row, Identifier.fromNamespaceAndPath("minecraft", names[row]));
+        for (int row = 0; row < names.length; row++) filter = filter.withEntry(row, ResourceLocation.fromNamespaceAndPath("minecraft", names[row]));
         return filter;
     }
 
@@ -1123,6 +1135,149 @@ public final class ConduitGameTests {
                 });
             });
         });
+    }
+
+    public static void backpackHighSlotRouting(GameTestHelper helper) {
+        BackpackBlockEntity source = indexedBackpack(helper, new BlockPos(2, 2, 3));
+        BackpackBlockEntity destination = indexedBackpack(helper, new BlockPos(4, 2, 3));
+        var pipe = conduit(helper, new BlockPos(3, 2, 3), ConduitKind.ITEM);
+        port(pipe, Direction.WEST, ConduitMode.EXTRACT);
+        port(pipe, Direction.EAST, ConduitMode.INSERT);
+        BagInventory inventory = source.inventory();
+        int lastSlot = inventory.getContainerSize() - 1;
+        helper.assertTrue(lastSlot > 73, "The actual Netherite source has both slot73 and a later final slot");
+        ItemStack cobble = new ItemStack(Items.COBBLESTONE, 11);
+        cobble.set(DataComponents.CUSTOM_NAME, Component.literal("High-slot cobble"));
+        ItemStack amethyst = new ItemStack(Items.AMETHYST_SHARD, 5);
+        amethyst.set(DataComponents.CUSTOM_NAME, Component.literal("Last-slot amethyst"));
+        inventory.setItem(73, cobble.copy());
+        inventory.setItem(lastSlot, amethyst.copy());
+        SlottedStorage<ItemVariant> first = indexedItems(helper, source);
+        SlottedStorage<ItemVariant> second = indexedItems(helper, source);
+        helper.assertTrue(first != second, "The real backpack provider returns fresh wrappers, without a test facade");
+        helper.assertValueEqual(first.getSlotCount(), inventory.getContainerSize(), "Indexed extent matches every actual physical slot");
+        SingleSlotStorage<ItemVariant> retained = first.getSlot(73);
+        helper.assertValueEqual(retained.getResource(), ItemVariant.of(cobble), "Slot73 exposes its exact component-bearing resource");
+        helper.assertValueEqual(first.getSlot(lastSlot).getResource(), ItemVariant.of(amethyst), "The final physical slot is indexed without truncation");
+        ItemStack beforeProbe = inventory.stack().copy();
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(retained.extract(ItemVariant.of(cobble), 2, transaction), 2L, "An indexed view performs a real tentative extraction");
+        }
+        assertStack(helper, inventory.stack(), beforeProbe, "Indexed extraction abort preserves the complete source snapshot");
+        Storage<?>[] previous = {second};
+        int[] phase = {0}, lookups = {2};
+        helper.onEachTick(() -> {
+            SlottedStorage<ItemVariant> current = indexedItems(helper, source);
+            helper.assertTrue(current != previous[0], "Subsequent native capability lookups keep returning fresh wrappers");
+            previous[0] = current;
+            lookups[0]++;
+            helper.assertValueEqual(count(inventory, Items.COBBLESTONE) + count(destination.inventory(), Items.COBBLESTONE),
+                    phase[0] == 0 ? 11 : 17, "High-slot routing conserves every cobblestone");
+            helper.assertValueEqual(count(inventory, Items.AMETHYST_SHARD) + count(destination.inventory(), Items.AMETHYST_SHARD),
+                    phase[0] == 0 ? 5 : 8, "Last-slot routing conserves every amethyst shard");
+            if (phase[0] == 0) {
+                if (count(destination.inventory(), Items.COBBLESTONE) != 11 || count(destination.inventory(), Items.AMETHYST_SHARD) != 5) return;
+                helper.assertTrue(inventory.isEmpty(), "OFF filters allow natural routing from slot73 and the final slot");
+                var allowed = backpackFilter(ConduitFilterMode.ALLOW, "cobblestone", "amethyst_shard");
+                pipe.setFilter(ConduitKind.ITEM, Direction.WEST, allowed);
+                pipe.setFilter(ConduitKind.ITEM, Direction.EAST, allowed);
+                for (int slot = 0; slot < 64; slot++) inventory.setItem(slot, new ItemStack(Items.IRON_INGOT));
+                inventory.setItem(73, cobble.copyWithCount(6));
+                inventory.setItem(lastSlot, amethyst.copyWithCount(3));
+                helper.assertValueEqual(retained.getAmount(), 6L, "A warmed indexed view reads new content instead of a cached quantity");
+                phase[0] = 1;
+                return;
+            }
+            helper.assertValueEqual(count(inventory, Items.IRON_INGOT), 64, "The first64 denied physical slots remain untouched");
+            helper.assertValueEqual(count(destination.inventory(), Items.IRON_INGOT), 0, "Neither endpoint's ALLOW filter admits iron");
+            if (count(destination.inventory(), Items.COBBLESTONE) != 17 || count(destination.inventory(), Items.AMETHYST_SHARD) != 8) return;
+            helper.assertTrue(inventory.getItem(73).isEmpty() && inventory.getItem(lastSlot).isEmpty(),
+                    "Natural routing advances past64 denied views to both allowed high slots");
+            for (int slot = 0; slot < destination.inventory().getContainerSize(); slot++) {
+                ItemStack item = destination.inventory().getItem(slot);
+                if (item.isEmpty()) continue;
+                helper.assertTrue(ItemStack.isSameItemSameComponents(item, item.is(Items.COBBLESTONE) ? cobble : amethyst),
+                        "The actual receiving backpack retains both transferred component variants");
+            }
+            helper.assertTrue(lookups[0] > 3, "Successful routing spans repeated fresh native provider lookups");
+            helper.succeed();
+        });
+    }
+
+    public static void backpackIndexedViewOwnership(GameTestHelper helper) {
+        BackpackBlockEntity entity = indexedBackpack(helper, new BlockPos(3, 2, 3), UpgradeKind.INCEPTION);
+        BagInventory root = entity.inventory();
+        root.updateSettings(tag -> tag.putBoolean("inception_nested_first", true));
+        BagInventory child = bag(BackpackTier.NETHERITE);
+        child.setItem(73, new ItemStack(Items.DIAMOND, 5));
+        root.setItem(0, child.stack());
+        root.setItem(73, new ItemStack(Items.STONE, 7));
+        SlottedStorage<ItemVariant> indexed = indexedItems(helper, entity);
+        int rootSize = root.getContainerSize(), childSize = child.getContainerSize();
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize + childSize, "The native index includes the current ordered child and root extents");
+        SingleSlotStorage<ItemVariant> childView = indexed.getSlot(73);
+        SingleSlotStorage<ItemVariant> rootView = indexed.getSlot(childSize + 73);
+        helper.assertValueEqual(childView.getResource(), ItemVariant.of(Items.DIAMOND), "Child-first indexing addresses the actual child");
+        helper.assertValueEqual(rootView.getResource(), ItemVariant.of(Items.STONE), "The root follows the child without shifting its physical slots");
+        ItemStack before = root.stack().copy();
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(childView.extract(ItemVariant.of(Items.DIAMOND), 2, transaction), 2L, "Indexed child extraction joins the actual transaction");
+        }
+        assertStack(helper, root.stack(), before, "Nested indexed extraction abort restores the serialized root and child");
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(childView.extract(ItemVariant.of(Items.DIAMOND), 2, transaction), 2L, "A subsequent indexed child extraction can commit");
+            transaction.commit();
+        }
+        BagInventory saved = BagInventory.of(roundTrip(helper.getLevel(), root.stack()));
+        assertStack(helper, BagInventory.of(saved.getItem(0)).getItem(73), Items.DIAMOND, 3, "Indexed final commit persists the child into the root codec");
+        root.updateSettings(tag -> tag.putBoolean("inception_nested_first", false));
+        helper.assertValueEqual(indexed.getSlot(73).getResource(), ItemVariant.of(Items.STONE), "A retained storage rebuilds its index when node ordering changes");
+        helper.assertValueEqual(indexed.getSlot(rootSize + 73).getAmount(), 3L, "The reordered child keeps its remaining quantity");
+        helper.assertValueEqual(childView.getAmount(), 3L, "A retained slot remains bound to its physical child, not its old ordinal");
+        ItemStack detached = root.getItem(0);
+        root.setItem(0, ItemStack.EMPTY);
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize, "Removing a child shrinks the advertised index");
+        helper.assertTrue(childView.isResourceBlank(), "A retained detached child view becomes blank");
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(childView.extract(ItemVariant.of(Items.DIAMOND), 1, transaction), 0L, "A retained detached child view cannot extract");
+            helper.assertValueEqual(childView.insert(ItemVariant.of(Items.DIAMOND), 1, transaction), 0L, "A retained detached child view cannot insert");
+            transaction.commit();
+        }
+        assertStack(helper, BagInventory.of(detached).getItem(73), Items.DIAMOND, 3, "Detaching and probing the old address conserves the child contents");
+        BagInventory replacementChild = bag(BackpackTier.GOLD);
+        replacementChild.setItem(73, new ItemStack(Items.EMERALD, 2));
+        root.setItem(0, replacementChild.stack());
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize + replacementChild.getContainerSize(), "An added child enters an already-retained storage index");
+        SingleSlotStorage<ItemVariant> replacementView = indexed.getSlot(rootSize + 73);
+        helper.assertValueEqual(replacementView.getResource(), ItemVariant.of(Items.EMERALD), "The new index addresses only the replacement child's resource");
+        helper.assertTrue(childView.isResourceBlank(), "An old child view never follows a replacement at the same parent slot");
+        root.updateSettings(tag -> tag.putBoolean("inception_outer_inventory", false));
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize, "Live outer-inventory policy removes child addresses");
+        helper.assertTrue(replacementView.isResourceBlank(), "The prior child view honors that live policy");
+        root.updateSettings(tag -> tag.putBoolean("inception_outer_inventory", true));
+        helper.assertValueEqual(indexed.getSlotCount(), rootSize + replacementChild.getContainerSize(), "Re-enabled access reconstructs the current child index");
+        helper.assertValueEqual(replacementView.getAmount(), 2L, "The same physically attached child becomes accessible again");
+        BagInventory replacementRoot = bag(BackpackTier.NETHERITE);
+        replacementRoot.setItem(73, new ItemStack(Items.DIRT, 4));
+        entity.setStack(replacementRoot.stack());
+        helper.assertValueEqual(indexed.getSlotCount(), 0, "Replacing the actual placed bag invalidates its retained indexed storage");
+        helper.assertTrue(rootView.isResourceBlank() && replacementView.isResourceBlank(), "Every retained slot keeps the old physical ownership boundary");
+        helper.assertValueEqual(indexedItems(helper, entity).getSlot(73).getResource(), ItemVariant.of(Items.DIRT), "A fresh native lookup can address the replacement bag");
+        helper.succeed();
+    }
+
+    private static BackpackBlockEntity indexedBackpack(GameTestHelper helper, BlockPos relative, UpgradeKind... upgrades) {
+        BlockPos position = helper.absolutePos(relative);
+        helper.getLevel().setBlock(position, BackpackRegistry.block(BackpackTier.NETHERITE).defaultBlockState(), 3);
+        var entity = (BackpackBlockEntity) helper.getLevel().getBlockEntity(position);
+        entity.setStack(bag(BackpackTier.NETHERITE, upgrades).stack());
+        return entity;
+    }
+
+    private static SlottedStorage<ItemVariant> indexedItems(GameTestHelper helper, BackpackBlockEntity entity) {
+        Storage<ItemVariant> storage = ItemStorage.SIDED.find(helper.getLevel(), entity.getBlockPos(), Direction.EAST);
+        helper.assertTrue(storage instanceof SlottedStorage<?>, "The actual registered backpack item API exposes indexed physical views");
+        return (SlottedStorage<ItemVariant>) storage;
     }
 
     private static <T> long backpackForward(GameTestHelper helper, Storage<T> source, Storage<T> pipe, T resource,
@@ -1206,7 +1361,7 @@ public final class ConduitGameTests {
 
             link.pipe().setFilter(ConduitKind.ITEM, Direction.EAST, ConduitFilter.EMPTY);
             var selectedIron = backpackFilter(ConduitFilterMode.ALLOW, "cobblestone")
-                    .withEntry(0, Identifier.fromNamespaceAndPath("minecraft", "iron_ingot"));
+                    .withEntry(0, ResourceLocation.fromNamespaceAndPath("minecraft", "iron_ingot"));
             link.pipe().setFilter(ConduitKind.ITEM, Direction.WEST, selectedIron);
             link.pipe().setFilter(ConduitKind.ITEM, Direction.NORTH, backpackFilter(ConduitFilterMode.BLOCK, "iron_ingot"));
             try (Transaction transaction = Transaction.openOuter()) {

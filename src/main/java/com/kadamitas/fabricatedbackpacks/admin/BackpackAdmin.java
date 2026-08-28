@@ -16,12 +16,11 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
-import net.minecraft.commands.arguments.IdentifierArgument;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.commands.arguments.item.ItemArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.item.ItemStack;
 
 import java.io.IOException;
@@ -46,10 +45,10 @@ public final class BackpackAdmin {
             dispatcher.register(root("fb", context));
             dispatcher.register(root("fabricatedbackpacks", context));
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> DRAFTS.keySet().removeIf(player -> player.level().getServer() == server));
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> DRAFTS.keySet().removeIf(player -> player.serverLevel().getServer() == server));
     }
     private static LiteralArgumentBuilder<CommandSourceStack> root(String name, CommandBuildContext context) {
-        return literal(name).requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+        return literal(name).requires(source -> source.hasPermission(2))
                 .executes(command -> guarded(command, () -> tell(command.getSource(),
                         "Fabricated Backpacks: list, recover, cleanup nonplayer [empty], template, dynamic", 1)))
                 .then(literal("list").executes(command -> list(command, "", 1))
@@ -121,7 +120,7 @@ public final class BackpackAdmin {
             BackpackTemplates.encode(player.registryAccess(), template);
             String name = StringArgumentType.getString(command, "name");
             data(command).putTemplate(name, template.backpack(), overwrite);
-            BackpackArchives.record(player.level(), bag, player);
+            BackpackArchives.record(player.serverLevel(), bag, player);
             return tell(command.getSource(), "Saved local whole-backpack template " + name, 1);
         });
     }
@@ -150,7 +149,7 @@ public final class BackpackAdmin {
                 .then(literal("item").then(item))
                 .then(literal("upgrade").then(argument("upgrade", ItemArgument.item(context)).executes(command -> guarded(command, () -> {
                     ServerPlayer author = command.getSource().getPlayerOrException();
-                    int slot = draft(author).addUpgrade(ItemArgument.getItem(command, "upgrade").createItemStack(1), author);
+                    int slot = draft(author).addUpgrade(ItemArgument.getItem(command, "upgrade").createItemStack(1, false), author);
                     return tell(command.getSource(), "Added upgrade in slot " + slot, 1);
                 }))))
                 .then(literal("preview").executes(command -> guarded(command, () -> {
@@ -176,7 +175,7 @@ public final class BackpackAdmin {
     private static int addItem(CommandContext<CommandSourceStack> command, int count, int slot) throws CommandSyntaxException {
         return guarded(command, () -> {
             ServerPlayer author = command.getSource().getPlayerOrException();
-            ItemStack stack = ItemArgument.getItem(command, "item").createItemStack(1);
+            ItemStack stack = ItemArgument.getItem(command, "item").createItemStack(1, false);
             stack.setCount(count); // The draft validates the enhanced capacity after its upgrades are chosen.
             draft(author).addItem(stack, slot);
             return tell(command.getSource(), "Queued " + count + " " + stack.getHoverName().getString() + (slot == DynamicBackpackBuilder.AUTO ? " for automatic placement" : " for slot " + slot), count);
@@ -205,8 +204,8 @@ public final class BackpackAdmin {
         return building(author).orElseThrow(() -> new IllegalArgumentException("Start a dynamic draft first"));
     }
     private static RequiredArgumentBuilder<CommandSourceStack, String> localName() { return argument("name", StringArgumentType.word()); }
-    private static RequiredArgumentBuilder<CommandSourceStack, net.minecraft.resources.Identifier> templateReference() {
-        return argument("template", IdentifierArgument.id()).suggests((command, suggestions) ->
+    private static RequiredArgumentBuilder<CommandSourceStack, net.minecraft.resources.ResourceLocation> templateReference() {
+        return argument("template", ResourceLocationArgument.id()).suggests((command, suggestions) ->
                 SharedSuggestionProvider.suggest(BackpackTemplates.names(command.getSource().getServer()), suggestions));
     }
     private static String reference(CommandContext<CommandSourceStack> command) {
@@ -223,7 +222,7 @@ public final class BackpackAdmin {
     private static int tell(CommandSourceStack source, String message, int result) { source.sendSuccess(() -> Component.literal(message), false); return result; }
     @FunctionalInterface private interface CommandAction { int run() throws CommandSyntaxException, IOException; }
     private static int guarded(CommandContext<CommandSourceStack> command, CommandAction action) throws CommandSyntaxException {
-        if (!command.getSource().permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) throw DENIED.create();
+        if (!command.getSource().hasPermission(2)) throw DENIED.create();
         try { return action.run(); }
         catch (IOException | IllegalArgumentException | IllegalStateException exception) {
             command.getSource().sendFailure(Component.literal(exception.getMessage() == null ? "Administration operation failed" : exception.getMessage()));

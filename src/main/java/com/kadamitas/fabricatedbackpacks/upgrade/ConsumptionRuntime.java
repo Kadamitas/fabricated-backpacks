@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.upgrade;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
@@ -31,7 +32,7 @@ public final class ConsumptionRuntime {
     }
 
     public static void feed(BagInventory bag, InstalledUpgrade upgrade, ServerLevel level, BlockPos position, LivingEntity carrier) {
-        long next = bag.settings(upgrade).getLongOr("feeding_next", 0);
+        long next = NbtAccess.getLongOr(bag.settings(upgrade), "feeding_next", 0);
         if (level.getGameTime() < next) return;
         boolean stillHungry = false;
         Container storage = BackpackTraversal.processingInventory(bag);
@@ -41,10 +42,10 @@ public final class ConsumptionRuntime {
             for (int slot = 0; slot < storage.getContainerSize(); slot++) {
                 ItemStack stack = storage.getItem(slot);
                 FoodProperties food = stack.get(DataComponents.FOOD);
-                if (stack.isEmpty() || food == null || food.nutrition() <= 0 || !stack.has(DataComponents.CONSUMABLE)
+                if (stack.isEmpty() || food == null || food.nutrition() <= 0
                         || stack.is(Items.OMINOUS_BOTTLE) || !storage.canTakeItem(null, slot, stack) || !UpgradeFilters.matches(bag, upgrade, stack)) continue;
-                String mode = upgrade.kind().advanced() ? bag.settings(upgrade).getStringOr("hunger_mode", "HALF") : "HALF";
-                boolean hurtOverride = bag.settings(upgrade).getBooleanOr("feed_when_hurt", true) && player.getHealth() < player.getMaxHealth();
+                String mode = upgrade.kind().advanced() ? NbtAccess.getStringOr(bag.settings(upgrade), "hunger_mode", "HALF") : "HALF";
+                boolean hurtOverride = NbtAccess.getBooleanOr(bag.settings(upgrade), "feed_when_hurt", true) && player.getHealth() < player.getMaxHealth();
                 int threshold = mode.equals("FULL") ? food.nutrition() : mode.equals("ANY") ? 1 : food.nutrition() / 2;
                 if (!hurtOverride && missing < threshold) continue;
                 consumeOne(bag, storage, slot, level, player);
@@ -66,8 +67,14 @@ public final class ConsumptionRuntime {
         ItemStack source = storage.getItem(sourceSlot);
         if (source.isEmpty() || !storage.canTakeItem(null, sourceSlot, source)) return;
         ItemStack consumed = source.copyWithCount(1);
+        // Native 1.21.1 milk returns its container only for players. Retain the
+        // declared, stack-aware remainder for automation dosing a nonplayer too.
+        ItemStack nonPlayerMilkContainer = !(target instanceof Player)
+                && consumed.getItem() instanceof net.minecraft.world.item.MilkBucketItem
+                ? consumed.getRecipeRemainder() : ItemStack.EMPTY;
         storage.setItem(sourceSlot, source.copyWithCount(source.getCount() - 1));
         ItemStack remainder = consumed.finishUsingItem(level, target);
+        if (remainder.isEmpty()) remainder = nonPlayerMilkContainer;
         returnRemainder(bag, level, target, remainder);
     }
 

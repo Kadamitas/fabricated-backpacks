@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.menu;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
@@ -30,7 +32,7 @@ public final class StorageActions {
         for (int slot = 0; slot < bag.getContainerSize(); slot++) {
             ItemStack item = bag.getItem(slot);
             if (!bag.blocked(slot) && !item.isEmpty()) entries.put(slot, new InventorySnapshot.Entry(slot,
-                    net.minecraft.world.item.ItemStackTemplate.fromNonEmptyStack(item.copyWithCount(1)), 1));
+                    com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate.fromNonEmptyStack(item.copyWithCount(1)), 1));
         }
         bag.stack().set(BagComponents.MEMORY, new InventorySnapshot(bag.getContainerSize(), List.copyOf(entries.values())));
         bag.save();
@@ -51,7 +53,7 @@ public final class StorageActions {
         var originalMain = InventoryMoves.snapshot(main);
         List<ItemStack> matches = new ArrayList<>();
         if (!all) {
-            for (ItemStack item : toBackpack ? bag : main) if (!item.isEmpty()) matches.add(item.copyWithCount(1));
+            for (ItemStack item : InventoryMoves.snapshot(toBackpack ? bag : main)) if (!item.isEmpty()) matches.add(item.copyWithCount(1));
             if (toBackpack) for (var memory : bag.stack().getOrDefault(BagComponents.MEMORY, InventorySnapshot.EMPTY).entries())
                 matches.add(memory.create());
         }
@@ -67,7 +69,7 @@ public final class StorageActions {
             }
             for (int slot = 0; slot < bag.getContainerSize(); slot++) UpgradeEngine.onManualSlotChanged(bag, slot);
         } else {
-            int[] excluded = bag.settings().getIntArray("no_sort").orElseGet(() -> new int[0]);
+            int[] excluded = NbtAccess.getIntArray(bag.settings(), "no_sort").orElseGet(() -> new int[0]);
             for (int slot = 0; slot < bag.getContainerSize(); slot++) {
                 ItemStack item = bag.getItem(slot);
                 final int index = slot;

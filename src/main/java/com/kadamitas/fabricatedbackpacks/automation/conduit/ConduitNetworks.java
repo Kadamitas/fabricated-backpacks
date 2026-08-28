@@ -5,7 +5,7 @@ import com.kadamitas.fabricatedbackpacks.config.AutomationConfig;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerBlockEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.lookup.v1.block.BlockApiCache;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
@@ -72,15 +72,15 @@ public final class ConduitNetworks {
         });
         ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> {
             WorldNetworks world = WORLDS.get(level);
-            if (world != null) { world.unloading.add(chunk.getPos().pack()); world.chunkChanged(chunk.getPos().pack()); }
+            if (world != null) { world.unloading.add(chunk.getPos().toLong()); world.chunkChanged(chunk.getPos().toLong()); }
         });
-        ServerChunkEvents.CHUNK_LOAD.register((level, chunk, generated) -> {
+        ServerChunkEvents.CHUNK_LOAD.register((level, chunk) -> {
             WorldNetworks world = WORLDS.get(level);
-            if (world != null) { world.unloading.remove(chunk.getPos().pack()); world.chunkChanged(chunk.getPos().pack()); }
+            if (world != null) { world.unloading.remove(chunk.getPos().toLong()); world.chunkChanged(chunk.getPos().toLong()); }
         });
-        ServerLevelEvents.LOAD.register((server, level) -> CLOSED.remove(level));
-        ServerLevelEvents.UNLOAD.register((server, level) -> { WORLDS.remove(level); CLOSED.add(level); });
-        ServerTickEvents.END_LEVEL_TICK.register(ConduitNetworks::tick);
+        ServerWorldEvents.LOAD.register((server, level) -> CLOSED.remove(level));
+        ServerWorldEvents.UNLOAD.register((server, level) -> { WORLDS.remove(level); CLOSED.add(level); });
+        ServerTickEvents.END_WORLD_TICK.register(ConduitNetworks::tick);
         ItemStorage.SIDED.registerForBlockEntity((bundle, side) -> side == null ? Storage.empty()
                 : new ForwardStorage<>(bundle, ConduitKind.ITEM, side), AutomationRegistry.CONDUIT_BUNDLE_ENTITY);
         FluidStorage.SIDED.registerForBlockEntity((bundle, side) -> side == null ? Storage.empty()
@@ -225,7 +225,7 @@ public final class ConduitNetworks {
                 if (bundle.has(kind) || previous != null && previous.has(kind)) lanes.get(kind).invalidateAround(bundle.getBlockPos());
         }
         boolean loaded(BlockPos position) {
-            if (unloading.contains(ChunkPos.pack(position.getX() >> 4, position.getZ() >> 4))) return false;
+            if (unloading.contains(ChunkPos.asLong(position.getX() >> 4, position.getZ() >> 4))) return false;
             var chunk = level.getChunkSource().getChunkNow(position.getX() >> 4, position.getZ() >> 4);
             if (chunk == null) return false;
             if (!chunk.getBlockState(position).hasBlockEntity()) return true;
@@ -248,10 +248,10 @@ public final class ConduitNetworks {
             for (ConduitKind kind : ConduitKind.values()) affected.put(kind, new ArrayList<>());
             for (ConduitBundleBlockEntity node : nodes.values()) {
                 BlockPos position = node.getBlockPos();
-                boolean touching = ChunkPos.pack(position.getX() >> 4, position.getZ() >> 4) == chunk;
+                boolean touching = ChunkPos.asLong(position.getX() >> 4, position.getZ() >> 4) == chunk;
                 for (Direction side : Direction.values()) {
                     BlockPos adjacent = position.relative(side);
-                    touching |= ChunkPos.pack(adjacent.getX() >> 4, adjacent.getZ() >> 4) == chunk;
+                    touching |= ChunkPos.asLong(adjacent.getX() >> 4, adjacent.getZ() >> 4) == chunk;
                 }
                 if (touching) for (ConduitKind kind : ConduitKind.values()) if (node.has(kind))
                     affected.get(kind).add(position.asLong());
@@ -304,12 +304,23 @@ public final class ConduitNetworks {
                     .thenComparingLong(value -> value.topology.nodes().getFirst()));
             // Do not burn the whole allowance by repeatedly retrying capped or empty sources.
             // Later API producers share this tick's work budget and must retain its unused portion.
-            int attempts = active.stream().mapToInt(component -> component.sources.size()).sum();
-            while (!active.isEmpty() && attempts-- > 0 && takeWork()) {
+            // Count probes per component: a shared call count would repeat short source lists
+            // while a larger component still has unvisited physical candidates.
+            int[] remaining = active.stream().mapToInt(component -> component.sources.size()).toArray();
+            int attempts = java.util.Arrays.stream(remaining).sum();
+            while (!active.isEmpty() && attempts > 0) {
                 firstComponent = Math.floorMod(firstComponent, active.size());
-                Component component = active.get(firstComponent);
+                int index = firstComponent;
+                if (remaining[index] == 0) {
+                    firstComponent = (firstComponent + 1) % active.size();
+                    continue;
+                }
+                if (!takeWork()) break;
+                Component component = active.get(index);
                 firstComponent = (firstComponent + 1) % active.size();
-                component.attempt();
+                int visited = component.attempt(remaining[index]);
+                remaining[index] -= visited;
+                attempts -= visited;
             }
             if (level.getGameTime() % 200 == 0) {
                 long oldest = level.getGameTime() - Math.max(1_200, limits().itemIntervalTicks());
@@ -539,34 +550,64 @@ public final class ConduitNetworks {
                         : current != null || lane.world.level.getBlockState(position).isAir();
             });
         }
-        void attempt() {
-            if (!live() || routing || sources.isEmpty() || destinations.isEmpty()) return;
-            sourceIndex = Math.floorMod(sourceIndex, sources.size());
-            Endpoint source = sources.get(sourceIndex);
-            sourceIndex = (sourceIndex + 1) % sources.size();
-            if (!source.current() || !source.conduit.extracts(lane.kind, source.side)) return;
-            Located located = source.locate();
-            if (located == null) return;
-            long now = lane.world.level.getGameTime();
-            ConduitBudget sourceBudget = lane.world.budget(lane.kind, located.identity());
-            long maximum = sourceBudget.available(now, limit(lane.kind), interval(lane.kind));
-            if (maximum == 0 || sourceBudget.receivedThisTick(now)) return;
-            routing = true;
-            try (Transaction transaction = Transaction.openOuter()) {
-                if (lane.kind == ConduitKind.ENERGY && located.storage instanceof EnergyStorage energy && energy.supportsExtraction())
-                    energy(located, energy, maximum, transaction);
-                else if (located.storage instanceof Storage<?> storage && storage.supportsExtraction())
-                    resource(located, storage, maximum, transaction);
-                if (live()) transaction.commit();
-            } catch (RuntimeException failure) { failure(failure); }
-            finally { routing = false; }
+        int attempt(int maximumSources) {
+            if (!live() || routing || sources.isEmpty() || destinations.isEmpty()) return 1;
+            int visited = 0;
+            while (visited < Math.min(maximumSources, sources.size())) {
+                // The caller paid for the first source. Inert faces do not consume the whole
+                // component turn, but every additional physical probe still costs shared work.
+                if (visited > 0 && !lane.world.takeWork()) return visited;
+                visited++;
+                sourceIndex = Math.floorMod(sourceIndex, sources.size());
+                Endpoint source = sources.get(sourceIndex);
+                sourceIndex = (sourceIndex + 1) % sources.size();
+                if (!source.current() || !source.conduit.extracts(lane.kind, source.side)) continue;
+                Located located = source.locate();
+                if (located == null) continue;
+                boolean extracts;
+                try {
+                    extracts = lane.kind == ConduitKind.ENERGY
+                            ? located.storage instanceof EnergyStorage energy && energy.supportsExtraction() && energy.getAmount() > 0
+                            : located.storage instanceof Storage<?> storage && storage.supportsExtraction();
+                } catch (RuntimeException failure) {
+                    failure(failure);
+                    continue;
+                }
+                if (!extracts) continue;
+                long now = lane.world.level.getGameTime();
+                ConduitBudget sourceBudget = lane.world.budget(lane.kind, located.identity());
+                long maximum = sourceBudget.available(now, limit(lane.kind), interval(lane.kind));
+                if (maximum == 0 || sourceBudget.receivedThisTick(now)) continue;
+                routing = true;
+                try (Transaction transaction = Transaction.openOuter()) {
+                    if (lane.kind == ConduitKind.ENERGY && located.storage instanceof EnergyStorage energy)
+                        energy(located, energy, maximum, transaction);
+                    else if (located.storage instanceof Storage<?> storage)
+                        resource(located, storage, maximum, transaction);
+                    if (live()) transaction.commit();
+                } catch (RuntimeException failure) { failure(failure); }
+                finally { routing = false; }
+                return visited;
+            }
+            return visited;
         }
         private Located target(Object source, TransactionContext transaction) {
             if (destinations.isEmpty()) return null;
             Cursor cursor = destinationsBySource.computeIfAbsent(source, ignored -> new Cursor());
-            Endpoint endpoint = destinations.get(cursor.choose(destinations.size(), transaction));
-            if (!endpoint.conduit.mode(lane.kind, endpoint.side).inserts()) return null;
-            return endpoint.locate();
+            for (int probe = 0; probe < destinations.size(); probe++) {
+                // The scheduler/forwarder already paid for the first probe. Extra skips still
+                // consume the shared work budget, even when the enclosing transfer is aborted.
+                if (probe > 0 && !lane.world.takeWork()) return null;
+                Endpoint endpoint = destinations.get(cursor.choose(destinations.size(), transaction));
+                if (!endpoint.conduit.mode(lane.kind, endpoint.side).inserts()) continue;
+                Located located = endpoint.locate();
+                if (located == null || source.equals(located.identity())) continue;
+                boolean inserts = lane.kind == ConduitKind.ENERGY
+                        ? located.storage instanceof EnergyStorage energy && energy.supportsInsertion()
+                        : located.storage instanceof Storage<?> storage && storage.supportsInsertion();
+                if (inserts) return located;
+            }
+            return null;
         }
         private long maximum(Object sourceIdentity, Located target, long requested) {
             if (target == null || sourceIdentity.equals(target.identity())) return 0;
@@ -639,7 +680,7 @@ public final class ConduitNetworks {
                     && entity.extracts(kind, side);
         }
         boolean advertisedInsertion() {
-            if (entity.getLevel() != null && entity.getLevel().isClientSide()) {
+            if (entity.getLevel() != null && entity.getLevel().isClientSide) {
                 return !entity.isRemoved() && entity.has(kind) && entity.mode(kind, side).extracts()
                         && entity.getLevel().hasChunkAt(entity.getBlockPos())
                         && entity.getLevel().getBlockEntity(entity.getBlockPos()) == entity;

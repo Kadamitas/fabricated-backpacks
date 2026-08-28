@@ -374,7 +374,7 @@ changes in five-point steps from 0% to 100%. Advanced Alchemy also exposes
 target groups and effect/duration/amplifier matching. These preferences travel
 with the upgrade; server range and timing bounds still apply.
 
-Minecraft's Controls screen can rebind **B** (open), **G** (equipment), **O**
+Minecraft's Controls screen can rebind **B** (open), **G** (equipment), **V**
 (browser), **C** (contextual deposit/restock) and **K** (manual tool selection).
 Dedicated deposit/restock keys are initially unbound. The browser's **Transfer
 recipe** and **Transfer max** buttons request one set or at most 64 complete

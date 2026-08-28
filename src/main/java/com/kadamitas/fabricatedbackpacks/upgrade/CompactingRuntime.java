@@ -1,12 +1,13 @@
 package com.kadamitas.fabricatedbackpacks.upgrade;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.config.UpgradeConfig;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
@@ -40,7 +41,7 @@ public final class CompactingRuntime {
     private static final Shape TWO = new Shape(2, 2, "1111");
     private static final Shape THREE = new Shape(3, 3, "111111111");
     private static List<Shape> extraShapes = List.of(new Shape(3, 3, "111101111"));
-    private static Map<Identifier, List<Shape>> overrides = Map.of();
+    private static Map<ResourceLocation, List<Shape>> overrides = Map.of();
     private static UpgradeConfig.Compacting configured;
     private CompactingRuntime() { }
 
@@ -49,7 +50,7 @@ public final class CompactingRuntime {
         if (rules == configured) return;
         extraShapes = rules.extraShapes().stream().map(shape -> new Shape(shape.width(), shape.height(), shape.pattern())).toList();
         overrides = rules.itemOverrides().entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
-                entry -> Identifier.parse(entry.getKey()), entry -> entry.getValue().stream()
+                entry -> ResourceLocation.parse(entry.getKey()), entry -> entry.getValue().stream()
                         .map(shape -> new Shape(shape.width(), shape.height(), shape.pattern())).toList()));
         configured = rules;
     }
@@ -93,12 +94,12 @@ public final class CompactingRuntime {
     private static boolean tryCompact(BagInventory bag, Container storage, InstalledUpgrade upgrade, ServerLevel level, ItemStack candidate, Shape shape) {
         if (InventoryMoves.count(storage, candidate) < shape.ingredients()) return false;
         CraftingInput input = shape.input(candidate);
-        Optional<RecipeHolder<CraftingRecipe>> selected = level.recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, level);
+        Optional<RecipeHolder<CraftingRecipe>> selected = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, input, level);
         if (selected.isEmpty()) return false;
         CraftingRecipe recipe = selected.get().value();
-        ItemStack result = recipe.assemble(input);
+        ItemStack result = recipe.assemble(input, level.registryAccess());
         if (result.isEmpty() || ItemStack.isSameItem(result, candidate)) return false;
-        if (!bag.settings(upgrade).getBooleanOr("compact_anything", false) && !reversible(level, candidate, result, shape.ingredients())) return false;
+        if (!NbtAccess.getBooleanOr(bag.settings(upgrade), "compact_anything", false) && !reversible(level, candidate, result, shape.ingredients())) return false;
         List<ItemStack> plan = InventoryMoves.snapshot(storage);
         if (!InventoryMoves.removeExact(storage, plan, candidate, shape.ingredients())) return false;
         if (!InventoryMoves.insertIntoPlan(storage, plan, result, false).isEmpty()) return false;
@@ -111,9 +112,9 @@ public final class CompactingRuntime {
 
     private static boolean reversible(ServerLevel level, ItemStack ingredient, ItemStack compressed, int inputCount) {
         CraftingInput reverseInput = CraftingInput.of(1, 1, List.of(compressed.copyWithCount(1)));
-        Optional<RecipeHolder<CraftingRecipe>> reverse = level.recipeAccess().getRecipeFor(RecipeType.CRAFTING, reverseInput, level);
+        Optional<RecipeHolder<CraftingRecipe>> reverse = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, reverseInput, level);
         if (reverse.isEmpty()) return false;
-        ItemStack restored = reverse.get().value().assemble(reverseInput);
+        ItemStack restored = reverse.get().value().assemble(reverseInput, level.registryAccess());
         if (!ItemStack.isSameItemSameComponents(restored, ingredient) || (long) restored.getCount() * compressed.getCount() != inputCount) return false;
         return reverse.get().value().getRemainingItems(reverseInput).stream().allMatch(ItemStack::isEmpty);
     }

@@ -103,7 +103,10 @@ public final class InventoryMoves {
 
     public static int count(Container inventory, ItemStack exemplar) {
         long total = 0;
-        for (ItemStack item : inventory) if (ItemStack.isSameItemSameComponents(item, exemplar)) total += item.getCount();
+        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (ItemStack.isSameItemSameComponents(item, exemplar)) total += item.getCount();
+        }
         return (int) Math.min(Integer.MAX_VALUE, total);
     }
 }

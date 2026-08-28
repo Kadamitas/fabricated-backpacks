@@ -15,10 +15,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** Extends vanilla's equipment predicate without changing anger, theft or attack behavior. */
 @Mixin(PiglinAi.class)
 public abstract class PiglinSafetyMixin {
-    @Inject(method = "isWearingSafeArmor", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "isWearingGold", at = @At("RETURN"), cancellable = true)
     private static void fabricatedBackpacks$nativeEquipment(LivingEntity entity, CallbackInfoReturnable<Boolean> result) {
         if (result.getReturnValue() || !(entity instanceof Player player)) return;
         ItemStack equipped = BackpackEquipment.get(player);
-        if (BackpackRegistry.isBackpack(equipped) && equipped.is(ItemTags.PIGLIN_SAFE_ARMOR)) result.setReturnValue(true);
+        if (BackpackRegistry.isBackpack(equipped) && equipped.is(net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM,
+                net.minecraft.resources.ResourceLocation.withDefaultNamespace("piglin_safe_armor")))) result.setReturnValue(true);
     }
 }

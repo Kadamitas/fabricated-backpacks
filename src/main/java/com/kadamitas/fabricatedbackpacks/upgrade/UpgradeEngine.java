@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.upgrade;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal;
@@ -8,7 +9,7 @@ import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -73,7 +74,7 @@ public final class UpgradeEngine {
             if (!UpgradeFilters.enabled(bag, upgrade)) {
                 JukeboxRuntime.stopUpgrade(bag, upgrade.slot(), level.getServer());
                 AlchemyRuntime.cancel(bag, upgrade.slot(), level.getServer());
-                if (bag.settings(upgrade).getBooleanOr("burning", false)) bag.updateSettings(upgrade, tag -> tag.putBoolean("burning", false));
+                if (NbtAccess.getBooleanOr(bag.settings(upgrade), "burning", false)) bag.updateSettings(upgrade, tag -> tag.putBoolean("burning", false));
                 continue;
             }
             switch (upgrade.kind().family()) {
@@ -85,7 +86,7 @@ public final class UpgradeEngine {
                 case "alchemy" -> AlchemyRuntime.tick(bag, upgrade, level, position, carrier);
                 case "compacting" -> {
                     var rules = BackpackConfig.get().upgrades().compacting();
-                    if ((context.inserted || bag.settings(upgrade).getBooleanOr("work_in_gui", false)) && level.getGameTime() % rules.interval() == 0) {
+                    if ((context.inserted || NbtAccess.getBooleanOr(bag.settings(upgrade), "work_in_gui", false)) && level.getGameTime() % rules.interval() == 0) {
                         CompactingRuntime.compact(bag, upgrade, level, rules.maximumOperations());
                     }
                 }
@@ -102,7 +103,7 @@ public final class UpgradeEngine {
         if (stack.isEmpty()) return false;
         for (InstalledUpgrade upgrade : bag.installedUpgrades()) {
             if (!upgrade.kind().family().equals("filter") || !UpgradeFilters.enabled(bag, upgrade)) continue;
-            String direction = bag.settings(upgrade).getStringOr("filter_direction", "BOTH");
+            String direction = NbtAccess.getStringOr(bag.settings(upgrade), "filter_direction", "BOTH");
             if (direction.equals(input ? "OUTPUT" : "INPUT")) continue;
             if (!UpgradeFilters.matches(bag, upgrade, stack)) return false;
         }
@@ -134,17 +135,21 @@ public final class UpgradeEngine {
     }
 
     public static String voidMode(CompoundTag settings) {
-        String mode = settings.getStringOr("void_mode", "STORAGE_OVERFLOW");
+        String mode = NbtAccess.getStringOr(settings, "void_mode", "STORAGE_OVERFLOW");
         if (!Set.of("ALWAYS", "SLOT_OVERFLOW", "STORAGE_OVERFLOW").contains(mode)) return "STORAGE_OVERFLOW";
         return mode.equals("ALWAYS") && (!alwaysVoidAllowed || !BackpackConfig.get().upgrades().allowAlwaysVoid()) ? "STORAGE_OVERFLOW" : mode;
     }
 
     private static ItemStack insertSlotOverflow(BagInventory bag, InstalledUpgrade upgrade, ItemStack supplied, boolean simulate) {
         CompoundTag settings = bag.settings(upgrade);
-        boolean damage = settings.getBooleanOr("match_damage", false);
-        boolean components = settings.getBooleanOr("match_components", false);
+        boolean damage = NbtAccess.getBooleanOr(settings, "match_damage", false);
+        boolean components = NbtAccess.getBooleanOr(settings, "match_components", false);
         long represented = 0;
-        for (ItemStack present : BackpackTraversal.processingInventory(bag)) if (UpgradeFilters.same(supplied, present, "ITEM", damage, components)) represented += present.getCount();
+        Container storage = BackpackTraversal.processingInventory(bag);
+        for (int slot = 0; slot < storage.getContainerSize(); slot++) {
+            ItemStack present = storage.getItem(slot);
+            if (UpgradeFilters.same(supplied, present, "ITEM", damage, components)) represented += present.getCount();
+        }
         int allowance = (int) Math.max(0, bag.capacity(supplied) - Math.min(Integer.MAX_VALUE, represented));
         int attempt = Math.min(supplied.getCount(), allowance);
         ItemStack retained = attempt == 0 ? ItemStack.EMPTY : BackpackTraversal.insert(bag, supplied.copyWithCount(attempt), simulate, null);
@@ -164,12 +169,12 @@ public final class UpgradeEngine {
     public static void pause(BagInventory bag, MinecraftServer server) {
         for (InstalledUpgrade upgrade : bag.installedUpgrades()) {
             stopUpgrade(bag, upgrade.slot(), server);
-            if (bag.settings(upgrade).getBooleanOr("burning", false)) bag.updateSettings(upgrade, tag -> tag.putBoolean("burning", false));
+            if (NbtAccess.getBooleanOr(bag.settings(upgrade), "burning", false)) bag.updateSettings(upgrade, tag -> tag.putBoolean("burning", false));
         }
     }
 
     private static void voidManualChanges(BagInventory bag, InstalledUpgrade upgrade, Set<Integer> changed) {
-        if (!alwaysVoidAllowed || !bag.settings(upgrade).getBooleanOr("work_in_gui", false) || !voidMode(bag.settings(upgrade)).equals("ALWAYS")) return;
+        if (!alwaysVoidAllowed || !NbtAccess.getBooleanOr(bag.settings(upgrade), "work_in_gui", false) || !voidMode(bag.settings(upgrade)).equals("ALWAYS")) return;
         for (int slot : changed) {
             ItemStack stack = bag.getItem(slot);
             if (!stack.isEmpty() && !BackpackRegistry.isBackpack(stack) && UpgradeFilters.matches(bag, upgrade, stack)) bag.setItem(slot, ItemStack.EMPTY);
@@ -204,8 +209,8 @@ public final class UpgradeEngine {
         if (claims.fabricatedBackpacks$target() != null && (carrier == null || !claims.fabricatedBackpacks$target().equals(carrier.getUUID()))) return false;
         if (!remote) return true;
         CompoundTag data = item.getItem().getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
-        if (data.getBooleanOr("prevent_remote_movement", false) || data.getBooleanOr("no_magnet", false)) return false;
-        if (item.entityTags().contains("fabricated_backpacks:no_magnet")) return false;
+        if (NbtAccess.getBooleanOr(data, "prevent_remote_movement", false) || NbtAccess.getBooleanOr(data, "no_magnet", false)) return false;
+        if (item.getTags().contains("fabricated_backpacks:no_magnet")) return false;
         return MOVEMENT_BLOCKERS.stream().noneMatch(blocker -> blocker.test(item, carrier));
     }
 
@@ -226,7 +231,7 @@ public final class UpgradeEngine {
 
     private static void magnet(BagInventory bag, InstalledUpgrade upgrade, ServerLevel level, BlockPos position, LivingEntity carrier) {
         CompoundTag state = bag.settings(upgrade);
-        if (!state.getBooleanOr("magnet_items", true) || level.getGameTime() < state.getLongOr("magnet_next", 0)) return;
+        if (!NbtAccess.getBooleanOr(state, "magnet_items", true) || level.getGameTime() < NbtAccess.getLongOr(state, "magnet_next", 0)) return;
         var rules = BackpackConfig.get().upgrades().magnet();
         int range = rules.radius(upgrade.kind());
         boolean moved = false;
@@ -268,7 +273,7 @@ public final class UpgradeEngine {
             case "jukebox" -> JukeboxRuntime.isDisc(stack);
             case "cooking" -> switch (slot) {
                 case CookingRuntime.INPUT -> CookingRuntime.recipe(level, upgrade.kind(), stack).isPresent();
-                case CookingRuntime.FUEL -> level.fuelValues().isFuel(stack) || stack.is(Items.BUCKET);
+                case CookingRuntime.FUEL -> net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.isFuel(stack) || stack.is(Items.BUCKET);
                 default -> false;
             };
             case "tank", "battery" -> com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime.isValidAuxiliary(upgrade.kind(), slot, stack);
@@ -283,18 +288,18 @@ public final class UpgradeEngine {
         CompoundTag state = bag.settings(upgrade);
         if (action.equals("toggle")) {
             if (FIXED_UPGRADES.contains(upgrade.kind().family())) return false;
-            boolean enabled = !state.getBooleanOr("enabled", true);
+            boolean enabled = !NbtAccess.getBooleanOr(state, "enabled", true);
             bag.updateSettings(upgrade, tag -> { tag.putBoolean("enabled", enabled); if (!enabled) tag.putBoolean("burning", false); });
             if (!enabled) {
-                JukeboxRuntime.stopUpgrade(bag, upgradeSlot, player.level().getServer());
-                AlchemyRuntime.cancel(bag, upgradeSlot, player.level().getServer());
+                JukeboxRuntime.stopUpgrade(bag, upgradeSlot, player.serverLevel().getServer());
+                AlchemyRuntime.cancel(bag, upgradeSlot, player.serverLevel().getServer());
             }
             return true;
         }
         if (upgrade.kind().family().equals("jukebox") && Set.of("play", "stop", "next", "previous", "prev", "shuffle", "repeat").contains(action)) {
-            if (!state.getBooleanOr("enabled", true) && !action.equals("stop")) return false;
-            Context context = CONTEXTS.get(new Key(player.level().getServer(), bag.identity()));
-            return JukeboxRuntime.action(bag, upgrade, player.level(), context == null ? player.blockPosition() : context.position,
+            if (!NbtAccess.getBooleanOr(state, "enabled", true) && !action.equals("stop")) return false;
+            Context context = CONTEXTS.get(new Key(player.serverLevel().getServer(), bag.identity()));
+            return JukeboxRuntime.action(bag, upgrade, player.serverLevel(), context == null ? player.blockPosition() : context.position,
                     context == null ? player : context.carrier, action);
         }
         if (action.equals("claim_xp") && upgrade.kind().family().equals("cooking")) { outputTaken(bag, upgradeSlot, player); return true; }
@@ -303,15 +308,15 @@ public final class UpgradeEngine {
         if (!prefix.isEmpty() && !CookingRuntime.automatic(upgrade.kind())) return false;
         if (operation.equals("filter_mode") && bag.filterSlots(upgrade) > 0) {
             cycle(bag, upgrade, prefix + "filter_mode", prefix.isEmpty() && !upgrade.kind().family().equals("void") ? "BLOCK" : "ALLOW", "ALLOW", "BLOCK", "CONTENTS");
-            if (bag.settings(upgrade).getStringOr(prefix + "filter_mode", "BLOCK").equals("CONTENTS")
-                    && bag.settings(upgrade).getStringOr(prefix + "filter_match", "ITEM").equals("TAGS")) {
+            if (NbtAccess.getStringOr(bag.settings(upgrade), prefix + "filter_mode", "BLOCK").equals("CONTENTS")
+                    && NbtAccess.getStringOr(bag.settings(upgrade), prefix + "filter_match", "ITEM").equals("TAGS")) {
                 bag.updateSettings(upgrade, tag -> tag.putString(prefix + "filter_match", "ITEM"));
             }
             return true;
         }
         if (operation.equals("filter_match") && (upgrade.kind().advanced() || prefix.equals("input_"))) {
             cycle(bag, upgrade, prefix + "filter_match", "ITEM", "ITEM", "NAMESPACE", "TAGS");
-            if (bag.settings(upgrade).getStringOr(prefix + "filter_match", "ITEM").equals("TAGS") && bag.settings(upgrade).getStringOr(prefix + "filter_mode", "BLOCK").equals("CONTENTS")) {
+            if (NbtAccess.getStringOr(bag.settings(upgrade), prefix + "filter_match", "ITEM").equals("TAGS") && NbtAccess.getStringOr(bag.settings(upgrade), prefix + "filter_mode", "BLOCK").equals("CONTENTS")) {
                 bag.updateSettings(upgrade, tag -> tag.putString(prefix + "filter_mode", "ALLOW"));
             }
             return true;
@@ -323,8 +328,8 @@ public final class UpgradeEngine {
         }
         if (operation.startsWith("tag:") && (upgrade.kind().advanced() || prefix.equals("input_"))) {
             String tag = operation.substring(4);
-            if (Identifier.tryParse(tag) == null || !tag.contains(":")) return false;
-            Set<String> selected = new HashSet<>(Arrays.asList(state.getStringOr(prefix + "tags", "").split(",")));
+            if (ResourceLocation.tryParse(tag) == null || !tag.contains(":")) return false;
+            Set<String> selected = new HashSet<>(Arrays.asList(NbtAccess.getStringOr(state, prefix + "tags", "").split(",")));
             selected.remove("");
             if (!selected.add(tag)) selected.remove(tag);
             if (selected.size() > 64) return false;
@@ -375,7 +380,7 @@ public final class UpgradeEngine {
             int change;
             try { change = Integer.parseInt(parts[2]); } catch (NumberFormatException invalid) { return false; }
             if (change != 5 && change != -5) return false;
-            int health = Math.clamp(bag.settings(upgrade).getIntOr("alchemy_health_" + row, 75) + change, 0, 100);
+            int health = Math.clamp(NbtAccess.getIntOr(bag.settings(upgrade), "alchemy_health_" + row, 75) + change, 0, 100);
             bag.updateSettings(upgrade, tag -> tag.putInt("alchemy_health_" + row, health));
             return true;
         }
@@ -383,11 +388,11 @@ public final class UpgradeEngine {
     }
 
     private static void toggle(BagInventory bag, InstalledUpgrade upgrade, String key, boolean initial) {
-        boolean next = !bag.settings(upgrade).getBooleanOr(key, initial);
+        boolean next = !NbtAccess.getBooleanOr(bag.settings(upgrade), key, initial);
         bag.updateSettings(upgrade, tag -> tag.putBoolean(key, next));
     }
     private static void cycle(BagInventory bag, InstalledUpgrade upgrade, String key, String initial, String... values) {
-        int index = Arrays.asList(values).indexOf(bag.settings(upgrade).getStringOr(key, initial));
+        int index = Arrays.asList(values).indexOf(NbtAccess.getStringOr(bag.settings(upgrade), key, initial));
         String next = values[(index + 1) % values.length];
         bag.updateSettings(upgrade, tag -> tag.putString(key, next));
     }

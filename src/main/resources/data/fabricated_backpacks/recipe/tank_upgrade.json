@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:bucket",
-    "T": "minecraft:copper_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:glass"
+    "M": {
+      "item": "minecraft:bucket"
+    },
+    "T": {
+      "item": "minecraft:copper_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:glass"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:tank_upgrade",

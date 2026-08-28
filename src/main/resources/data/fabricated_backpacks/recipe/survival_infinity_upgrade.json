@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:nether_star",
-    "T": "minecraft:netherite_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:diamond_block"
+    "M": {
+      "item": "minecraft:nether_star"
+    },
+    "T": {
+      "item": "minecraft:netherite_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:diamond_block"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:survival_infinity_upgrade",

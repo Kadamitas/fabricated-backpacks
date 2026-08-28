@@ -1,16 +1,12 @@
-# Building and testing
+# Building and testing the 1.21.1 port
 
-Target: **Minecraft 26.2, Fabric, Java 25**. The checked-in Gradle wrapper and
-`gradle.properties` define the toolchain and dependency versions.
+Target: **Minecraft 1.21.1, Fabric, Java 21**. The separate branch is
+`codex/minecraft-1.21.1-cobblemon`. The Gradle wrapper and `gradle.properties`
+define the exact versions. This build is not the existing published 26.2 alpha.
 
-This guide includes unreleased source changes. A local build may still have
-the `0.5.0-alpha` filename; it is not the immutable published `v0.5.0-alpha`
-download. Identify a tested build by its exact source and artifact hashes.
+## Build
 
-## Local build
-
-Install a Java 25 JDK and make it available to Gradle. On Windows, use
-PowerShell from the repository root:
+Install a Java 21 JDK. From the repository root in PowerShell:
 
 ```powershell
 java -version
@@ -18,221 +14,107 @@ java -version
 .\gradlew.bat build
 ```
 
-On systems with a POSIX shell, use `./gradlew` in place of `gradlew.bat`.
-Gradle may download the configured toolchain and dependencies on the first run.
-Do not point development runs at an existing personal world.
+On other systems, use `./gradlew`. Loom remaps the older game's Mojang-named
+source to its production namespace. Install only
+`build/libs/fabricated-backpacks-0.5.0-alpha+mc1.21.1.jar`, not a development or
+sources JAR. Fabric API is required separately; Energy API 4.1.0 is embedded.
+Do not use a 26.2 world, a personal instance or the 26.2 JAR for these checks.
 
-The main artifact is
-`build/libs/fabricated-backpacks-0.5.0-alpha.jar`. The adjacent sources JAR is
-for development and is not installed in Minecraft. The runtime JAR includes
-the configured Team Reborn Energy dependency; Fabric Loader and Fabric API
-remain instance dependencies.
+## Source and assets
 
-## Source layout
+Common/server code is under `src/main`, client code under `src/client`, unit
+tests under `src/test`, and the separate server test mod under `src/gametest`.
+Neither that test mod nor local evidence belongs in the production artifact.
 
-| Path | Purpose |
-| --- | --- |
-| `src/main/java` | Common/server rules, registries, storage, upgrades, menus and protocol |
-| `src/client/java` | Client screens, recipe browser, geometry and sound |
-| `src/main/resources` | Production metadata, generated assets, recipes and tags |
-| `src/test/java` | Unit, protocol and resource audits |
-| `src/gametest` | Separate server/client acceptance test mod and fixtures |
-| `tools` | Deterministic asset generation and standalone resource tests |
-
-Client-only classes must not be loaded by production server entry points.
-The GameTest mod and its fixtures must not appear in the production JAR.
-
-## Deterministic assets
-
-Python 3.10 or newer is sufficient; the asset tools use the standard library.
+Generated assets retain their original models and textures but use native
+1.21.1 resource formats. Edit the generators, not their generated outputs:
 
 ```powershell
-python tools/generate_assets.py
-python tools/generate_assets.py --check --review
-python tools/test_assets.py --minecraft-jar '<path to the exact Minecraft 26.2 client JAR>'
+python tools/generate_assets.py --check
+python tools/test_assets.py --minecraft-jar '<exact Minecraft 1.21.1 client JAR>'
 ```
 
-The exact game JAR check resolves vanilla recipe ingredients and model parents;
-use the matching 26.2 JAR, not a different version. Loom stores its downloaded
-game files in Gradle's cache.
+Loom's original downloaded client JAR is normally at
+`<Gradle user home>/caches/fabric-loom/1.21.1/minecraft-client.jar`.
+Review sheets are offline asset renders, not game screenshots.
 
-Edit the generator or its explicit language inputs, not generated files.
-Regenerate after changes to the upgrade catalog,
-`tools/assets/ui_strings.json`, `tools/assets/browser_strings.json` or
-`tools/assets/automation_strings.json`.
-The generated manifest records input and output hashes; a stale manifest is a
-test failure, not something to bypass.
+## Unit and server checks
 
-Offline review sheets are written to `build/reports/asset-audit`. Their contents
-are rendered from production cuboids and textures. They are not in-game
-screenshots. Geometry, UVs and tint contracts are documented in
-[Asset pipeline](../tools/ASSET_PIPELINE.md).
-
-## Verification layers
-
-Run each layer explicitly and inspect its output. Avoid simultaneous Gradle
-runs against the same checkout or shared development world.
+Run one Gradle invocation at a time. Start the verification epoch only after
+source, build, tool and README/changelog edits are complete. Fresh checks must
+run without cached task outputs:
 
 ```powershell
-.\gradlew.bat test
-.\gradlew.bat runGameTest
-.\gradlew.bat runClientGameTest
-.\gradlew.bat runClientGameTest -PclientScenario=restart
-.\tools\run-multiplayer.ps1
-.\gradlew.bat build
+python tools/test_verify_evidence.py
+python tools/test_verify_compatibility.py
+python tools/verify_compatibility.py begin
+.\gradlew.bat --no-daemon --console=plain --no-build-cache --rerun-tasks test runGameTest build
+python tools/verify_compatibility.py check
 ```
 
-Stop and investigate a failing command before treating later output as a
-release result. The unit-test HTML/XML reports are under
-`build/reports/tests/test` and `build/test-results/test`. Development game
-logs and screenshots live under the configured Loom/Fabric run directories;
-acceptance captures may also be collected under `build/client-evidence`.
-The full client test archives its closed world and expectations under
-`.codex-local/client-evidence`. The `restart` scenario must run in a subsequent
-JVM: it verifies that archived world, equipment, stored items and bookmarks.
-Loom clears the normal test run directory before a new client run, so preserve
-failure logs and screenshots before retrying.
-
-For a focused worn-model iteration, use
-`.\gradlew.bat runClientGameTest -PclientScenario=appearance`. It creates a fresh
-world and records actual rear, armor, dye, and crouch views. This focused run
-does not produce a full-client passing receipt and cannot replace the complete
-client or multiplayer scenarios.
-
-For a conduit/engine change, use the focused automation paths instead of
-walking through unrelated backpack screens:
+For the exact official Cobblemon 1.7.3 Fabric runtime:
 
 ```powershell
-.\gradlew.bat runClientGameTest -PclientScenario=automation
-.\gradlew.bat runClientGameTest -PclientScenario=automation_restart
-.\tools\run-multiplayer.ps1 -Scenario automation
+python tools/verify_compatibility.py begin --with-cobblemon
+.\gradlew.bat --no-daemon --console=plain --no-build-cache --rerun-tasks test runGameTest build -PwithCobblemon=true
+python tools/verify_compatibility.py check --with-cobblemon
 ```
 
-These exercise actual conduit placement, hand mining, physical interface and
-wrench input, machine-side controls, item/fluid/energy transfers, persistence
-and two real TCP clients. They write separate automation receipts and do not
-claim the full backpack scenario ran. See the
-[automation verification record](AUTOMATION_VERIFICATION.md) for executed results.
+The flag adds the normal external mod at runtime and registers two additional
+server tests against its real items. These tests are absent from the base run;
+when registered they fail if Cobblemon is missing, rather than silently skip.
+The build never includes Cobblemon in our distributable.
+Loom strips nested libraries from development dependencies, so this flag also
+adds the exact Kotlin runtime bundled by Cobblemon to the development classpath.
+It also applies the Kotlin Gradle plugin so Loom remaps Cobblemon's Kotlin
+metadata alongside its bytecode. This is a build tool, not a new dependency of
+our Java mod. Normal installed clients use Cobblemon's own nested runtime.
+If a local cache already contains a Cobblemon JAR remapped before this build
+configuration, run once with `--refresh-dependencies` to rebuild that cache.
 
-### Optional JEI development and tests
+Inspect `build/test-results/test`, `build/gametest-results.xml` and
+`build/verification/compatibility-runtime.json`. The runtime witness records
+actual loaded versions and registry presence; it is not itself a passing test.
+The strict checker also requires complete source-derived test discovery,
+unchanged inputs, fresh successful reports and a clean remapped artifact.
+`compatibility-start.json` and `compatibility.json` are separate from historical
+26.2 evidence and have unit/server scope only.
 
-The adapter compiles against JEI's public Fabric API pinned to **30.28.0.191**
-for Minecraft **26.2**. JEI is not embedded in the main JAR and is absent from
-default development/test runtimes. The built-in item/fluid picker works without
-it. Opt in to the actual JEI runtime for a development session or its focused
-drag-and-drop scenario:
+## Installed-client acceptance
+
+The 26.2 Fabric client GameTest API is unavailable on 1.21.1. Those source files
+are explicitly excluded from this test mod. `runClientGameTest` fails clearly;
+it does not execute an empty suite. The 26.2 multiplayer launcher likewise is
+not a 1.21.1 acceptance harness.
+
+An isolated installed-JAR client can be started when manual checks are intended:
 
 ```powershell
-.\gradlew.bat runClient -PwithJei=true
-.\gradlew.bat runClientGameTest -PclientScenario=automation_jei -PwithJei=true
+.\gradlew.bat runProductionClient --rerun -PwithCobblemon=true -PwithJei=true
 ```
 
-Run the normal `automation` scenario without that flag as well. The optional
-scenario targets real JEI search and item/fluid/container ghost dragging, with
-server filter updates and unchanged inventory. Its separate
-`automation-jei-pass.json` receipt is valid only after successful execution;
-listing the command here is not a pass claim or a replacement for the native
-client, restart or multiplayer checks. For a normal installed client, install
-the compatible JEI mod separately only if wanted.
+This loads the remapped main artifact and optional real dependencies, not the
+test mod. It uses `.codex-local/manual-client` and does not select a personal
+world. `--rerun` forces the launch task itself; confirm a new Minecraft PID and
+fresh log. A Gradle success alone is not evidence that Minecraft opened.
 
-### Multiplayer and evidence scope
+Create a new world through the game's menus. Check B while worn, the readable
+backpack/JEI screens and ghost filters, rear/side worn models with armor and
+crouching, Pokémon riding, aimed single-strand conduit mining, and exact item,
+fluid and energy movement between backpacks. Then test saving/reopening and a
+second real network client. Record observations only after they occur.
 
-The PowerShell multiplayer launcher prepares both launch commands in one
-Gradle invocation, then starts two separate Minecraft JVMs with different
-usernames and run directories. It requires both processes to finish
-successfully and matching reports from the real TCP session. A server player
-fixture is not a substitute for that check. `-PrepareOnly` validates the launch
-commands without starting Minecraft and never creates a passing result.
+B remains the open-backpack key. V opens the built-in browser to avoid
+Cobblemon's O key. All registered actions can be rebound in Controls; existing
+saved choices are not overwritten.
 
-| Layer | What it establishes | What it does not establish |
-| --- | --- | --- |
-| Unit/resource tests | Exercised rules, protocol bounds, generated-file hashes and resource structure | Actual GUI or dedicated-server behavior |
-| Server GameTests | Exercised Minecraft inventory, recipe, entity and transfer behavior | Human client interaction or a second real client |
-| Client GameTests | The actual client actions and frames captured by that run | Every upgrade combination or multiplayer scenario |
-| Manual acceptance | The specifically recorded observations | Unrecorded features or blanket compatibility |
-| Profiling | Measurements for a documented workload and environment | Superiority to other software without a fair comparison |
+## Publication boundary
 
-Server connection fixtures are identified as fixtures in the tests. A fixture
-receiving a packet is not evidence that a real client rendered the result.
-Likewise, opening a screen successfully does not establish inventory
-conservation or persistence.
+The compatibility checker deliberately rejects release mode. The older
+`verify_evidence.py --release` gate and historical 26.2 receipts cannot certify
+this target. `releaseBundle` is blocked until target-specific rendered-client,
+restart, multiplayer and installed-artifact acceptance are implemented and
+observed. Do not create a replacement pass JSON or reuse another build's images.
 
-Maintain the build's [Verification record](VERIFICATION.md) with commands,
-toolchain, exact artifact hash, discovered/executed/skipped test counts,
-failures, screenshot paths and remaining acceptance work. Do not replace it
-with a cumulative pass count from earlier edits.
-
-## Packaging and release
-
-After source, tools, CI, README and changelog files are final, start a fresh
-verification record.
-Then rerun all required checks; cached reports from an earlier edit do not count:
-
-The evidence checker requires **Python 3.11 or newer** and uses only the standard
-library. The asset generator itself also supports Python 3.10.
-
-```powershell
-python tools/verify_evidence.py begin
-.\gradlew.bat test build --rerun-tasks
-.\gradlew.bat runGameTest
-.\gradlew.bat runClientGameTest
-.\gradlew.bat runClientGameTest -PclientScenario=restart
-.\tools\run-multiplayer.ps1
-python tools/verify_evidence.py check
-```
-
-Inspect the built JAR in a separate Minecraft instance with a newly created
-world and no development test mod. Record the exact artifact hash, specific
-observations and real screenshots in `build/verification/manual.json`.
-That record is written only after the observed checks, never before them.
-
-Its required fields are `passed` (true only after completion),
-`artifact_sha256` (the main JAR's lowercase SHA-256), `observations` (a nonempty
-list of specific observed behaviors) and `screenshots` (a nonempty list of
-distinct project-relative PNG paths, for example
-`.codex-local/manual-evidence/01-new-world.png`). Absolute paths and `..` are
-rejected. Capture the actual game window after verification starts; do not use
-an asset render or an earlier build's screenshot. Record any failed observation
-as a failure and resolve it before setting `passed` to true.
-
-Use the task-specific `--rerun` option for every manual launch and restart:
-
-```powershell
-.\gradlew.bat runProductionClient --rerun
-```
-
-Without this option, Gradle can mark `runProductionClient` as `UP-TO-DATE` and
-finish without starting a JVM. `--rerun` forces the launch task to execute
-without forcing its build dependencies to rerun; do not substitute the global
-`--rerun-tasks` option. Confirm a new Minecraft process/PID and fresh startup
-log for the intended JAR. A successful Gradle exit alone is not a launch check.
-
-The task opens an isolated instance under `.codex-local/manual-client`.
-It loads the built main JAR and the declared
-Fabric API JAR using Loom's
-[production client task](https://docs.fabricmc.net/develop/loom/production-run-tasks).
-It does not include this project's test mod or substitute compiled source
-directories for the distributable. Create a fresh world there through the
-normal game menus, exercise the features and exit the game normally.
-
-Collect the release artifacts after the recorded checks pass:
-
-```powershell
-.\gradlew.bat releaseBundle
-```
-
-This task writes main/sources JARs and SHA-256 files under
-`release/0.5.0-alpha`. It runs `verifyReleaseEvidence`, which requires fresh,
-nonempty passing unit/server reports, unchanged source inputs, separate-JVM
-restart evidence, both multiplayer process results and the installed-JAR
-observations. It does not run those client checks for you. Failed, skipped,
-missing or stale evidence blocks the bundle.
-
-Inspect the final JAR contents, metadata and hash. Only production code,
-production resources and declared bundled dependencies belong in it. Test
-fixtures, local evidence, private planning files and development caches must
-remain outside the distributable.
-
-Publishing is a separate step. A local artifact, successful upload request or
-pending moderation state is not confirmation that a release is publicly
-available.
+A pushed development branch or CI artifact is not a published playable release.
+The original immutable 26.2 alpha must not be overwritten with this port.

@@ -4,7 +4,7 @@ import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitKind;
 import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
+import net.fabricmc.fabric.api.transfer.v1.item.InventoryStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
@@ -33,7 +33,7 @@ import java.util.List;
 final class SteamEngineStorage {
     static final FluidVariant WATER = FluidVariant.of(Fluids.WATER);
     private final SteamEngineBlockEntity engine;
-    private final ContainerStorage internal;
+    private final InventoryStorage internal;
     private final List<SlottedStorage<ItemVariant>> itemPorts;
     private final List<SingleSlotStorage<FluidVariant>> waterPorts;
     private final List<EnergyStorage> energyPorts;
@@ -42,7 +42,7 @@ final class SteamEngineStorage {
     SteamEngineStorage(SteamEngineBlockEntity engine) {
         this.engine = engine;
         // Internal recipe remainders must be able to enter slots that reject external insertion.
-        internal = ContainerStorage.of(new Container() {
+        internal = InventoryStorage.of(new Container() {
             @Override public int getContainerSize() { return SteamEngineBlockEntity.SLOT_COUNT; }
             @Override public boolean isEmpty() { return engine.isEmpty(); }
             @Override public ItemStack getItem(int slot) { return engine.getItem(slot); }

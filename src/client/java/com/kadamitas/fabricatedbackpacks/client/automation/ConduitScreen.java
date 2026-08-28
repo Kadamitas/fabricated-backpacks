@@ -12,20 +12,16 @@ import com.kadamitas.fabricatedbackpacks.client.screen.BackpackIconButton;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackIconButton.Icon;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackStyle;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.input.InputWithModifiers;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -50,7 +46,7 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
     private ConduitKind selectedFilter;
     private BackpackIconButton filterMode;
 
-    public ConduitScreen(ConduitMenu menu, Inventory inventory, Component title) { super(menu, inventory, title, 176, 140); }
+    public ConduitScreen(ConduitMenu menu, Inventory inventory, Component title) { super(menu, inventory, title); imageWidth = 176; imageHeight = 140; }
     @Override protected void init() {
         super.init();
         leftPos = (width - MAIN_WIDTH - (selectedFilter == null ? 0 : FILTER_WIDTH - 2)) / 2;
@@ -132,14 +128,14 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
     }
 
     /** Optional ingredient-browser integrations submit only an ID; the server owns the mutation. */
-    public boolean acceptItem(int slot, Identifier id) {
+    public boolean acceptItem(int slot, ResourceLocation id) {
         if (id == null || selectedFilter != ConduitKind.ITEM || !validContext()) return false;
         Item item = BuiltInRegistries.ITEM.getOptional(id).orElse(null);
         if (item == null || item == Items.AIR || !item.isEnabled(minecraft.level.enabledFeatures())) return false;
         return send(ConduitFilterAction.Operation.SET_ENTRY, slot, Optional.of(id));
     }
 
-    public boolean acceptFluid(int slot, Identifier id) {
+    public boolean acceptFluid(int slot, ResourceLocation id) {
         if (id == null || selectedFilter != ConduitKind.FLUID || !validContext()) return false;
         return FluidPresentation.canonical(id).map(canonical ->
                 send(ConduitFilterAction.Operation.SET_ENTRY, slot, Optional.of(canonical))).orElse(false);
@@ -151,10 +147,10 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
     }
 
     private boolean panelVisible() {
-        return selectedFilter != null && validContext() && minecraft.gui.screen() == this && menu.installed(selectedFilter);
+        return selectedFilter != null && validContext() && minecraft.screen == this && menu.installed(selectedFilter);
     }
 
-    private boolean send(ConduitFilterAction.Operation operation, int index, Optional<Identifier> resource) {
+    private boolean send(ConduitFilterAction.Operation operation, int index, Optional<ResourceLocation> resource) {
         if (!validContext() || selectedFilter == null || selectedFilter == ConduitKind.ENERGY || !menu.installed(selectedFilter)
                 || !ClientPlayNetworking.canSend(ConduitFilterAction.TYPE)) return false;
         int bound = operation == ConduitFilterAction.Operation.SET_MODE ? ConduitFilterMode.values().length : ConduitFilter.SLOT_COUNT;
@@ -180,10 +176,10 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
     private int filterX() { return leftPos + MAIN_WIDTH - 2; }
     private int filterY() { return topPos + 44; }
 
-    @Override protected boolean hasClickedOutside(double mouseX, double mouseY, int left, int top) {
+    @Override protected boolean hasClickedOutside(double mouseX, double mouseY, int left, int top, int button) {
         boolean overFilter = selectedFilter != null && mouseX >= filterX() && mouseX < filterX() + FILTER_WIDTH
                 && mouseY >= filterY() && mouseY < filterY() + FILTER_HEIGHT;
-        return !overFilter && super.hasClickedOutside(mouseX, mouseY, left, top);
+        return !overFilter && super.hasClickedOutside(mouseX, mouseY, left, top, button);
     }
 
     private Component filterModeLabel() {
@@ -198,8 +194,11 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
         return text("lane_redstone", kindName(kind), faceName(menu.selectedFace()),
                 text("redstone." + menu.redstone(kind, menu.selectedFace()).name().toLowerCase(Locale.ROOT)));
     }
-    @Override public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-        super.extractBackground(g, mouseX, mouseY, delta);
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        renderTooltip(graphics, mouseX, mouseY);
+    }
+    @Override protected void renderBg(GuiGraphics g, float delta, int mouseX, int mouseY) {
         BackpackStyle.frame(g, leftPos, topPos, MAIN_WIDTH, imageHeight, BackpackStyle.Surface.BODY);
         BackpackStyle.frame(g, leftPos + 3, topPos + 3, MAIN_WIDTH - 6, 13, BackpackStyle.Surface.TITLE);
         // A descriptive badge, not a button: another face requires another physical interface hit.
@@ -210,10 +209,10 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
         for (ConduitKind kind : ConduitKind.values()) {
             int y = 54 + kind.ordinal() * 26;
             BackpackStyle.frame(g, leftPos + 9, topPos + y, MAIN_WIDTH - 18, 24, BackpackStyle.Surface.PANEL);
-            g.fakeItem(AutomationRegistry.conduit(kind).getDefaultInstance(), leftPos + 15, topPos + y + 4);
+            g.renderFakeItem(AutomationRegistry.conduit(kind).getDefaultInstance(), leftPos + 15, topPos + y + 4);
             String count = menu.installed(kind) ? Integer.toString(menu.networkSize(kind)) : "-";
             int color = menu.oversized(kind) ? 0xFF9B251D : BackpackStyle.PANEL_TEXT;
-            g.text(font, count, leftPos + 39, topPos + y + 8, color, false);
+            g.drawString(font, count, leftPos + 39, topPos + y + 8, color, false);
             if (isHovering(12, y + 2, kind == ConduitKind.ENERGY ? 94 : 60, 20, mouseX, mouseY)) {
                 Component label = !menu.installed(kind) ? text("lane_mode", kindName(kind), faceName(menu.selectedFace()), text("absent"))
                         : menu.oversized(kind) ? text("oversized", kindName(kind))
@@ -224,12 +223,12 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
         if (selectedFilter != null) {
             BackpackStyle.frame(g, filterX(), filterY(), FILTER_WIDTH, FILTER_HEIGHT, BackpackStyle.Surface.PANEL);
             BackpackStyle.frame(g, filterX() + 3, filterY() + 3, FILTER_WIDTH - 6, 20, BackpackStyle.Surface.TITLE);
-            g.fakeItem(AutomationRegistry.conduit(selectedFilter).getDefaultInstance(), filterX() + 11, filterY() + 6);
+            g.renderFakeItem(AutomationRegistry.conduit(selectedFilter).getDefaultInstance(), filterX() + 11, filterY() + 6);
         }
         if (isHovering(3, 3, MAIN_WIDTH - 6, 13, mouseX, mouseY)) setWrappedTooltip(g, text("conduit_help"), mouseX, mouseY);
     }
-    @Override protected void extractLabels(GuiGraphicsExtractor g, int mouseX, int mouseY) {
-        g.text(font, title, 8, 6, BackpackStyle.TITLE_TEXT, false);
+    @Override protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
+        g.drawString(font, title, 8, 6, BackpackStyle.TITLE_TEXT, false);
     }
 
     private final class GhostButton extends AbstractButton {
@@ -254,39 +253,43 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
             setTooltip(Tooltip.create(help));
         }
 
-        @Override protected boolean isValidClickButton(MouseButtonInfo button) {
-            return button.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT || button.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT;
+        @Override protected boolean isValidClickButton(int button) {
+            return button == GLFW.GLFW_MOUSE_BUTTON_LEFT || button == GLFW.GLFW_MOUSE_BUTTON_RIGHT;
         }
 
-        @Override public void onPress(InputWithModifiers input) {
-            if (input instanceof MouseButtonEvent mouse && mouse.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT)
-                send(ConduitFilterAction.Operation.CLEAR_ENTRY, slot, Optional.empty());
-            else openPicker(slot);
+        @Override public void onPress() { openPicker(slot); }
+
+        @Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            if (button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) return super.mouseClicked(mouseX, mouseY, button);
+            if (!visible || !active || !clicked(mouseX, mouseY)) return false;
+            playDownSound(minecraft.getSoundManager());
+            send(ConduitFilterAction.Operation.CLEAR_ENTRY, slot, Optional.empty());
+            return true;
         }
 
-        @Override public boolean keyPressed(KeyEvent event) {
-            if (event.key() == GLFW.GLFW_KEY_DELETE || event.key() == GLFW.GLFW_KEY_BACKSPACE) {
+        @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            if (keyCode == GLFW.GLFW_KEY_DELETE || keyCode == GLFW.GLFW_KEY_BACKSPACE) {
                 send(ConduitFilterAction.Operation.CLEAR_ENTRY, slot, Optional.empty());
                 return true;
             }
-            return super.keyPressed(event);
+            return super.keyPressed(keyCode, scanCode, modifiers);
         }
 
-        @Override protected void extractContents(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+        @Override protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float delta) {
             BackpackStyle.slot(g, getX(), getY(), true);
-            var id = selectedFilter == null ? Optional.<Identifier>empty() : menu.filter(selectedFilter).entry(slot);
+            var id = selectedFilter == null ? Optional.<ResourceLocation>empty() : menu.filter(selectedFilter).entry(slot);
             g.enableScissor(getX(), getY(), getRight(), getBottom());
             try {
                 if (id.isPresent()) {
                     if (selectedFilter == ConduitKind.FLUID) FluidPresentation.draw(g, id.get(), getX(), getY());
-                    else g.fakeItem(BuiltInRegistries.ITEM.getOptional(id.get()).map(Item::getDefaultInstance)
+                    else g.renderFakeItem(BuiltInRegistries.ITEM.getOptional(id.get()).map(Item::getDefaultInstance)
                             .orElseGet(Items.BARRIER::getDefaultInstance), getX(), getY());
                 } else {
                     g.fill(getX() + 7, getY() + 4, getX() + 9, getY() + 12, 0xFFC9B990);
                     g.fill(getX() + 4, getY() + 7, getX() + 12, getY() + 9, 0xFFC9B990);
                 }
             } finally { g.disableScissor(); }
-            if (isHoveredOrFocused()) g.outline(getX() - 1, getY() - 1, 18, 18, 0xFFFFD375);
+            if (isHoveredOrFocused()) g.renderOutline(getX() - 1, getY() - 1, 18, 18, 0xFFFFD375);
         }
 
         @Override protected void updateWidgetNarration(NarrationElementOutput narration) { defaultButtonNarrationText(narration); }
@@ -297,8 +300,8 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
     }
     private static Component faceName(Direction face) { return text("face." + face.getName()); }
 
-    private void setWrappedTooltip(GuiGraphicsExtractor graphics, Component message, int mouseX, int mouseY) {
+    private void setWrappedTooltip(GuiGraphics graphics, Component message, int mouseX, int mouseY) {
         int maxWidth = Math.max(1, Math.min(260, width - 24));
-        graphics.setTooltipForNextFrame(font, font.split(message, maxWidth), mouseX, mouseY);
+        com.kadamitas.fabricatedbackpacks.client.screen.ClientText.tooltip(font, font.split(message, maxWidth), mouseX, mouseY);
     }
 }

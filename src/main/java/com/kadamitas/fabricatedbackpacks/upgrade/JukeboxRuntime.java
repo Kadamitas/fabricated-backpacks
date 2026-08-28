@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.upgrade;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.domain.Playlist;
 import com.kadamitas.fabricatedbackpacks.network.JukeboxAudio;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
@@ -72,13 +73,13 @@ public final class JukeboxRuntime {
             this.position = position.immutable();
             entityId = carrier == null ? -1 : carrier.getId();
             CompoundTag state = bag.settings(upgrade);
-            upgradeIdentity = state.getStringOr("jukebox_identity", UUID.randomUUID().toString());
+            upgradeIdentity = NbtAccess.getStringOr(state, "jukebox_identity", UUID.randomUUID().toString());
             soundIdentity = bag.identity() + ":" + upgrade.slot() + ":" + upgradeIdentity;
             random = new Random(soundIdentity.hashCode() ^ level.getGameTime());
             Container inventory = bag.upgradeInventory(upgrade);
             discs = discSnapshot(inventory);
             playlist = Playlist.stopped(discs.size(), occupied(discs),
-                    state.getBooleanOr("shuffle", false), repeat(state));
+                    NbtAccess.getBooleanOr(state, "shuffle", false), repeat(state));
             lastSeen = level.getServer().getTickCount();
             bag.updateSettings(upgrade, tag -> tag.putString("jukebox_identity", upgradeIdentity));
             persist(this);
@@ -95,7 +96,7 @@ public final class JukeboxRuntime {
             trackingHooksRegistered = true;
         }
     }
-    public static boolean isDisc(ItemStack item) { return !item.isEmpty() && JukeboxSong.fromStack(item).isPresent(); }
+    public static boolean isDisc(ItemStack item) { return !item.isEmpty() && item.has(net.minecraft.core.component.DataComponents.JUKEBOX_PLAYABLE); }
 
     public static void tick(BagInventory bag, InstalledUpgrade upgrade, ServerLevel level, BlockPos position, LivingEntity carrier) {
         Session session = session(bag, upgrade, level, position, carrier);
@@ -141,7 +142,7 @@ public final class JukeboxRuntime {
     private static Session session(BagInventory bag, InstalledUpgrade upgrade, ServerLevel level, BlockPos position, LivingEntity carrier) {
         Key key = new Key(level.getServer(), bag.identity(), upgrade.slot());
         Session old = SESSIONS.get(key);
-        String id = bag.settings(upgrade).getStringOr("jukebox_identity", "");
+        String id = NbtAccess.getStringOr(bag.settings(upgrade), "jukebox_identity", "");
         int carrierId = carrier == null ? -1 : carrier.getId();
         if (old != null && (old.level != level || !old.upgradeIdentity.equals(id)
                 || old.entityId != carrierId || (carrierId == -1 && !old.position.equals(position)))) {
@@ -167,7 +168,7 @@ public final class JukeboxRuntime {
     }
 
     private static Playlist.Repeat repeat(CompoundTag state) {
-        try { return Playlist.Repeat.valueOf(state.getStringOr("repeat", "OFF")); }
+        try { return Playlist.Repeat.valueOf(NbtAccess.getStringOr(state, "repeat", "OFF")); }
         catch (IllegalArgumentException invalid) { return Playlist.Repeat.OFF; }
     }
 
@@ -216,9 +217,9 @@ public final class JukeboxRuntime {
 
     /** Item defaults may hold a bootstrap registry reference rather than this world's datapack value. */
     private static Optional<Holder<JukeboxSong>> currentSong(Session session) {
-        return JukeboxSong.fromStack(session.discs.get(session.playlist.activeSlot()))
+        return JukeboxSong.fromStack(session.level.registryAccess(), session.discs.get(session.playlist.activeSlot()))
                 .flatMap(Holder::unwrapKey).filter(key -> key.isFor(Registries.JUKEBOX_SONG))
-                .filter(key -> key.identifier().toString().length() <= JukeboxAudio.MAX_SONG_KEY_LENGTH)
+                .filter(key -> key.location().toString().length() <= JukeboxAudio.MAX_SONG_KEY_LENGTH)
                 .flatMap(key -> session.level.registryAccess().lookup(Registries.JUKEBOX_SONG)
                         .flatMap(registry -> registry.get(key)))
                 .filter(holder -> Float.isFinite(holder.value().lengthInSeconds()) && holder.value().lengthInSeconds() > 0)
@@ -303,7 +304,7 @@ public final class JukeboxRuntime {
         Session removed = SESSIONS.remove(new Key(server, bag.identity(), slot));
         if (removed != null) {
             InstalledUpgrade current = bag.installedUpgrades().stream().filter(upgrade -> upgrade.slot() == slot
-                    && bag.settings(upgrade).getStringOr("jukebox_identity", "").equals(removed.upgradeIdentity)).findFirst().orElse(null);
+                    && NbtAccess.getStringOr(bag.settings(upgrade), "jukebox_identity", "").equals(removed.upgradeIdentity)).findFirst().orElse(null);
             if (current != null) { removed.bag = bag; removed.upgrade = current; }
             stop(removed, current != null);
         }

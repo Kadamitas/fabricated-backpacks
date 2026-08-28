@@ -19,11 +19,11 @@ public final class ConduitMining {
 
     /** PASS retains vanilla final-lane removal, including water restoration and ordinary block loot. */
     public static Result complete(ServerPlayer player, BlockPos position) {
-        var level = player.level();
+        var level = player.serverLevel();
         var state = level.getBlockState(position);
         if (!(state.getBlock() instanceof ConduitBundleBlock)) return Result.PASS;
         if (!(level.getBlockEntity(position) instanceof ConduitBundleBlockEntity bundle)
-                || !bundle.stillValid(player) || !player.isWithinBlockInteractionRange(position, 0)
+                || !bundle.stillValid(player) || !player.canInteractWithBlock(position, 0)
                 || level.getServer().isUnderSpawnProtection(level, position, player)) {
             resync(player, position);
             return Result.REJECTED;
@@ -48,7 +48,7 @@ public final class ConduitMining {
         // A stale hit must not remove a different final lane either. Only a current surface reaches vanilla.
         if (Integer.bitCount(bundle.installedMask()) == 1) return Result.PASS;
 
-        boolean drops = !player.preventsBlockDrops();
+        boolean drops = !player.isCreative();
         boolean correctTool = player.hasCorrectToolForDrops(state);
         ItemStack removed = bundle.remove(part.kind());
         if (removed.isEmpty()) {
@@ -69,7 +69,7 @@ public final class ConduitMining {
     }
 
     private static void resync(ServerPlayer player, BlockPos position) {
-        var level = player.level();
+        var level = player.serverLevel();
         level.destroyBlockProgress(player.getId(), position, -1);
         player.connection.send(new ClientboundBlockUpdatePacket(level, position));
         var entity = level.getBlockEntity(position);

@@ -11,7 +11,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -29,7 +29,7 @@ import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests
 /** Optional test plugin observes JEI's public API; acceptance actions use native keys and mouse drags. */
 public final class JeiConduitClientAcceptance implements IModPlugin {
     private static volatile IJeiRuntime runtime;
-    @Override public Identifier getPluginUid() { return Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "jei_acceptance"); }
+    @Override public ResourceLocation getPluginUid() { return ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "jei_acceptance"); }
     @Override public void onRuntimeAvailable(IJeiRuntime available) { runtime = available; }
     @Override public void onRuntimeUnavailable() { runtime = null; }
 
@@ -150,6 +150,6 @@ public final class JeiConduitClientAcceptance implements IModPlugin {
     }
     private static void await(ClientGameTestContext context, ConduitKind kind, int slot, String id) {
         context.waitFor(client -> client.gui.screen() instanceof ConduitScreen screen
-                && screen.getMenu().filter(kind).entry(slot).filter(Identifier.withDefaultNamespace(id)::equals).isPresent());
+                && screen.getMenu().filter(kind).entry(slot).filter(ResourceLocation.withDefaultNamespace(id)::equals).isPresent());
     }
 }

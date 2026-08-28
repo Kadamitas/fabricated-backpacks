@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:furnace",
-    "T": "minecraft:copper_ingot",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:coal"
+    "M": {
+      "item": "minecraft:furnace"
+    },
+    "T": {
+      "item": "minecraft:copper_ingot"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:coal"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:smelting_upgrade",

@@ -1,5 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.settings;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
+
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
@@ -12,7 +14,7 @@ import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
+import com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate;
 import net.minecraft.world.item.component.CustomData;
 
 import java.util.Arrays;
@@ -63,14 +65,14 @@ public record SettingsTemplate(CustomData main, InventorySnapshot memory, List<U
 
     public void apply(BagInventory bag) {
         CompoundTag safe = select(main.copyTag(), MAIN_KEYS);
-        int[] excluded = Arrays.stream(safe.getIntArray("no_sort").orElseGet(() -> new int[0]))
+        int[] excluded = Arrays.stream(NbtAccess.getIntArray(safe, "no_sort").orElseGet(() -> new int[0]))
                 .filter(slot -> slot >= 0 && slot < bag.getContainerSize()).distinct().sorted().toArray();
         safe.putIntArray("no_sort", excluded);
-        int display = safe.getIntOr("display_slot", -1);
+        int display = NbtAccess.getIntOr(safe, "display_slot", -1);
         safe.putInt("display_slot", display >= 0 && display < bag.getContainerSize() ? display : -1);
-        safe.putInt("display_rotation", Math.floorMod(safe.getIntOr("display_rotation", 0), 360) / 45 * 45);
-        safe.putInt("display_depth", Math.clamp(safe.getIntOr("display_depth", 0), -16, 16));
-        bag.updateSettings(tag -> { MAIN_KEYS.forEach(tag::remove); safe.entrySet().forEach(entry -> tag.put(entry.getKey(), entry.getValue().copy())); });
+        safe.putInt("display_rotation", Math.floorMod(NbtAccess.getIntOr(safe, "display_rotation", 0), 360) / 45 * 45);
+        safe.putInt("display_depth", Math.clamp(NbtAccess.getIntOr(safe, "display_depth", 0), -16, 16));
+        bag.updateSettings(tag -> { MAIN_KEYS.forEach(tag::remove); safe.getAllKeys().forEach(key -> tag.put(key, safe.get(key).copy())); });
         var memoryEntries = memory.entries().stream().filter(entry -> entry.slot() < bag.getContainerSize()
                 && (bag.getItem(entry.slot()).isEmpty() || ItemStack.isSameItemSameComponents(bag.getItem(entry.slot()), entry.create())))
                 .map(entry -> new InventorySnapshot.Entry(entry.slot(), entry.item().withCount(1), 1)).toList();
@@ -78,12 +80,12 @@ public record SettingsTemplate(CustomData main, InventorySnapshot memory, List<U
         for (Upgrade saved : upgrades) bag.installedUpgrades().stream().filter(installed -> installed.slot() == saved.slot()
                 && installed.kind().family().equals(saved.kind().family())).findFirst().ifPresent(installed -> {
             int targetInputs = bag.cookingInputFilters(installed), targetFuel = bag.cookingFuelFilters(installed);
-            int sourceInputs = Math.clamp(saved.settings().copyTag().getIntOr("cooking_input_filter_slots", 8), 1, 32);
-            int sourceFuel = Math.clamp(saved.settings().copyTag().getIntOr("cooking_fuel_filter_slots", 4), 1, 32);
+            int sourceInputs = Math.clamp(NbtAccess.getIntOr(saved.settings().copyTag(), "cooking_input_filter_slots", 8), 1, 32);
+            int sourceFuel = Math.clamp(NbtAccess.getIntOr(saved.settings().copyTag(), "cooking_fuel_filter_slots", 4), 1, 32);
             CompoundTag settings = selectUpgrade(saved.settings().copyTag());
             bag.updateSettings(installed, tag -> {
-                selectUpgrade(tag).keySet().forEach(tag::remove);
-                settings.entrySet().forEach(entry -> tag.put(entry.getKey(), entry.getValue().copy()));
+                selectUpgrade(tag).getAllKeys().forEach(tag::remove);
+                settings.getAllKeys().forEach(key -> tag.put(key, settings.get(key).copy()));
             });
             boolean cooking = automaticCooking(installed.kind());
             var filters = saved.filters().entries().stream().filter(entry -> !cooking
@@ -113,8 +115,8 @@ public record SettingsTemplate(CustomData main, InventorySnapshot memory, List<U
     }
     private static CompoundTag selectUpgrade(CompoundTag source) {
         CompoundTag result = select(source, UPGRADE_KEYS);
-        source.entrySet().stream().filter(entry -> entry.getKey().matches("(refill_target|alchemy_condition|alchemy_health)_[0-9]{1,2}"))
-                .forEach(entry -> result.put(entry.getKey(), entry.getValue().copy()));
+        source.getAllKeys().stream().filter(key -> key.matches("(refill_target|alchemy_condition|alchemy_health)_[0-9]{1,2}"))
+                .forEach(key -> result.put(key, source.get(key).copy()));
         return result;
     }
     public record Upgrade(int slot, UpgradeKind kind, CustomData settings, InventorySnapshot filters, List<FluidVariant> fluidFilters) {

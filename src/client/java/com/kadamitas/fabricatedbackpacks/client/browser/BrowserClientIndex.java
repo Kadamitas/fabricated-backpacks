@@ -5,18 +5,10 @@ import com.kadamitas.fabricatedbackpacks.browser.BrowserRecipeEntry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.context.ContextMap;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.display.FurnaceRecipeDisplay;
-import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
-import net.minecraft.world.item.crafting.display.ShapelessCraftingRecipeDisplay;
-import net.minecraft.world.item.crafting.display.SlotDisplay;
-import net.minecraft.world.item.crafting.display.SlotDisplayContext;
-import net.minecraft.world.item.crafting.display.SmithingRecipeDisplay;
-import net.minecraft.world.item.crafting.display.StonecutterRecipeDisplay;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,14 +24,12 @@ final class BrowserClientIndex {
     private static final Logger LOGGER = LoggerFactory.getLogger("fabricated_backpacks/browser");
     private static final long TICK_BUDGET_NANOS = 6_000_000;
     private final List<BrowserItem> items = new ArrayList<>();
-    private final Map<Identifier, BrowserItem> itemsById = new HashMap<>();
-    private final Map<Identifier, List<BrowserRecipeView>> recipesByResult = new HashMap<>();
-    private final Map<Identifier, List<BrowserRecipeView>> recipesByInput = new HashMap<>();
+    private final Map<ResourceLocation, BrowserItem> itemsById = new HashMap<>();
+    private final Map<ResourceLocation, List<BrowserRecipeView>> recipesByResult = new HashMap<>();
+    private final Map<ResourceLocation, List<BrowserRecipeView>> recipesByInput = new HashMap<>();
     private final List<BrowserRecipeView> recipes = new ArrayList<>();
-    private final Map<SlotDisplay, List<ItemStack>> alternatives = new HashMap<>();
     private final ArrayDeque<Item> pendingItems = new ArrayDeque<>();
     private final ArrayDeque<BrowserRecipeEntry> pendingRecipes = new ArrayDeque<>();
-    private ContextMap displayContext;
     private boolean started;
     private boolean sorted;
     private long version;
@@ -61,7 +51,6 @@ final class BrowserClientIndex {
     void begin(Minecraft client) {
         if (started || client.level == null) return;
         started = true;
-        displayContext = SlotDisplayContext.fromLevel(client.level);
         for (Item item : BuiltInRegistries.ITEM) if (item != Items.AIR && item.isEnabled(client.level.enabledFeatures())) pendingItems.add(item);
     }
 
@@ -73,7 +62,7 @@ final class BrowserClientIndex {
         int processed = 0;
         while (processed < 128 && System.nanoTime() - start < TICK_BUDGET_NANOS && !pendingItems.isEmpty()) {
             Item item = pendingItems.removeFirst();
-            Identifier id = BuiltInRegistries.ITEM.getKey(item);
+            ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
             ItemStack stack = item.getDefaultInstance();
             String name = stack.getHoverName().getString();
             String tooltip = String.join(" ", Screen.getTooltipFromItem(client, stack).stream().map(component -> component.getString()).toList());
@@ -92,8 +81,8 @@ final class BrowserClientIndex {
             try {
                 BrowserRecipeView recipe = resolve(source);
                 recipes.add(recipe);
-                for (Identifier id : recipe.resultIds()) recipesByResult.computeIfAbsent(id, ignored -> new ArrayList<>()).add(recipe);
-                for (Identifier id : recipe.ingredientIds()) recipesByInput.computeIfAbsent(id, ignored -> new ArrayList<>()).add(recipe);
+                for (ResourceLocation id : recipe.resultIds()) recipesByResult.computeIfAbsent(id, ignored -> new ArrayList<>()).add(recipe);
+                for (ResourceLocation id : recipe.ingredientIds()) recipesByInput.computeIfAbsent(id, ignored -> new ArrayList<>()).add(recipe);
             } catch (RuntimeException exception) {
                 LOGGER.warn("Could not resolve recipe browser display {}", source.recipe(), exception);
             }
@@ -116,60 +105,24 @@ final class BrowserClientIndex {
         return queryResult;
     }
 
-    ItemStack item(Identifier id) {
+    ItemStack item(ResourceLocation id) {
         BrowserItem item = itemsById.get(id);
         if (item != null) return item.stack;
         return BuiltInRegistries.ITEM.getOptional(id).map(Item::getDefaultInstance).orElse(ItemStack.EMPTY);
     }
 
-    List<BrowserRecipeView> recipes(Identifier item, boolean uses) {
+    List<BrowserRecipeView> recipes(ResourceLocation item, boolean uses) {
         return (uses ? recipesByInput : recipesByResult).getOrDefault(item, List.of());
     }
 
     private BrowserRecipeView resolve(BrowserRecipeEntry source) {
-        var display = source.display();
-        BrowserRecipeView.Layout layout = BrowserRecipeView.Layout.GENERIC;
-        List<SlotDisplay> inputs = source.fallbackInputs();
-        List<ItemStack> fuel = List.of();
-        int columns = Math.min(3, Math.max(1, inputs.size())), rows = Math.ceilDiv(inputs.size(), columns);
-        int duration = 0;
-        float experience = 0;
-        if (display instanceof ShapedCraftingRecipeDisplay shaped) {
-            layout = BrowserRecipeView.Layout.CRAFTING;
-            columns = shaped.width();
-            rows = shaped.height();
-            inputs = shaped.ingredients();
-        } else if (display instanceof ShapelessCraftingRecipeDisplay shapeless) {
-            layout = BrowserRecipeView.Layout.CRAFTING;
-            inputs = shapeless.ingredients();
-            columns = 3;
-            rows = Math.ceilDiv(inputs.size(), 3);
-        } else if (display instanceof FurnaceRecipeDisplay furnace) {
-            layout = BrowserRecipeView.Layout.FURNACE;
-            inputs = List.of(furnace.ingredient());
-            fuel = stacks(furnace.fuel());
-            columns = rows = 1;
-            duration = furnace.duration();
-            experience = furnace.experience();
-        } else if (display instanceof StonecutterRecipeDisplay stonecutting) {
-            layout = BrowserRecipeView.Layout.STONECUTTING;
-            inputs = List.of(stonecutting.input());
-            columns = rows = 1;
-        } else if (display instanceof SmithingRecipeDisplay smithing) {
-            layout = BrowserRecipeView.Layout.SMITHING;
-            inputs = List.of(smithing.template(), smithing.base(), smithing.addition());
-            columns = 3;
-            rows = 1;
-        }
-        if (columns < 1 || columns > 9 || rows < 0 || rows > 9 || inputs.size() > 81) throw new IllegalArgumentException("Unsupported recipe display dimensions");
-        return new BrowserRecipeView(source, layout, columns, rows, inputs.stream().map(this::stacks).toList(), fuel,
-                stacks(display.result()), stacks(display.craftingStation()), duration, experience);
+        if (source.columns() < 1 || source.columns() > 9 || source.rows() < 0 || source.rows() > 9
+                || source.ingredients().size() > 81) throw new IllegalArgumentException("Unsupported recipe display dimensions");
+        return new BrowserRecipeView(source, BrowserRecipeView.Layout.valueOf(source.layout().name()), source.columns(), source.rows(),
+                source.ingredients().stream().map(group -> group.stream().map(ItemStack::copy).toList()).toList(),
+                source.fuel().stream().map(ItemStack::copy).toList(), source.results().stream().map(ItemStack::copy).toList(),
+                source.stations().stream().map(ItemStack::copy).toList(), source.duration(), source.experience());
     }
 
-    private List<ItemStack> stacks(SlotDisplay slot) {
-        return alternatives.computeIfAbsent(slot, display -> display.resolveForStacks(displayContext).stream()
-                .filter(stack -> !stack.isEmpty()).map(ItemStack::copy).toList());
-    }
-
-    record BrowserItem(Identifier id, ItemStack stack, BrowserQuery.SearchText text) {}
+    record BrowserItem(ResourceLocation id, ItemStack stack, BrowserQuery.SearchText text) {}
 }

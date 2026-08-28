@@ -43,8 +43,8 @@ public final class ChestLoot {
     private ChestLoot() { }
     public static void initialize() {
         LootTableEvents.MODIFY.register((key, builder, source, registries) -> {
-            if (!key.identifier().getNamespace().equals("minecraft")) return;
-            String path = key.identifier().getPath();
+            if (!key.location().getNamespace().equals("minecraft")) return;
+            String path = key.location().getPath();
             if (!path.startsWith("chests/")) return;
             Roll roll = ROLLS.get(path.substring("chests/".length()));
             if (roll == null) return;

@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.upgrade;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
@@ -53,7 +54,7 @@ public final class TransferRuntime {
                 int owned = InventoryMoves.count(inventory, desired);
                 int needed = Math.max(0, desired.getMaxStackSize() - Math.min(desired.getMaxStackSize(), owned) - cursorCount);
                 if (needed == 0) continue;
-                String target = upgrade.kind().advanced() ? bag.settings(upgrade).getStringOr("refill_target_" + row, "ANY") : "ANY";
+                String target = upgrade.kind().advanced() ? NbtAccess.getStringOr(bag.settings(upgrade), "refill_target_" + row, "ANY") : "ANY";
                 int destination = targetSlot(inventory, desired, target);
                 if (destination < 0) continue;
                 ItemStack present = inventory.getItem(destination);
@@ -72,7 +73,7 @@ public final class TransferRuntime {
     }
 
     private static int targetSlot(Inventory inventory, ItemStack desired, String target) {
-        if (target.equals("MAIN_HAND")) return inventory.getSelectedSlot();
+        if (target.equals("MAIN_HAND")) return inventory.selected;
         if (target.equals("OFF_HAND")) return Inventory.SLOT_OFFHAND;
         if (target.startsWith("HOTBAR_")) {
             try {

@@ -167,13 +167,31 @@ class AssetGenerationTest(unittest.TestCase):
 
     def test_registry_resources_exactly_cover_catalog(self):
         self.assertEqual(76, len(self.items))
-        definitions = {Path(path).stem for path in self.outputs if path.startswith(assets.ASSET + "/items/")}
+        definitions = {Path(path).stem for path in self.outputs if path.startswith(assets.ASSET + "/models/item/")}
         self.assertEqual(self.items, definitions)
+        self.assertFalse(any(path.startswith(assets.ASSET + "/items/") for path in self.outputs),
+                         "Newer item-definition files are not valid 1.21.1 model entrypoints")
+        for item in self.items:
+            self.assertFalse((assets.ROOT / assets.ASSET / "items" / f"{item}.json").exists(),
+                             "Retired generated definitions must not remain in the shipped resources")
+        manifest = json.loads(self.outputs[assets.ASSET + "/asset_manifest.json"])
+        self.assertEqual("1.21.1", manifest["minecraft_version"])
         lang = json.loads(self.outputs[assets.ASSET + "/lang/en_us.json"])
         for item in self.items:
             self.assertTrue(lang[f"item.{assets.MOD}.{item}"].strip())
             if item not in {tier.item for tier in assets.TIERS}:
                 self.assertTrue(lang[f"tooltip.{assets.MOD}.{item}"].strip())
+        tag_labels = {"backpacks": "Backpacks", "conduits": "Conduits",
+                      "stack_conversions": "Stack Upgrade Conversions", "upgrades": "Backpack Upgrades"}
+        item_tag_prefix = assets.DATA + "/tags/item/"
+        generated_tags = {path.removeprefix(item_tag_prefix).removesuffix(".json").replace("/", ".")
+                          for path in self.outputs if path.startswith(item_tag_prefix)}
+        self.assertEqual(set(tag_labels), generated_tags, "Every generated item tag needs a native display name")
+        for tag, label in tag_labels.items():
+            self.assertEqual(label, lang[f"tag.item.{assets.MOD}.{tag}"])
+        capture_exclusions = json.loads(self.outputs[assets.DATA + "/tags/entity_type/unsupported_capture.json"])
+        self.assertEqual({"replace": False, "values": [{"id": "cobblemon:pokemon", "required": False}]},
+                         capture_exclusions, "Externally stored Pokemon cannot be captured; absent Cobblemon must remain optional")
 
     def test_model_face_closure_uvs_bounds_and_named_parts(self):
         required = {"body_floor", "body_left", "body_right", "body_back", "body_front", "front_pocket",
@@ -217,10 +235,12 @@ class AssetGenerationTest(unittest.TestCase):
                         self.assertEqual(rotation, variant["y"])
                         self.assertTrue(variant["model"].endswith("_body"))
                         self.assertIn(f'{assets.ASSET}/models/{variant["model"].split(":")[1]}.json', self.models)
-                definition = json.loads(self.outputs[f"{assets.ASSET}/items/{tier.item}.json"])["model"]
-                self.assertEqual("minecraft:model", definition["type"])
-                self.assertEqual([0, 1], [tint["index"] for tint in definition["tints"]])
-                self.assertTrue(all(tint["type"] == "minecraft:custom_model_data" for tint in definition["tints"]))
+                model = json.loads(self.outputs[f"{assets.ASSET}/models/item/{tier.item}.json"])
+                self.assertEqual(f"{assets.MOD}:block/{tier.item}_closed", model["parent"])
+                parent = self.models[f"{assets.ASSET}/models/block/{tier.item}_closed.json"]
+                tints = {face.get("tintindex", -1) for element in parent["elements"] for face in element["faces"].values()}
+                self.assertTrue({0, 1}.issubset(tints), "Both native item-color layers remain present")
+                self.assertNotIn(f"{assets.ASSET}/items/{tier.item}.json", self.outputs)
 
     def test_textures_have_explicit_dimensions_and_alpha(self):
         for path, raster in self.rasters.items():
@@ -273,7 +293,7 @@ class AssetGenerationTest(unittest.TestCase):
         self.assertEqual(self.items - {"infinity_upgrade", "stack_upgrade_omega_tier"}, craftable)
         for source, target, conversion in assets.CONVERSIONS:
             recipe = self.recipes[f"{conversion}_apply"]
-            self.assertEqual([f"{assets.MOD}:{assets.stack_id(source)}", f"{assets.MOD}:{conversion}"], recipe["ingredients"])
+            self.assertEqual([assets.ingredient(f"{assets.MOD}:{assets.stack_id(source)}"), assets.ingredient(f"{assets.MOD}:{conversion}")], recipe["ingredients"])
             self.assertEqual(f"{assets.MOD}:{assets.stack_id(target)}", recipe["result"]["id"])
 
     def test_backpack_tier_recipes_and_loot_preserve_storage_ownership(self):
@@ -446,7 +466,7 @@ class AssetGenerationTest(unittest.TestCase):
                 for rule in rules.values():
                     for item in rule["items"]:
                         resource = item.split(":", 1)[1]
-                        path = f"data/minecraft/tags/item/{resource}.json" if item.startswith("#") else f"assets/minecraft/items/{resource}.json"
+                        path = f"data/minecraft/tags/item/{resource}.json" if item.startswith("#") else f"assets/minecraft/models/item/{resource}.json"
                         self.assertIn(path, names)
                     for block in rule.get("blocks", []):
                         self.assertIn(f"assets/minecraft/blockstates/{block.split(':', 1)[1]}.json", names)
@@ -617,16 +637,19 @@ class AssetGenerationTest(unittest.TestCase):
         with ZipFile(TARGET_JAR) as jar:
             names = set(jar.namelist())
             version = json.loads(jar.read("version.json"))
-            self.assertEqual("26.2", version["id"])
+            self.assertEqual("1.21.1", version["id"])
             for recipe_id, recipe in self.recipes.items():
                 ingredients = list(recipe.get("key", {}).values()) + recipe.get("ingredients", [])
                 ingredients.extend(recipe[key] for key in ("template", "base", "addition") if key in recipe)
                 for ingredient in ingredients:
                     with self.subTest(recipe=recipe_id, ingredient=ingredient):
-                        self.assertIsInstance(ingredient, str)
-                        namespace, item = ingredient.split(":")
+                        self.assertIsInstance(ingredient, dict)
+                        self.assertIn(set(ingredient), ({"item"}, {"tag"}))
+                        kind = next(iter(ingredient))
+                        namespace, item = ingredient[kind].split(":")
                         if namespace == "minecraft":
-                            self.assertIn(f"assets/minecraft/items/{item}.json", names)
+                            location = f"assets/minecraft/models/item/{item}.json" if kind == "item" else f"data/minecraft/tags/item/{item}.json"
+                            self.assertIn(location, names)
                         else:
                             self.assertEqual(assets.MOD, namespace)
                             self.assertIn(item, self.items)

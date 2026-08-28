@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,8 +21,8 @@ import java.util.Set;
 final class BrowserBookmarks {
     private static final Logger LOGGER = LoggerFactory.getLogger("fabricated_backpacks/browser");
     private static final int LIMIT = 512;
-    private final Set<Identifier> items = new LinkedHashSet<>();
-    private final Set<Identifier> recipes = new LinkedHashSet<>();
+    private final Set<ResourceLocation> items = new LinkedHashSet<>();
+    private final Set<ResourceLocation> recipes = new LinkedHashSet<>();
     private final Path path = FabricLoader.getInstance().getConfigDir().resolve("fabricated-backpacks-browser.json");
     private long revision;
 
@@ -39,13 +39,13 @@ final class BrowserBookmarks {
         }
     }
 
-    boolean containsItem(Identifier id) { return items.contains(id); }
-    boolean containsRecipe(Identifier id) { return recipes.contains(id); }
+    boolean containsItem(ResourceLocation id) { return items.contains(id); }
+    boolean containsRecipe(ResourceLocation id) { return recipes.contains(id); }
     long revision() { return revision; }
-    boolean toggleItem(Identifier id) { return toggle(items, id); }
-    boolean toggleRecipe(Identifier id) { return toggle(recipes, id); }
+    boolean toggleItem(ResourceLocation id) { return toggle(items, id); }
+    boolean toggleRecipe(ResourceLocation id) { return toggle(recipes, id); }
 
-    private boolean toggle(Set<Identifier> target, Identifier id) {
+    private boolean toggle(Set<ResourceLocation> target, ResourceLocation id) {
         if (!target.remove(id)) {
             if (target.size() >= LIMIT) return false;
             target.add(id);
@@ -55,10 +55,10 @@ final class BrowserBookmarks {
         return true;
     }
 
-    private static void read(JsonArray values, Set<Identifier> target) {
+    private static void read(JsonArray values, Set<ResourceLocation> target) {
         if (values == null) return;
         for (var value : values) {
-            Identifier id = Identifier.tryParse(value.getAsString());
+            ResourceLocation id = ResourceLocation.tryParse(value.getAsString());
             if (id != null && target.size() < LIMIT) target.add(id);
         }
     }

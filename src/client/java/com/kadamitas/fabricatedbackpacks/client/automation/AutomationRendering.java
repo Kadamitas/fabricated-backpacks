@@ -22,8 +22,11 @@ public final class AutomationRendering {
             var player = Minecraft.getInstance().player;
             if (player != null && player.containerMenu instanceof ConduitMenu menu) menu.applyFilters(state);
         });
-        ModelLoadingPlugin.register(plugin -> plugin.modifyBlockModelAfterBake().register((model, context) ->
-                context.state().is(AutomationRegistry.CONDUIT_BUNDLE) ? new ConduitBlockModel(model, context.baker()) : model));
+        ModelLoadingPlugin.register(plugin -> plugin.modifyModelAfterBake().register((model, context) -> {
+            var id = context.topLevelId();
+            return model != null && id != null && id.id().equals(com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry.id("conduit_bundle"))
+                    && !id.variant().equals("inventory") ? new ConduitBlockModel(model, context.textureGetter()) : model;
+        }));
         BlockEntityRendererRegistry.register(AutomationRegistry.STEAM_ENGINE_ENTITY, SteamEngineRenderer::new);
         MenuScreens.register(SteamEngineMenus.STEAM_ENGINE, SteamEngineScreen::new);
         MenuScreens.register(SteamEngineMenus.SIDES, SteamEngineSideScreen::new);

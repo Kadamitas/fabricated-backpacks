@@ -56,7 +56,7 @@ public final class ResourceRuntime {
             return TraversalResources.fluids(bag, true, () -> current(entity, bag, direction), entity::setChanged);
         }, BackpackRegistry.BLOCK_ENTITY);
         EnergyStorage.SIDED.registerForBlockEntity((entity, direction) -> {
-            if (entity.getLevel() != null && entity.getLevel().isClientSide()) return entity.energyStorage(direction);
+            if (entity.getLevel() != null && entity.getLevel().isClientSide) return entity.energyStorage(direction);
             if (!connectionAllowed(entity.getLevel(), entity.getBlockPos(), direction)) return null;
             return entity.energyStorage(direction);
         }, BackpackRegistry.BLOCK_ENTITY);
@@ -142,9 +142,9 @@ public final class ResourceRuntime {
     public static Component fluidFilterDescription(BagInventory bag, int upgradeSlot, int row) {
         FluidVariant fluid = fluidFilter(bag, upgradeSlot, row);
         Component name = fluid.isBlank() ? Component.translatable("tooltip.fabricated_backpacks.fluid_filter.empty")
-                : fluid.getComponents().getOrDefault(DataComponents.CUSTOM_NAME, FluidVariantAttributes.getName(fluid));
+                : fluid.getComponentMap().getOrDefault(DataComponents.CUSTOM_NAME, FluidVariantAttributes.getName(fluid));
         var description = Component.translatable("tooltip.fabricated_backpacks.fluid_filter", row + 1, name);
-        if (!fluid.isBlank() && !fluid.getComponentsPatch().isEmpty())
+        if (!fluid.isBlank() && !fluid.getComponents().isEmpty())
             description.append(Component.translatable("tooltip.fabricated_backpacks.fluid_filter.components"));
         return description;
     }

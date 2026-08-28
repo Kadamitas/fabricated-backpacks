@@ -11,7 +11,8 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
-import net.minecraft.network.protocol.game.ServerboundPlayerLoadedPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
+import net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -54,12 +55,19 @@ final class BackpackTestSupport {
         var cookie = CommonListenerCookie.createInitial(new GameProfile(id, "bp_test_" + id.toString().substring(0, 8)), false);
         ServerPlayer player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(), cookie.gameProfile(), cookie.clientInformation());
         var connection = new Connection(PacketFlow.SERVERBOUND);
-        new EmbeddedChannel(connection);
+        var channel = new EmbeddedChannel(connection);
         helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
         player.setGameMode(GameType.SURVIVAL);
-        player.connection.handleAcceptPlayerLoad(new ServerboundPlayerLoadedPacket());
         Vec3 position = helper.absoluteVec(new Vec3(6.5, 1, 6.5));
-        player.setPos(position);
+        player.connection.teleport(position.x, position.y, position.z, 0, 0);
+        // Acknowledge the actual native teleport ID, including the initial login
+        // teleport. 1.21.1 has no separate player-loaded acknowledgement packet.
+        Object outbound;
+        while ((outbound = channel.readOutbound()) != null) {
+            if (outbound instanceof ClientboundPlayerPositionPacket teleport) {
+                player.connection.handleAcceptTeleportPacket(new ServerboundAcceptTeleportationPacket(teleport.getId()));
+            }
+        }
         return player;
     }
 

@@ -30,18 +30,19 @@ public final class BackpackRuntime {
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> { LIVE.remove(server); BackpackTraversal.stop(server); BackpackIdentities.stop(server); UpgradeEngine.stopAll(server); });
         net.fabricmc.fabric.api.event.player.AttackBlockCallback.EVENT.register((player, level, hand, pos, face) -> {
             if (player instanceof ServerPlayer serverPlayer && hand == net.minecraft.world.InteractionHand.MAIN_HAND)
-                for (BagInventory bag : carried(serverPlayer)) if (UpgradeEngine.blockAttack(bag, serverPlayer, level.getBlockState(pos), false)) break;
+                for (BagInventory bag : carried(serverPlayer)) if (UpgradeEngine.blockAttack(bag, serverPlayer, level.getBlockState(pos), false)) {
+                    publishEquipment(serverPlayer, bag);
+                    break;
+                }
             return net.minecraft.world.InteractionResult.PASS;
         });
         net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
             if (player instanceof ServerPlayer serverPlayer && entity instanceof net.minecraft.world.entity.LivingEntity target)
-                for (BagInventory bag : carried(serverPlayer)) if (UpgradeEngine.entityAttack(bag, serverPlayer, target, false)) break;
+                for (BagInventory bag : carried(serverPlayer)) if (UpgradeEngine.entityAttack(bag, serverPlayer, target, false)) {
+                    publishEquipment(serverPlayer, bag);
+                    break;
+                }
             return net.minecraft.world.InteractionResult.PASS;
-        });
-        net.fabricmc.fabric.api.event.player.PlayerPickItemEvents.BLOCK.register((player, pos, state, data) -> {
-            ItemStack desired = state.getCloneItemStack(player.level(), pos, false);
-            for (BagInventory bag : carried(player)) if (UpgradeEngine.pickBlock(bag, player, desired)) break;
-            return null;
         });
         for (var tier : com.kadamitas.fabricatedbackpacks.domain.BackpackTier.values()) {
             net.minecraft.world.level.block.DispenserBlock.registerBehavior(BackpackRegistry.item(tier), new net.minecraft.core.dispenser.OptionalDispenseItemBehavior() {
@@ -54,8 +55,57 @@ public final class BackpackRuntime {
             });
         }
     }
+    /** The request names only a position; the server derives and authorizes every picked item. */
+    public static boolean pickBlock(ServerPlayer player, net.minecraft.core.BlockPos pos) {
+        return pickBlock(player, pos, false);
+    }
+    public static boolean pickBlock(ServerPlayer player, net.minecraft.core.BlockPos pos, boolean includeData) {
+        if (!player.isAlive() || player.isSpectator()
+                || includeData && (!player.isCreative() || !player.hasPermissions(2))) return false;
+        var level = player.serverLevel();
+        var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null || !level.getWorldBorder().isWithinBounds(pos) || !player.mayInteract(level, pos)) return false;
+        Vec3 eye = player.getEyePosition();
+        double reach = player.blockInteractionRange();
+        if (!Double.isFinite(reach) || reach < 0 || pos.distToCenterSqr(eye) > (reach + 1) * (reach + 1)) return false;
+        Vec3 end = eye.add(player.getViewVector(1).scale(reach));
+        // A client request cannot cause the native ray caster to load a neighboring chunk.
+        for (int x = net.minecraft.util.Mth.floor(Math.min(eye.x, end.x)) >> 4; x <= (net.minecraft.util.Mth.floor(Math.max(eye.x, end.x)) >> 4); x++)
+            for (int z = net.minecraft.util.Mth.floor(Math.min(eye.z, end.z)) >> 4; z <= (net.minecraft.util.Mth.floor(Math.max(eye.z, end.z)) >> 4); z++)
+                if (level.getChunkSource().getChunkNow(x, z) == null) return false;
+        var hit = level.clip(new net.minecraft.world.level.ClipContext(eye, end,
+                net.minecraft.world.level.ClipContext.Block.OUTLINE, net.minecraft.world.level.ClipContext.Fluid.NONE, player));
+        if (hit.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK || !hit.getBlockPos().equals(pos)) return false;
+        if (includeData) {
+            if (!(chunk.getBlockEntities().get(pos) instanceof com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity entity)
+                    || entity.isRemoved()) return false;
+            entity.inventory().save();
+            ItemStack copy = com.kadamitas.fabricatedbackpacks.storage.BackpackCopies.fork(entity.stack());
+            player.getInventory().setPickedItem(copy);
+            synchronizePick(player);
+            return true;
+        }
+        var state = chunk.getBlockState(pos);
+        ItemStack desired = state.getBlock().getCloneItemStack(level, pos, state);
+        if (desired.isEmpty()) return false;
+        for (BagInventory bag : carried(player)) if (UpgradeEngine.pickBlock(bag, player, desired)) {
+            publishEquipment(player, bag);
+            synchronizePick(player);
+            return true;
+        }
+        return false;
+    }
+    private static void synchronizePick(ServerPlayer player) {
+        player.getInventory().setChanged();
+        player.connection.send(new net.minecraft.network.protocol.game.ClientboundSetCarriedItemPacket(player.getInventory().selected));
+        player.inventoryMenu.broadcastChanges();
+        if (player.containerMenu != player.inventoryMenu) player.containerMenu.broadcastChanges();
+    }
+    private static void publishEquipment(ServerPlayer player, BagInventory bag) {
+        if (BackpackEquipment.isCurrent(player, bag)) BackpackEquipment.setFromInventory(player, bag);
+    }
     private static BagInventory handle(ServerPlayer player, ItemStack stack) {
-        Map<ItemStack, BagInventory> live = LIVE.computeIfAbsent(player.level().getServer(), ignored -> new IdentityHashMap<>());
+        Map<ItemStack, BagInventory> live = LIVE.computeIfAbsent(player.serverLevel().getServer(), ignored -> new IdentityHashMap<>());
         if (player.containerMenu instanceof com.kadamitas.fabricatedbackpacks.menu.BackpackSessionMenu menu
                 && menu.backpack().stack() == stack) {
             // Inventory sessions retain their actual physical source. Equal UUIDs
@@ -80,7 +130,7 @@ public final class BackpackRuntime {
             result.add(bag);
             physical.add(bag.stack());
             physical.add(BackpackEquipment.get(player));
-            LIVE.computeIfAbsent(player.level().getServer(), ignored -> new IdentityHashMap<>()).put(bag.stack(), bag);
+            LIVE.computeIfAbsent(player.serverLevel().getServer(), ignored -> new IdentityHashMap<>()).put(bag.stack(), bag);
         });
         if (!includeInventory) return result;
         for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
@@ -97,7 +147,7 @@ public final class BackpackRuntime {
                 for (BagInventory bag : carried(player)) {
                     seen.add(bag.stack());
                     var before = bag.stack().getComponentsPatch();
-                    BackpackTraversal.tick(bag, player.level(), player.blockPosition(), player);
+                    BackpackTraversal.tick(bag, player.serverLevel(), player.blockPosition(), player);
                     if (!before.equals(bag.stack().getComponentsPatch()) && BackpackEquipment.isCurrent(player, bag)) {
                         BackpackEquipment.setFromInventory(player, bag);
                     }
@@ -105,7 +155,7 @@ public final class BackpackRuntime {
             }
             if (server.getTickCount() % 20 == 0) for (BagInventory bag : physicalCarried(player)) {
                 seen.add(bag.stack());
-                archiveTree(bag, player.level(), player);
+                archiveTree(bag, player.serverLevel(), player);
             }
         }
         LIVE.computeIfAbsent(server, ignored -> new IdentityHashMap<>()).keySet().removeIf(stack -> !seen.contains(stack));
@@ -131,10 +181,10 @@ public final class BackpackRuntime {
         BackpackIdentities.tickDropped(entity);
         if (!everlasting(entity.getItem())) return;
         entity.setUnlimitedLifetime();
-        if (entity.getY() < entity.level().getMinY() + 2) {
+        if (entity.getY() < entity.level().getMinBuildHeight() + 2) {
             int safeY = entity.level().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                     entity.blockPosition().getX(), entity.blockPosition().getZ());
-            entity.setPos(entity.getX(), Math.max(safeY + 1, entity.level().getMinY() + 4), entity.getZ());
+            entity.setPos(entity.getX(), Math.max(safeY + 1, entity.level().getMinBuildHeight() + 4), entity.getZ());
             entity.setDeltaMovement(Vec3.ZERO);
         } else if (entity.isInWater() || entity.isInLava()) {
             Vec3 velocity = entity.getDeltaMovement();

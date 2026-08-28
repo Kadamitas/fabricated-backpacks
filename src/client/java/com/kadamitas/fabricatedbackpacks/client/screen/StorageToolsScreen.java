@@ -1,9 +1,10 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
@@ -36,11 +37,11 @@ public final class StorageToolsScreen extends Screen {
         }
         var color = addRenderableWidget(new EditBox(font, left + 12, top + 132, 100, 18, Component.literal("No-sort overlay color")));
         color.setMaxLength(7);
-        color.setValue("#%06X".formatted(menu.bag().settings().getIntOr("no_sort_color", 0xdb8c39) & 0xffffff));
+        color.setValue("#%06X".formatted(NbtAccess.getIntOr(menu.bag().settings(), "no_sort_color", 0xdb8c39) & 0xffffff));
         button("Set overlay color", 116, 132, 184, () -> send("no_sort_color", 0, color.getValue()));
-        button("Store matching", 12, 159, 142, () -> send("bulk_store", minecraft.hasShiftDown() ? 1 : 0, ""))
+        button("Store matching", 12, 159, 142, () -> send("bulk_store", net.minecraft.client.gui.screens.Screen.hasShiftDown() ? 1 : 0, ""))
                 .setTooltip(Tooltip.create(Component.literal("Move matching main-inventory stacks into this bag. Shift: all eligible stacks. Hotbar stays put.")));
-        button("Take matching", 158, 159, 142, () -> send("bulk_take", minecraft.hasShiftDown() ? 1 : 0, ""))
+        button("Take matching", 158, 159, 142, () -> send("bulk_take", net.minecraft.client.gui.screens.Screen.hasShiftDown() ? 1 : 0, ""))
                 .setTooltip(Tooltip.create(Component.literal("Move matching bag stacks to main inventory. Shift: all eligible stacks. Exclusions and infinite seeds stay put.")));
         button("Back", 12, 198, 288, this::onClose);
     }
@@ -50,18 +51,20 @@ public final class StorageToolsScreen extends Screen {
     private void menuButton(int action) { minecraft.gameMode.handleInventoryButtonClick(menu.containerId, action); }
     private void send(String action, int value, String text) { ClientPlayNetworking.send(new MenuAction(menu.containerId, action, 0, value, text)); }
     @Override public void tick() {
-        if (minecraft.player == null || minecraft.player.containerMenu != menu || !minecraft.player.isAlive()) minecraft.gui.setScreen(null);
+        if (minecraft.player == null || minecraft.player.containerMenu != menu || !minecraft.player.isAlive()) minecraft.setScreen(null);
     }
-    @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    // This screen paints its own backdrop before its native widgets.
+    @Override public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {}
+
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         graphics.fill(left, top, left + 312, top + 228, 0xffccb996);
-        graphics.outline(left, top, 312, 228, 0xff493326);
-        graphics.text(font, title, left + 12, top + 10, 0xff302a21, false);
-        graphics.text(font, "Sort", left + 12, top + 79, 0xff302a21, false);
-        graphics.text(font, "No-sort overlay: RGB hex color", left + 12, top + 120, 0xff302a21, false);
-        graphics.text(font, "Hold Shift when transferring to move all", left + 12, top + 183, 0xff302a21, false);
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
+        graphics.renderOutline(left, top, 312, 228, 0xff493326);
+        graphics.drawString(font, title, left + 12, top + 10, 0xff302a21, false);
+        graphics.drawString(font, "Sort", left + 12, top + 79, 0xff302a21, false);
+        graphics.drawString(font, "No-sort overlay: RGB hex color", left + 12, top + 120, 0xff302a21, false);
+        graphics.drawString(font, "Hold Shift when transferring to move all", left + 12, top + 183, 0xff302a21, false);
+        super.render(graphics, mouseX, mouseY, delta);
     }
-    @Override public void onClose() { minecraft.gui.setScreen(minecraft.player != null && minecraft.player.containerMenu == menu ? previous : null); }
+    @Override public void onClose() { minecraft.setScreen(minecraft.player != null && minecraft.player.containerMenu == menu ? previous : null); }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public boolean isInGameUi() { return true; }
 }

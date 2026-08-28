@@ -6,14 +6,14 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
 import java.util.Optional;
 
 /** A bounded intent for the currently open physical face. No position, face, stack or quantity is supplied. */
 public record ConduitFilterAction(int containerId, ConduitKind kind, Operation operation,
-                                  int index, Optional<Identifier> resource) implements CustomPacketPayload {
+                                  int index, Optional<ResourceLocation> resource) implements CustomPacketPayload {
     public enum Operation { SET_MODE, SET_ENTRY, CLEAR_ENTRY }
     public static final Type<ConduitFilterAction> TYPE = new Type<>(BackpackRegistry.id("conduit_filter_action"));
     public static final StreamCodec<RegistryFriendlyByteBuf, ConduitFilterAction> STREAM_CODEC = StreamCodec.composite(
@@ -22,7 +22,7 @@ public record ConduitFilterAction(int containerId, ConduitKind kind, Operation o
             ByteBufCodecs.VAR_INT.map(ConduitFilterAction::decodeOperation, Operation::ordinal), ConduitFilterAction::operation,
             ByteBufCodecs.VAR_INT, ConduitFilterAction::index,
             ByteBufCodecs.optional(ByteBufCodecs.stringUtf8(ConduitFilter.MAX_IDENTIFIER_LENGTH)
-                    .map(Identifier::parse, Identifier::toString)), ConduitFilterAction::resource,
+                    .map(ResourceLocation::parse, ResourceLocation::toString)), ConduitFilterAction::resource,
             ConduitFilterAction::new);
 
     public ConduitFilterAction {

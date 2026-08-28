@@ -5,7 +5,7 @@ import com.kadamitas.fabricatedbackpacks.automation.engine.SteamEngineSideMenu;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackIconButton;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackIconButton.Icon;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackStyle;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ComponentRenderUtils;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.Direction;
@@ -29,7 +29,7 @@ public final class SteamEngineSideScreen extends AbstractContainerScreen<SteamEn
     private final Map<ConduitKind, BackpackIconButton> modes = new EnumMap<>(ConduitKind.class);
 
     public SteamEngineSideScreen(SteamEngineSideMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 176, 140);
+        super(menu, inventory, title); imageWidth = 176; imageHeight = 140;
     }
 
     @Override protected void init() {
@@ -77,8 +77,11 @@ public final class SteamEngineSideScreen extends AbstractContainerScreen<SteamEn
                 text("engine_mode." + menu.mode(kind, menu.selectedFace()).name().toLowerCase(Locale.ROOT)));
     }
 
-    @Override public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-        super.extractBackground(g, mouseX, mouseY, delta);
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        renderTooltip(graphics, mouseX, mouseY);
+    }
+    @Override protected void renderBg(GuiGraphics g, float delta, int mouseX, int mouseY) {
         BackpackStyle.frame(g, leftPos, topPos, imageWidth, imageHeight, BackpackStyle.Surface.BODY);
         BackpackStyle.frame(g, leftPos + 3, topPos + 3, imageWidth - 6, 13, BackpackStyle.Surface.TITLE);
         if (isHovering(8, 3, imageWidth - 16, 13, mouseX, mouseY))
@@ -86,22 +89,22 @@ public final class SteamEngineSideScreen extends AbstractContainerScreen<SteamEn
         for (ConduitKind kind : ConduitKind.values()) {
             int y = 54 + kind.ordinal() * 26;
             BackpackStyle.frame(g, leftPos + 9, topPos + y, imageWidth - 18, 24, BackpackStyle.Surface.PANEL);
-            g.fakeItem(RESOURCE_ICONS.get(kind), leftPos + 15, topPos + y + 4);
+            g.renderFakeItem(RESOURCE_ICONS.get(kind), leftPos + 15, topPos + y + 4);
             if (isHovering(12, y + 2, 125, 20, mouseX, mouseY))
                 setWrappedTooltip(g, modeLabel(kind), mouseX, mouseY);
         }
     }
 
-    @Override protected void extractLabels(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+    @Override protected void renderLabels(GuiGraphics g, int mouseX, int mouseY) {
         int titleWidth = imageWidth - 16;
         var line = font.width(title) > titleWidth
-                ? ComponentRenderUtils.clipText(title, font, titleWidth) : title.getVisualOrderText();
+                ? com.kadamitas.fabricatedbackpacks.client.screen.ClientText.clipText(title, font, titleWidth) : title.getVisualOrderText();
         FormattedCharSequence visible = sink -> line.accept((index, style, codePoint) ->
-                sink.accept(index, style.withoutShadow(), codePoint));
+                sink.accept(index, style, codePoint));
         // Preserve the full title for native narration and hover, clipping only its painted form.
-        g.enableScissor(8, 4, 8 + titleWidth, 16);
+        g.enableScissor(leftPos + 8, topPos + 4, leftPos + 8 + titleWidth, topPos + 16);
         try {
-            g.text(font, visible, 8, 6, BackpackStyle.TITLE_TEXT, false);
+            g.drawString(font, visible, 8, 6, BackpackStyle.TITLE_TEXT, false);
         } finally {
             g.disableScissor();
         }
@@ -110,8 +113,8 @@ public final class SteamEngineSideScreen extends AbstractContainerScreen<SteamEn
     private static Component text(String key, Object... arguments) { return SteamEngineScreen.text(key, arguments); }
     private static Component faceName(Direction face) { return text("face." + face.getName()); }
 
-    private void setWrappedTooltip(GuiGraphicsExtractor graphics, Component message, int mouseX, int mouseY) {
+    private void setWrappedTooltip(GuiGraphics graphics, Component message, int mouseX, int mouseY) {
         int maxWidth = Math.max(1, Math.min(260, width - 24));
-        graphics.setTooltipForNextFrame(font, font.split(message, maxWidth), mouseX, mouseY);
+        com.kadamitas.fabricatedbackpacks.client.screen.ClientText.tooltip(font, font.split(message, maxWidth), mouseX, mouseY);
     }
 }

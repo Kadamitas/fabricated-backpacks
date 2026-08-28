@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.admin;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
@@ -9,7 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.item.component.CustomModelData;
+import com.kadamitas.fabricatedbackpacks.item.BackpackColors;
 
 /** Latest-access snapshots are independent of the lifetime of the accessed inventory handle. */
 public final class BackpackArchives {
@@ -20,14 +21,13 @@ public final class BackpackArchives {
         AdminSavedData data = AdminSavedData.of(level.getServer());
         BackpackArchive previous = data.archive(bag.identity()).orElse(null);
         String ownerId = owner != null ? owner.getUUID().toString() : previous == null ? "" : previous.ownerId();
-        String ownerName = owner != null ? owner.getGameProfile().name() : previous == null ? "" : previous.ownerName();
+        String ownerName = owner != null ? owner.getGameProfile().getName() : previous == null ? "" : previous.ownerName();
         long now = System.currentTimeMillis();
         // A periodic scan refreshes access at most once per minute unless contents or ownership change.
         if (previous != null && previous.sameContents(bag.stack()) && previous.ownerId().equals(ownerId)
                 && previous.ownerName().equals(ownerName) && now - previous.accessedAt() < 60_000) return;
-        CustomModelData colors = bag.stack().getOrDefault(DataComponents.CUSTOM_MODEL_DATA, CustomModelData.EMPTY);
-        int body = colors.getColor(0) == null ? 0xB97843 : colors.getColor(0);
-        int trim = colors.getColor(1) == null ? 0x503B36 : colors.getColor(1);
+        int body = BackpackColors.color(bag.stack(), 0, BackpackColors.DEFAULT_BODY);
+        int trim = BackpackColors.color(bag.stack(), 1, BackpackColors.DEFAULT_TRIM);
         data.record(new BackpackArchive(bag.identity(), ownerId, ownerName, bag.stack().getHoverName().getString(),
                 body & 0xffffff, trim & 0xffffff, Math.max(now, previous == null ? 0 : previous.accessedAt()), bag.stack()));
     }
@@ -36,6 +36,6 @@ public final class BackpackArchives {
         for (var type : java.util.List.of(BagComponents.CONTENTS, BagComponents.UPGRADES, WorldComponents.EXTRA_ITEMS))
             if (!backpack.getOrDefault(type, InventorySnapshot.EMPTY).entries().isEmpty()) return false;
         return !backpack.has(WorldComponents.DEFERRED_LOOT)
-                && backpack.getOrDefault(BagComponents.SETTINGS, CustomData.EMPTY).copyTag().getListOrEmpty("captured_entities").isEmpty();
+                && NbtAccess.getListOrEmpty(backpack.getOrDefault(BagComponents.SETTINGS, CustomData.EMPTY).copyTag(), "captured_entities").isEmpty();
     }
 }

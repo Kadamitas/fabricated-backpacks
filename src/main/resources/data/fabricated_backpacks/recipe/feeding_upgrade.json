@@ -7,10 +7,18 @@
     " S "
   ],
   "key": {
-    "M": "minecraft:golden_carrot",
-    "T": "minecraft:wheat",
-    "U": "fabricated_backpacks:upgrade_base",
-    "S": "minecraft:bowl"
+    "M": {
+      "item": "minecraft:golden_carrot"
+    },
+    "T": {
+      "item": "minecraft:wheat"
+    },
+    "U": {
+      "item": "fabricated_backpacks:upgrade_base"
+    },
+    "S": {
+      "item": "minecraft:bowl"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:feeding_upgrade",

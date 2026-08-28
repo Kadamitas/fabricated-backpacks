@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gameplay;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
@@ -49,16 +50,16 @@ public final class BackpackTraversal {
 
     public static boolean usesChildren(BagInventory root) {
         return root.has(UpgradeKind.INCEPTION) && BackpackConfig.get().storage().outerUsesChildren()
-                && root.settings().getBooleanOr("inception_outer_inventory", true);
+                && NbtAccess.getBooleanOr(root.settings(), "inception_outer_inventory", true);
     }
 
     public static boolean ticksChildren(BagInventory root) {
         return root.has(UpgradeKind.INCEPTION) && BackpackConfig.get().storage().childUpgrades()
-                && root.settings().getBooleanOr("inception_inner_upgrades", true);
+                && NbtAccess.getBooleanOr(root.settings(), "inception_inner_upgrades", true);
     }
 
     public static boolean nestedFirst(BagInventory root) {
-        return root.settings().getBooleanOr("inception_nested_first", true);
+        return NbtAccess.getBooleanOr(root.settings(), "inception_nested_first", true);
     }
 
     /** Invalid, duplicate and recursively populated child bags never enter a live processing graph. */

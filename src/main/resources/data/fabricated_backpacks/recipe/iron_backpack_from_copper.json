@@ -7,8 +7,12 @@
     " I "
   ],
   "key": {
-    "I": "minecraft:iron_ingot",
-    "B": "fabricated_backpacks:copper_backpack"
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "B": {
+      "item": "fabricated_backpacks:copper_backpack"
+    }
   },
   "result": {
     "id": "fabricated_backpacks:iron_backpack",

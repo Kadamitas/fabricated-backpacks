@@ -14,8 +14,10 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.item.DyeItem;
+import com.kadamitas.fabricatedbackpacks.item.BackpackColors;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -64,7 +66,7 @@ final class RecipeGameTests {
             helper.assertTrue(WorkstationMenus.transfer(player, id), "Real placement metadata transfers " + transition.id());
             helper.assertTrue(menu.stillValid(player), "Recipe transfer keeps the physical backpack that owns its open session");
             assertStack(helper, menu.getSlot(0).getItem(), expected, "Shaped upgrade preview preserves every source component for " + transition.id());
-            menu.clicked(0, 0, ContainerInput.PICKUP, player);
+            menu.clicked(0, 0, ClickType.PICKUP, player);
             assertStack(helper, menu.getCarried(), expected, "Taking the shaped upgrade preserves the original bag identity and contents");
             helper.assertTrue(menu.grid().isEmpty(), "The source backpack and all upgrade material are consumed exactly once");
             helper.assertTrue(player.getInventory().getItem(9).isEmpty() && player.getInventory().getItem(10).isEmpty(), "Transferred ingredients leave no duplicate source items");
@@ -80,7 +82,7 @@ final class RecipeGameTests {
     }
 
     static void dyeRegionsBlendsAndRetention(GameTestHelper helper) {
-        var holder = helper.getLevel().recipeAccess().byKey(ResourceKey.create(Registries.RECIPE, BackpackRegistry.id("dye_backpack"))).orElseThrow();
+        var holder = helper.getLevel().getRecipeManager().byKey(BackpackRegistry.id("dye_backpack")).orElseThrow();
         helper.assertTrue(holder.value() instanceof CraftingRecipe, "The actual datapack registers the dye crafting recipe");
         CraftingRecipe recipe = (CraftingRecipe) holder.value();
         BagInventory source = bag(BackpackTier.NETHERITE, UpgradeKind.ADVANCED_JUKEBOX);
@@ -88,23 +90,24 @@ final class RecipeGameTests {
         source.upgradeInventory(upgrade(source, 0)).setItem(11, new ItemStack(Items.MUSIC_DISC_13));
         source.remember(0, new ItemStack(Items.EMERALD));
         source.stack().set(DataComponents.CUSTOM_NAME, Component.literal("Tinted expedition"));
-        source.stack().set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(List.of(.25F), List.of(true), List.of("retained"), List.of(0x123456, 0xfedcba)));
-        var left = grid(source.stack(), 3, Items.DYE.pick(DyeColor.RED));
-        var right = grid(source.stack(), 5, Items.DYE.pick(DyeColor.BLUE));
-        var both = grid(source.stack(), 1, Items.DYE.pick(DyeColor.RED));
-        var blend = grid(source.stack(), 1, Items.DYE.pick(DyeColor.RED));
-        blend.set(3, new ItemStack(Items.DYE.pick(DyeColor.WHITE)));
-        blend.set(5, new ItemStack(Items.DYE.pick(DyeColor.BLUE)));
-        int red = DyedItemColor.applyDyes((DyedItemColor) null, List.of(DyeColor.RED)).rgb();
-        int blue = DyedItemColor.applyDyes((DyedItemColor) null, List.of(DyeColor.BLUE)).rgb();
+        source.stack().set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(314159));
+        BackpackColors.set(source.stack(), 0x123456, 0xfedcba);
+        var left = grid(source.stack(), 3, DyeItem.byColor(DyeColor.RED));
+        var right = grid(source.stack(), 5, DyeItem.byColor(DyeColor.BLUE));
+        var both = grid(source.stack(), 1, DyeItem.byColor(DyeColor.RED));
+        var blend = grid(source.stack(), 1, DyeItem.byColor(DyeColor.RED));
+        blend.set(3, new ItemStack(DyeItem.byColor(DyeColor.WHITE)));
+        blend.set(5, new ItemStack(DyeItem.byColor(DyeColor.BLUE)));
+        int red = vanillaColor(DyeColor.RED);
+        int blue = vanillaColor(DyeColor.BLUE);
         assertDye(helper, recipe, source.stack(), left, red, 0xfedcba, "Left-side dye changes only the body");
         assertDye(helper, recipe, source.stack(), right, 0x123456, blue, "Right-side dye changes only the trim");
         assertDye(helper, recipe, source.stack(), both, red, red, "Same-column dye changes body and trim together");
         assertDye(helper, recipe, source.stack(), blend,
-                DyedItemColor.applyDyes((DyedItemColor) null, List.of(DyeColor.RED, DyeColor.WHITE)).rgb(),
-                DyedItemColor.applyDyes((DyedItemColor) null, List.of(DyeColor.RED, DyeColor.BLUE)).rgb(),
+                vanillaColor(DyeColor.RED, DyeColor.WHITE),
+                vanillaColor(DyeColor.RED, DyeColor.BLUE),
                 "Each region blends only the dyes that apply to it");
-        var invalid = grid(source.stack(), 3, Items.DYE.pick(DyeColor.RED));
+        var invalid = grid(source.stack(), 3, DyeItem.byColor(DyeColor.RED));
         invalid.set(5, bag(BackpackTier.LEATHER).stack());
         helper.assertFalse(recipe.matches(CraftingInput.of(3, 3, invalid), helper.getLevel()), "Two backpacks cannot merge or duplicate their inventories through dyeing");
         invalid.set(5, new ItemStack(Items.STICK));
@@ -116,7 +119,7 @@ final class RecipeGameTests {
         for (int slot = 0; slot < 9; slot++) menu.grid().setItem(slot, both.get(slot).copy());
         ItemStack preview = menu.getSlot(0).getItem().copy();
         helper.assertFalse(preview.isEmpty(), "Dye recipe also resolves through the real portable crafting grid");
-        menu.clicked(0, 0, ContainerInput.PICKUP, player);
+        menu.clicked(0, 0, ClickType.PICKUP, player);
         assertStack(helper, menu.getCarried(), preview, "The real result take retains every colored backpack component");
         helper.assertTrue(menu.grid().isEmpty(), "Dye crafting consumes exactly one source bag and the one dye");
         BagInventory loaded = BagInventory.of(roundTrip(helper.getLevel(), menu.getCarried()));
@@ -134,9 +137,10 @@ final class RecipeGameTests {
         source.remember(0, new ItemStack(Items.EMERALD));
         source.toggleNoSort(1);
         source.stack().set(DataComponents.CUSTOM_NAME, Component.literal("Washed expedition"));
-        source.stack().set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(List.of(.25F), List.of(true), List.of("retained"), List.of(0x123456, 0xfedcba)));
+        source.stack().set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(314159));
+        BackpackColors.set(source.stack(), 0x123456, 0xfedcba);
         ItemStack expected = source.stack().copy();
-        expected.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(List.of(.25F), List.of(true), List.of("retained"), List.of(0xB97843, 0x503B36)));
+        BackpackColors.set(expected, BackpackColors.DEFAULT_BODY, BackpackColors.DEFAULT_TRIM);
         player.getInventory().setItem(0, source.stack());
         BlockPos pos = helper.absolutePos(new BlockPos(2, 1, 2));
         helper.getLevel().setBlockAndUpdate(pos, Blocks.WATER_CAULDRON.defaultBlockState().setValue(LayeredCauldronBlock.LEVEL, 3));
@@ -152,12 +156,19 @@ final class RecipeGameTests {
         helper.assertValueEqual(count(loaded, Items.DIAMOND), 999, "Wash and save preserve enhanced main storage counts");
         helper.assertTrue(loaded.upgradeInventory(upgrade(loaded, 1)).getItem(11).is(Items.MUSIC_DISC_13), "Wash and save preserve the last advanced record slot");
         helper.assertValueEqual(loaded.identity(), source.identity(), "Washing preserves the physical backpack identity");
-        source.stack().set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(List.of(.25F), List.of(true), List.of("retained"), List.of(0xff0000, 0x00ff00)));
+        BackpackColors.set(source.stack(), 0xff0000, 0x00ff00);
         helper.getLevel().setBlockAndUpdate(pos, Blocks.WATER_CAULDRON.defaultBlockState().setValue(LayeredCauldronBlock.LEVEL, 1));
         player.getMainHandItem().useOn(context);
         helper.assertTrue(helper.getLevel().getBlockState(pos).is(Blocks.CAULDRON), "Washing the last water layer leaves an empty cauldron");
         assertStack(helper, player.getMainHandItem(), expected, "The last-layer wash remains lossless");
         helper.succeed();
+    }
+
+    /** Independent expected value comes from the actual 1.21.1 vanilla dye implementation. */
+    private static int vanillaColor(DyeColor... colors) {
+        ItemStack dyed = DyedItemColor.applyDyes(new ItemStack(Items.LEATHER_CHESTPLATE),
+                java.util.Arrays.stream(colors).map(DyeItem::byColor).toList());
+        return dyed.get(DataComponents.DYED_COLOR).rgb();
     }
 
     private static List<ItemStack> grid(ItemStack bag, int dyeSlot, Item dye) {
@@ -171,10 +182,9 @@ final class RecipeGameTests {
     private static void assertDye(GameTestHelper helper, CraftingRecipe recipe, ItemStack original, List<ItemStack> items, int body, int trim, String message) {
         CraftingInput input = CraftingInput.of(3, 3, items);
         helper.assertTrue(recipe.matches(input, helper.getLevel()), "Valid dye layout matches: " + message);
-        ItemStack result = recipe.assemble(input);
-        CustomModelData previous = original.get(DataComponents.CUSTOM_MODEL_DATA);
+        ItemStack result = recipe.assemble(input, helper.getLevel().registryAccess());
         ItemStack expected = original.copy();
-        expected.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(previous.floats(), previous.flags(), previous.strings(), List.of(body, trim)));
+        BackpackColors.set(expected, body, trim);
         assertStack(helper, result, expected, message + "; all unrelated components remain unchanged");
         assertStack(helper, input.items().stream().filter(BackpackRegistry::isBackpack).findFirst().orElseThrow(), original,
                 "Preview computation does not mutate its source backpack");

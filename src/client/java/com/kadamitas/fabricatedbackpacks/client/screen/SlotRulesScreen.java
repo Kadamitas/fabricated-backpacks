@@ -1,11 +1,12 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.upgrade.AlchemyRuntime;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
@@ -67,7 +68,7 @@ public final class SlotRulesScreen extends Screen {
     private void send(String action) { ClientPlayNetworking.send(new MenuAction(menu.containerId, "upgrade", 0, 0, action)); }
 
     private String condition(InstalledUpgrade upgrade, int row) {
-        return menu.bag().settings(upgrade).getStringOr((alchemy ? "alchemy_condition_" : "refill_target_") + row,
+        return NbtAccess.getStringOr(menu.bag().settings(upgrade), (alchemy ? "alchemy_condition_" : "refill_target_") + row,
                 alchemy ? AlchemyRuntime.defaultCondition(menu.bag().ghost(upgrade, row)).name() : "ANY");
     }
 
@@ -80,7 +81,7 @@ public final class SlotRulesScreen extends Screen {
             row.condition().active = !menu.bag().ghost(upgrade, row.slot()).isEmpty();
             if (alchemy) {
                 boolean hurt = row.condition().active && selected.equals("HURT");
-                int health = menu.bag().settings(upgrade).getIntOr("alchemy_health_" + row.slot(), 75);
+                int health = NbtAccess.getIntOr(menu.bag().settings(upgrade), "alchemy_health_" + row.slot(), 75);
                 row.lower().active = hurt && health > 0;
                 row.higher().active = hurt && health < 100;
                 row.lower().setTooltip(Tooltip.create(Component.literal("Use below " + health + "% health; lower by 5 percentage points")));
@@ -91,7 +92,7 @@ public final class SlotRulesScreen extends Screen {
 
     @Override public void tick() {
         var upgrade = menu.selected().orElse(null);
-        if (!sessionCurrent()) minecraft.gui.setScreen(null);
+        if (!sessionCurrent()) minecraft.setScreen(null);
         else refresh(upgrade);
     }
 
@@ -100,27 +101,29 @@ public final class SlotRulesScreen extends Screen {
                 && menu.selected().filter(upgrade -> upgrade.slot() == upgradeSlot && upgrade.kind() == upgradeKind).isPresent();
     }
 
-    @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    // This screen paints its own backdrop before its native widgets.
+    @Override public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {}
+
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         graphics.fill(left, top, left + 312, top + 228, 0xffccb996);
-        graphics.outline(left, top, 312, 228, 0xff493326);
-        graphics.text(font, title, left + 12, top + 10, 0xff302a21, false);
-        graphics.text(font, "Set items in the upgrade's ghost filters first", left + 12, top + 23, 0xff493326, false);
+        graphics.renderOutline(left, top, 312, 228, 0xff493326);
+        graphics.drawString(font, title, left + 12, top + 10, 0xff302a21, false);
+        graphics.drawString(font, "Set items in the upgrade's ghost filters first", left + 12, top + 23, 0xff493326, false);
         menu.selected().ifPresent(upgrade -> {
             for (var row : rows) {
                 int y = top + 37 + row.slot() % PAGE_SIZE * 24;
-                graphics.text(font, Integer.toString(row.slot() + 1), left + 12, y + 4, 0xff493326, false);
-                graphics.fakeItem(menu.bag().ghost(upgrade, row.slot()), left + 29, y);
+                graphics.drawString(font, Integer.toString(row.slot() + 1), left + 12, y + 4, 0xff493326, false);
+                graphics.renderFakeItem(menu.bag().ghost(upgrade, row.slot()), left + 29, y);
                 if (alchemy && condition(upgrade, row.slot()).equals("HURT"))
-                    graphics.text(font, "< " + menu.bag().settings(upgrade).getIntOr("alchemy_health_" + row.slot(), 75) + "%",
+                    graphics.drawString(font, "< " + NbtAccess.getIntOr(menu.bag().settings(upgrade), "alchemy_health_" + row.slot(), 75) + "%",
                             left + 193, y + 4, 0xff493326, false);
             }
-            graphics.centeredText(font, "Page " + (page + 1) + "/" + Math.max(1, Math.ceilDiv(menu.bag().filterSlots(upgrade), PAGE_SIZE)),
+            graphics.drawCenteredString(font, "Page " + (page + 1) + "/" + Math.max(1, Math.ceilDiv(menu.bag().filterSlots(upgrade), PAGE_SIZE)),
                     left + 156, top + 215, 0xff493326);
         });
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
+        super.render(graphics, mouseX, mouseY, delta);
     }
 
-    @Override public void onClose() { minecraft.gui.setScreen(sessionCurrent() ? previous : null); }
+    @Override public void onClose() { minecraft.setScreen(sessionCurrent() ? previous : null); }
     @Override public boolean isPauseScreen() { return false; }
-    @Override public boolean isInGameUi() { return true; }
 }

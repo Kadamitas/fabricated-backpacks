@@ -9,6 +9,8 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /** Only used for air/liquid blocks: tile entities and dropping blocks are excluded by the caller. */
 final class WorldFluidChange extends SnapshotParticipant<BlockState> {
+    // No client, neighbour or shape notifications escape an uncommitted air/liquid mutation.
+    private static final int TENTATIVE_FLAGS = Block.UPDATE_INVISIBLE | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
     private final ServerLevel level;
     private final BlockPos position;
     private final BlockState original;
@@ -21,12 +23,12 @@ final class WorldFluidChange extends SnapshotParticipant<BlockState> {
 
     boolean set(BlockState state, TransactionContext transaction) {
         updateSnapshots(transaction);
-        return level.setBlock(position, state, Block.UPDATE_SKIP_ALL_SIDEEFFECTS);
+        return level.setBlock(position, state, TENTATIVE_FLAGS);
     }
 
     @Override protected BlockState createSnapshot() { return level.getBlockState(position); }
     @Override protected void readSnapshot(BlockState state) {
-        level.setBlock(position, state, Block.UPDATE_SKIP_ALL_SIDEEFFECTS);
+        level.setBlock(position, state, TENTATIVE_FLAGS);
     }
 
     @Override protected void onFinalCommit() {

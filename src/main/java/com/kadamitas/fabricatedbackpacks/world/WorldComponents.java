@@ -9,12 +9,12 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 public final class WorldComponents {
-    public record DeferredLoot(Identifier table, long seed, int rolls, float luck) {
+    public record DeferredLoot(ResourceLocation table, long seed, int rolls, float luck) {
         public static final Codec<DeferredLoot> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Identifier.CODEC.fieldOf("table").forGetter(DeferredLoot::table), Codec.LONG.fieldOf("seed").forGetter(DeferredLoot::seed),
+                ResourceLocation.CODEC.fieldOf("table").forGetter(DeferredLoot::table), Codec.LONG.fieldOf("seed").forGetter(DeferredLoot::seed),
                 Codec.intRange(1, 6).fieldOf("rolls").forGetter(DeferredLoot::rolls),
                 Codec.floatRange(0, 100).fieldOf("luck").forGetter(DeferredLoot::luck)).apply(instance, DeferredLoot::new));
         public DeferredLoot {
@@ -30,7 +30,7 @@ public final class WorldComponents {
             builder -> builder.persistent(Codec.floatRange(0, 100)));
     private WorldComponents() { }
     public static void initialize() { }
-    private static Identifier id(String path) { return Identifier.fromNamespaceAndPath("fabricated_backpacks", path); }
+    private static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath("fabricated_backpacks", path); }
     private static <T> DataComponentType<T> component(String id, Codec<T> codec) {
         return Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE, id(id), DataComponentType.<T>builder()
                 .persistent(codec).networkSynchronized(ByteBufCodecs.fromCodecWithRegistries(codec)).cacheEncoding().build());

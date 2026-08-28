@@ -8,7 +8,7 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.upgrade.InventoryMoves;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -33,8 +33,7 @@ import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.item.crafting.SmithingRecipe;
 import net.minecraft.world.item.crafting.SmithingRecipeInput;
 import net.minecraft.world.item.crafting.StonecutterRecipe;
-import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
-import net.minecraft.world.level.gamerules.GameRules;
+import net.minecraft.world.level.GameRules;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,12 +50,12 @@ final class WorkstationTransfer {
         return destination == null ? BrowserWorkstation.NONE : destination.kind;
     }
 
-    static boolean transfer(ServerPlayer player, Identifier recipeId, boolean maximum) {
+    static boolean transfer(ServerPlayer player, ResourceLocation recipeId, boolean maximum) {
         Destination destination = destination(player);
         if (destination == null || recipeId == null) return false;
-        RecipeHolder<?> holder = player.level().recipeAccess().byKey(ResourceKey.create(Registries.RECIPE, recipeId)).orElse(null);
+        RecipeHolder<?> holder = player.serverLevel().getRecipeManager().byKey(recipeId).orElse(null);
         if (holder == null || !destination.kind.accepts(BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType()))
-                || !holder.value().isSpecial() && player.level().getGameRules().get(GameRules.LIMITED_CRAFTING)
+                || !holder.value().isSpecial() && player.serverLevel().getGameRules().getBoolean(GameRules.RULE_LIMITED_CRAFTING)
                 && !player.getRecipeBook().contains(holder.id())) return false;
         List<Requirement> requirements = requirements(destination, holder);
         if (requirements.isEmpty()) return false;
@@ -123,7 +122,7 @@ final class WorkstationTransfer {
         if (!player.isAlive() || player.isSpectator() || !menu.stillValid(player) || !menu.getCarried().isEmpty()) return null;
         BackpackMenu origin = WorkstationMenus.origin(menu);
         BagInventory bag = origin == null ? null : origin.bag();
-        if (menu instanceof CraftingMenu crafting) return new Destination(menu, BrowserWorkstation.CRAFTING, crafting.getInputGridSlots(), bag, origin);
+        if (menu instanceof CraftingMenu crafting) return new Destination(menu, BrowserWorkstation.CRAFTING, crafting.slots.subList(1, 10), bag, origin);
         if (menu instanceof StonecutterMenu) return new Destination(menu, BrowserWorkstation.STONECUTTER, List.of(menu.getSlot(0)), bag, origin);
         if (menu instanceof SmithingMenu) return new Destination(menu, BrowserWorkstation.SMITHING, menu.slots.subList(0, 3), bag, origin);
         if (menu instanceof FurnaceMenu) return new Destination(menu, BrowserWorkstation.SMELTING, List.of(menu.getSlot(0)), null, null);
@@ -147,26 +146,23 @@ final class WorkstationTransfer {
     private static List<Requirement> requirements(Destination destination, RecipeHolder<?> holder) {
         List<Requirement> result = new ArrayList<>();
         if (holder.value() instanceof CraftingRecipe recipe && destination.kind == BrowserWorkstation.CRAFTING) {
-            var placement = recipe.placementInfo();
-            if (placement.isImpossibleToPlace() || placement.slotsToIngredientIndex().size() > 9) return List.of();
-            int width = recipe instanceof ShapedRecipe shaped ? shaped.getWidth() : recipe.display().stream()
-                    .filter(ShapedCraftingRecipeDisplay.class::isInstance).map(ShapedCraftingRecipeDisplay.class::cast)
-                    .mapToInt(ShapedCraftingRecipeDisplay::width).findFirst().orElse(3);
+            List<Ingredient> ingredients = recipe.getIngredients();
+            if (ingredients.size() > 9 || !recipe.canCraftInDimensions(3, 3)) return List.of();
+            int width = recipe instanceof ShapedRecipe shaped ? shaped.getWidth() : 3;
             if (width < 1 || width > 3) return List.of();
-            for (int index = 0; index < placement.slotsToIngredientIndex().size(); index++) {
-                int ingredient = placement.slotsToIngredientIndex().getInt(index);
+            for (int index = 0; index < ingredients.size(); index++) {
                 int cell = index / width * 3 + index % width;
-                if (cell >= 9 || ingredient >= placement.ingredients().size()) return List.of();
-                if (ingredient >= 0) result.add(new Requirement(cell, destination.inputs.get(cell), placement.ingredients().get(ingredient)));
+                if (cell >= 9) return List.of();
+                Ingredient ingredient = ingredients.get(index);
+                if (!ingredient.isEmpty()) result.add(new Requirement(cell, destination.inputs.get(cell), ingredient));
             }
         } else if (holder.value() instanceof SmithingRecipe recipe && destination.kind == BrowserWorkstation.SMITHING) {
-            recipe.templateIngredient().ifPresent(ingredient -> result.add(new Requirement(0, destination.inputs.get(0), ingredient)));
-            result.add(new Requirement(1, destination.inputs.get(1), recipe.baseIngredient()));
-            recipe.additionIngredient().ifPresent(ingredient -> result.add(new Requirement(2, destination.inputs.get(2), ingredient)));
-        } else if (holder.value() instanceof AbstractCookingRecipe recipe && destination.inputs.size() == 1) {
-            result.add(new Requirement(0, destination.inputs.getFirst(), recipe.input()));
-        } else if (holder.value() instanceof StonecutterRecipe recipe && destination.kind == BrowserWorkstation.STONECUTTER) {
-            result.add(new Requirement(0, destination.inputs.getFirst(), recipe.input()));
+            result.add(new Requirement(0, destination.inputs.get(0), recipe::isTemplateIngredient));
+            result.add(new Requirement(1, destination.inputs.get(1), recipe::isBaseIngredient));
+            result.add(new Requirement(2, destination.inputs.get(2), recipe::isAdditionIngredient));
+        } else if ((holder.value() instanceof AbstractCookingRecipe || holder.value() instanceof StonecutterRecipe)
+                && destination.inputs.size() == 1 && !holder.value().getIngredients().isEmpty()) {
+            result.add(new Requirement(0, destination.inputs.getFirst(), holder.value().getIngredients().getFirst()));
         }
         return result;
     }
@@ -249,28 +245,28 @@ final class WorkstationTransfer {
         ItemStack result;
         if (holder.value() instanceof CraftingRecipe recipe) {
             CraftingInput input = CraftingInput.of(3, 3, inputs);
-            if (!recipe.matches(input, player.level())) return false;
-            result = recipe.assemble(input);
+            if (!recipe.matches(input, player.serverLevel())) return false;
+            result = recipe.assemble(input, player.registryAccess());
         } else if (holder.value() instanceof SmithingRecipe recipe) {
             SmithingRecipeInput input = new SmithingRecipeInput(inputs.get(0), inputs.get(1), inputs.get(2));
-            if (!recipe.matches(input, player.level()) || player.level().recipeAccess().getRecipeFor(RecipeType.SMITHING, input, player.level())
+            if (!recipe.matches(input, player.serverLevel()) || player.serverLevel().getRecipeManager().getRecipeFor(RecipeType.SMITHING, input, player.serverLevel())
                     .filter(selected -> selected.id().equals(holder.id())).isEmpty()) return false;
-            result = recipe.assemble(input);
+            result = recipe.assemble(input, player.registryAccess());
         } else if (holder.value() instanceof StonecutterRecipe recipe) {
             SingleRecipeInput input = new SingleRecipeInput(inputs.getFirst());
-            if (!recipe.matches(input, player.level())) return false;
-            result = recipe.assemble(input);
+            if (!recipe.matches(input, player.serverLevel())) return false;
+            result = recipe.assemble(input, player.registryAccess());
         } else if (holder.value() instanceof AbstractCookingRecipe recipe) {
             SingleRecipeInput input = new SingleRecipeInput(inputs.getFirst());
-            Optional<RecipeHolder<?>> selected = (Optional) player.level().recipeAccess().getRecipeFor((RecipeType) recipe.getType(), input, player.level());
-            if (!recipe.matches(input, player.level()) || selected.filter(current -> current.id().equals(holder.id())).isEmpty()) return false;
-            result = recipe.assemble(input);
+            Optional<RecipeHolder<?>> selected = (Optional) player.serverLevel().getRecipeManager().getRecipeFor((RecipeType) recipe.getType(), input, player.serverLevel());
+            if (!recipe.matches(input, player.serverLevel()) || selected.filter(current -> current.id().equals(holder.id())).isEmpty()) return false;
+            result = recipe.assemble(input, player.registryAccess());
         } else return false;
-        return !result.isEmpty() && result.isItemEnabled(player.level().enabledFeatures());
+        return !result.isEmpty() && result.isItemEnabled(player.serverLevel().enabledFeatures());
     }
 
     private enum Area { INPUT, STORAGE, INVENTORY }
-    private record Requirement(int inputIndex, Slot slot, Ingredient ingredient) {}
+    private record Requirement(int inputIndex, Slot slot, java.util.function.Predicate<ItemStack> ingredient) {}
     private record Source(Area area, int slot, boolean infinite) {}
     private record Plan(List<ItemStack> inputs, List<ItemStack> storage, List<ItemStack> inventory) {}
     private record CompletedPlan(Plan sources, List<ItemStack> inputs) {}

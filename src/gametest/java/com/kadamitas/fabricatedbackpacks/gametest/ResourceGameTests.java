@@ -1,5 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
+import com.kadamitas.fabricatedbackpacks.compat.NbtAccess;
 import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitBundleBlockEntity;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitKind;
@@ -28,7 +29,7 @@ import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
+import net.fabricmc.fabric.api.transfer.v1.item.InventoryStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
@@ -47,7 +48,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
@@ -67,7 +68,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -94,16 +94,15 @@ public final class ResourceGameTests {
 
     public static void registerFixtures() {
         if (energyCell != null) return;
-        Identifier id = Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "energy_cell");
-        // Item.Properties derives ITEM_MODEL from the registry ID after component initialization.
-        // The test resource pack supplies its item definition; no fixture art enters the release jar.
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "energy_cell");
+        // The test resource pack supplies the registered fixture item model; no fixture art enters the release jar.
         energyCell = Registry.register(BuiltInRegistries.ITEM, id,
-                new TestEnergyCell(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id)).stacksTo(1)));
-        Identifier receiverId = Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "energy_receiver");
+                new TestEnergyCell(new Item.Properties().stacksTo(1)));
+        ResourceLocation receiverId = ResourceLocation.fromNamespaceAndPath("fabricated_backpacks_tests", "energy_receiver");
         energyReceiver = Registry.register(BuiltInRegistries.BLOCK, receiverId,
-                new Block(Block.Properties.of().setId(ResourceKey.create(Registries.BLOCK, receiverId))) {
+                new Block(Block.Properties.of()) {
                     @Override protected void neighborChanged(BlockState state, Level level, BlockPos position,
-                                                              Block source, Orientation orientation, boolean moved) {
+                                                              Block source, BlockPos sourcePosition, boolean moved) {
                         Receiver receiver = RECEIVERS.get(new Endpoint(level, position));
                         if (receiver != null) receiver.neighborUpdates++;
                     }
@@ -165,7 +164,7 @@ public final class ResourceGameTests {
     private static InstalledUpgrade upgrade(BagInventory bag, int slot) { return BackpackTestSupport.upgrade(bag, slot); }
     private static BackpackTank tank(BagInventory bag) { return new BackpackTank(bag, upgrade(bag, 0), false); }
     private static ContainerItemContext context(Container container, int slot) {
-        return ContainerItemContext.ofSingleSlot(ContainerStorage.of(container, null).getSlot(slot));
+        return ContainerItemContext.ofSingleSlot(InventoryStorage.of(container, null).getSlot(slot));
     }
     private static void fill(BackpackTank tank, FluidVariant resource, long droplets) {
         try (Transaction transaction = Transaction.openOuter()) {
@@ -444,7 +443,7 @@ public final class ResourceGameTests {
         }
         SimpleContainer source = new SimpleContainer(new ItemStack(Items.DIRT, 4));
         try (Transaction outer = Transaction.openOuter()) {
-            helper.assertValueEqual(StorageUtil.move(ContainerStorage.of(source, null), items, item -> true, 4, outer), 0L,
+            helper.assertValueEqual(StorageUtil.move(InventoryStorage.of(source, null), items, item -> true, 4, outer), 0L,
                     "The actual Fabric transfer helper rolls back a refused destination exchange");
             outer.commit();
         }
@@ -658,7 +657,7 @@ public final class ResourceGameTests {
         BagInventory bag = bag(UpgradeKind.BATTERY);
         InstalledUpgrade upgrade = upgrade(bag, 0);
         helper.assertTrue(UpgradeEngine.action(bag, 0, "external_output", BackpackTestSupport.player(helper)), "Battery output can be disabled through its server action");
-        helper.assertFalse(bag.settings(upgrade).getBooleanOr("external_output", true), "The action changes the external-output setting");
+        helper.assertFalse(NbtAccess.getBooleanOr(bag.settings(upgrade), "external_output", true), "The action changes the external-output setting");
         BackpackBattery battery = new BackpackBattery(bag, upgrade);
         BackpackBattery alias = new BackpackBattery(bag, upgrade);
         ItemStack initial = bag.stack().copy();
@@ -779,8 +778,8 @@ public final class ResourceGameTests {
             outer.commit();
         }
         var publicTag = entity.getUpdateTag(helper.getLevel().registryAccess());
-        helper.assertValueEqual(publicTag.getIntOr("energy_ports", 0), 0x1555, "The update publishes only insertion support on all six faces and unsided access");
-        ItemStack publicStack = net.minecraft.world.item.ItemStackTemplate.CODEC.parse(net.minecraft.resources.RegistryOps.create(
+        helper.assertValueEqual(NbtAccess.getIntOr(publicTag, "energy_ports", 0), 0x1555, "The update publishes only insertion support on all six faces and unsided access");
+        ItemStack publicStack = com.kadamitas.fabricatedbackpacks.compat.ItemStackTemplate.CODEC.parse(net.minecraft.resources.RegistryOps.create(
                 net.minecraft.nbt.NbtOps.INSTANCE, helper.getLevel().registryAccess()), publicTag.get("backpack")).getOrThrow().create();
         helper.assertFalse(publicStack.has(BagComponents.UPGRADES) || publicTag.toString().contains("tank_fluid") || publicTag.toString().contains("amount:"),
                 "Capability updates do not publish battery quantities, fluid state, or private upgrades");
@@ -1099,8 +1098,8 @@ public final class ResourceGameTests {
         bag.updateSettings(upgrade(bag, 1), state -> { state.putInt("target", Integer.MAX_VALUE); state.putInt("levels", Integer.MIN_VALUE); });
         ResourceRuntime.action(bag, 1, "target_up", player);
         ResourceRuntime.action(bag, 1, "levels_down", player);
-        helper.assertValueEqual(bag.settings(upgrade(bag, 1)).getIntOr("target", -1), 10_000, "Target adjustment clamps without overflowing");
-        helper.assertValueEqual(bag.settings(upgrade(bag, 1)).getIntOr("levels", -1), 1, "Level adjustment clamps without underflowing");
+        helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade(bag, 1)), "target", -1), 10_000, "Target adjustment clamps without overflowing");
+        helper.assertValueEqual(NbtAccess.getIntOr(bag.settings(upgrade(bag, 1)), "levels", -1), 1, "Level adjustment clamps without underflowing");
         long nearlyFull = tank(bag).getCapacity() - FluidAmount.DROPLETS_PER_XP + 1;
         fill(tank(bag), ResourceComponents.experience(), nearlyFull);
         helper.assertValueEqual(ResourceRuntime.offerExperience(bag, 1), 0L, "A space smaller than one point rejects a whole-point source");
@@ -1125,7 +1124,7 @@ public final class ResourceGameTests {
         long before = tank(magnet).getCapacity() - 10 * FluidAmount.DROPLETS_PER_XP;
         fill(tank(magnet), ResourceComponents.experience(), before);
         Vec3 orbPosition = helper.absoluteVec(new Vec3(1.5, 2, 1.5));
-        ExperienceOrb orb = new ExperienceOrb(helper.getLevel(), orbPosition, Vec3.ZERO, 7);
+        ExperienceOrb orb = new ExperienceOrb(helper.getLevel(), orbPosition.x, orbPosition.y, orbPosition.z, 7);
         ((ExperienceOrbAccessor) orb).fabricatedBackpacks$setCount(3);
         orb.setNoGravity(true);
         helper.getLevel().addFreshEntity(orb);
@@ -1139,7 +1138,7 @@ public final class ResourceGameTests {
             helper.assertValueEqual(player.getMainHandItem().getDamageValue(), 0, "Mending repairs equipped tools even with XP transfer off");
             helper.assertValueEqual(tank(mending).getAmount(), FluidAmount.dropletsForMb(10), "One durability repair spends exactly half an XP point");
             helper.assertValueEqual(tank(cooking).getAmount(), 2 * FluidAmount.DROPLETS_PER_XP, "Auto-cooking hands off only complete stored experience points");
-            helper.assertValueEqual(cooking.settings(upgrade(cooking, 1)).getDoubleOr("experience", -1), 0.75, "Fractional cooking XP remains in the machine");
+            helper.assertValueEqual(NbtAccess.getDoubleOr(cooking.settings(upgrade(cooking, 1)), "experience", -1), 0.75, "Fractional cooking XP remains in the machine");
             long remaining = helper.getLevel().getEntitiesOfClass(ExperienceOrb.class, new AABB(magnetPosition).inflate(3), value -> !value.isRemoved()).stream()
                     .mapToLong(value -> (long) value.getValue() * ((ExperienceOrbAccessor) value).fabricatedBackpacks$getCount()).sum();
             long captured = (tank(magnet).getAmount() - before) / FluidAmount.DROPLETS_PER_XP;
