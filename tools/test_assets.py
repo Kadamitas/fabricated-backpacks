@@ -15,13 +15,100 @@ import re
 import struct
 import sys
 import unittest
+import zlib
 from pathlib import Path
+from unittest.mock import patch
 from zipfile import ZipFile
 
 import generate_assets as assets
 
 
 TARGET_JAR: Path | None = None
+
+
+def decode_rgba_png(data: bytes) -> tuple[int, int, bytes]:
+    """Independently validate and decode the generator's filter-0 RGBA PNG format."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("Invalid PNG signature")
+    position, chunks = 8, []
+    while position < len(data):
+        if position + 12 > len(data):
+            raise ValueError("Truncated PNG chunk")
+        size = struct.unpack_from(">I", data, position)[0]
+        end = position + 12 + size
+        if end > len(data):
+            raise ValueError("Truncated PNG payload")
+        kind = data[position + 4:position + 8]
+        payload = data[position + 8:end - 4]
+        if struct.unpack_from(">I", data, end - 4)[0] != zlib.crc32(kind + payload):
+            raise ValueError("Incorrect PNG chunk CRC")
+        chunks.append((kind, payload))
+        position = end
+    if [kind for kind, _ in chunks] != [b"IHDR", b"IDAT", b"IEND"] or chunks[-1][1]:
+        raise ValueError("Unexpected PNG chunk structure")
+    width, height, depth, color, compression, filtering, interlace = struct.unpack(">IIBBBBB", chunks[0][1])
+    if width <= 0 or height <= 0 or (depth, color, compression, filtering, interlace) != (8, 6, 0, 0, 0):
+        raise ValueError("Unexpected PNG pixel format")
+    decoder = zlib.decompressobj()
+    raw = decoder.decompress(chunks[1][1]) + decoder.flush()
+    if not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+        raise ValueError("Incomplete or concatenated PNG zlib stream")
+    stride = width * 4 + 1
+    if len(raw) != height * stride or any(raw[row * stride] != 0 for row in range(height)):
+        raise ValueError("Unexpected PNG scanline size or filter")
+    return width, height, b"".join(raw[row * stride + 1:(row + 1) * stride] for row in range(height))
+
+
+class PngEncodingTest(unittest.TestCase):
+    def test_stored_zlib_has_exact_portable_vectors(self):
+        self.assertEqual(bytes.fromhex("78 01 01 00 00 ff ff 00 00 00 01"), assets.stored_zlib(b""))
+        self.assertEqual(bytes.fromhex("78 01 01 05 00 fa ff 68 65 6c 6c 6f 06 2c 02 15"),
+                         assets.stored_zlib(b"hello"))
+
+    def test_stored_zlib_block_boundaries_and_checksums(self):
+        for size in (0, 1, 255, 256, 65534, 65535, 65536, 131069, 131070, 131071, 200000):
+            for pattern in (bytes(range(256)), b"\xff"):
+                with self.subTest(size=size, pattern=len(pattern)):
+                    data = (pattern * (size // len(pattern) + 1))[:size]
+                    encoded = assets.stored_zlib(data)
+                    self.assertEqual(b"\x78\x01", encoded[:2])
+                    self.assertEqual(0, int.from_bytes(encoded[:2], "big") % 31)
+                    self.assertEqual(zlib.adler32(data), struct.unpack(">I", encoded[-4:])[0])
+                    position, decoded, sizes = 2, bytearray(), []
+                    while True:
+                        header = encoded[position]
+                        self.assertIn(header, (0, 1), "Only BFINAL may be set in a byte-aligned stored-block header")
+                        length, complement = struct.unpack_from("<HH", encoded, position + 1)
+                        self.assertEqual(0xffff, length ^ complement)
+                        position += 5
+                        self.assertLessEqual(position + length, len(encoded) - 4)
+                        decoded.extend(encoded[position:position + length])
+                        sizes.append(length)
+                        position += length
+                        if header:
+                            break
+                    self.assertEqual(len(encoded) - 4, position, "Exactly one final block precedes the checksum")
+                    self.assertEqual([min(65535, size - start) for start in range(0, max(1, size), 65535)], sizes)
+                    self.assertEqual(data, bytes(decoded))
+                    self.assertEqual(data, zlib.decompress(encoded), "The independent platform decoder accepts the stream")
+                    self.assertEqual(size + 6 + 5 * max(1, math.ceil(size / 65535)), len(encoded))
+
+    def test_png_preserves_dimensions_rgba_and_scanlines_across_blocks(self):
+        for width, height in ((1, 1), (16, 16), (257, 64)):
+            with self.subTest(width=width, height=height):
+                raster = assets.Raster(width, height)
+                raster.pixels = [(i % 256, i * 7 % 256, i * 17 % 256, i * 13 % 256)
+                                 for i in range(width * height)]
+                expected = bytes(channel for pixel in raster.pixels for channel in pixel)
+                self.assertEqual((width, height, expected), decode_rgba_png(raster.png()))
+
+
+    def test_png_never_calls_a_platform_compressor(self):
+        raster = assets.Raster(16, 16, (31, 79, 127, 191))
+        expected = raster.png()
+        with patch.object(assets.zlib, "compress", side_effect=AssertionError("Platform compressor used")), \
+                patch.object(assets.zlib, "compressobj", side_effect=AssertionError("Platform compressor used")):
+            self.assertEqual(expected, raster.png())
 
 
 class AssetGenerationTest(unittest.TestCase):
@@ -45,6 +132,12 @@ class AssetGenerationTest(unittest.TestCase):
                 target = assets.ROOT / path
                 self.assertTrue(target.is_file(), f"Missing generated output: {path}")
                 self.assertEqual(expected, target.read_bytes(), f"Stale generated output: {path}")
+
+    def test_every_generated_png_roundtrips_to_its_exact_rgba_pixels(self):
+        for path, raster in self.rasters.items():
+            with self.subTest(path=path):
+                expected = bytes(channel for pixel in raster.pixels for channel in pixel)
+                self.assertEqual((raster.width, raster.height, expected), decode_rgba_png(self.outputs[path]))
 
     def test_every_json_is_valid_and_owned(self):
         for path, content in self.outputs.items():

@@ -6,6 +6,7 @@ The generator writes only its declared resources and project icon. It never dele
 Review images are offline orthographic renders of the production cuboids/textures,
 not Minecraft screenshots. All geometry, palettes, pixel clusters and prose here
 are original project work, covered by the project's MIT license.
+PNG streams use explicitly encoded stored DEFLATE blocks, independent of zlib's compressor.
 """
 
 from __future__ import annotations
@@ -156,6 +157,30 @@ def rgb(value: str | int) -> tuple[int, int, int, int]:
     return (number >> 16 & 255, number >> 8 & 255, number & 255, 255)
 
 
+def stored_zlib(data: bytes) -> bytes:
+    """Encode an RFC 1950 stream with deterministic RFC 1951 stored blocks.
+
+    Compression libraries may choose different matches or Huffman trees across
+    platforms. Stored blocks specify every output byte and remain valid PNG IDAT
+    data. A zero-length input still needs one final block.
+    """
+    result = bytearray(b"\x78\x01")  # DEFLATE, 32 KiB window, no dictionary, valid FCHECK.
+    for start in range(0, max(1, len(data)), 65535):
+        block = data[start:start + 65535]
+        size = len(block)
+        result.append(int(start + size == len(data)))  # BFINAL; BTYPE=00 and zero padding.
+        result.extend(struct.pack("<HH", size, size ^ 0xffff))
+        result.extend(block)
+
+    # Python integers do not overflow; reducing these sums at the end is exact.
+    low, high = 1, 0
+    for value in data:
+        low += value
+        high += low
+    result.extend(struct.pack(">I", (high % 65521) << 16 | low % 65521))
+    return bytes(result)
+
+
 class Raster:
     def __init__(self, width: int, height: int, color=(0, 0, 0, 0)):
         self.width, self.height = width, height
@@ -191,7 +216,7 @@ class Raster:
         rows = b"".join(b"\0" + bytes(channel for pixel in self.pixels[y * self.width:(y + 1) * self.width] for channel in pixel)
                         for y in range(self.height))
         return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", self.width, self.height, 8, 6, 0, 0, 0))
-                + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b""))
+                + chunk(b"IDAT", stored_zlib(rows)) + chunk(b"IEND", b""))
 
 
 FONT = {

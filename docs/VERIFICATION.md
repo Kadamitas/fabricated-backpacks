@@ -6,11 +6,15 @@ upgrade combinations.
 
 ## Release status
 
-Checkpoint: **2026-08-28**. The current unit/server build, full client scenario,
-two-client TCP scenario and separate-JVM restart have passed. Independent
-review of the placed-appearance captures is complete. Installed-JAR acceptance
-is running; the complete release gate, hosted CI and public downloads remain
-pending. This is not a completed release approval. Earlier development runs
+Checkpoint: **2026-08-28**. The recorded unit/server build, full client scenario,
+two-client TCP scenario and separate-JVM restart passed. Targeted visual
+review of the client captures is complete. The first hosted Linux run found
+platform-dependent PNG compression. The corrected encoder passes exact-byte
+asset checks under both local Python 3.13.2/zlib and 3.14.3/zlib-ng; all 94 PNGs
+retain identical dimensions and decoded RGBA pixels. All release checks will
+be rerun. Installed-JAR acceptance is pending. The complete
+release gate and public downloads remain pending. This is not a completed
+release approval. Earlier development runs
 do not substitute for checks against the current source snapshot and artifact.
 
 ## Current executed results
@@ -30,10 +34,10 @@ passed at `2026-08-28T09:04:05Z`.
 | Full client, run 11 | **PASS:** actual client scenario, PID 38724, 41 PNG captures; placed-state and mesh-observer assertions passed | `build/client-evidence/run11/`, `.codex-local/client-evidence/full-pass.json` |
 | Multiplayer, run 5 | **PASS:** two actual Minecraft JVMs over TCP, both exit codes 0 | `build/verification/multiplayer.json` |
 | Separate-JVM restart, run 2 | **PASS:** writer PID 38724, reader PID 34432, reader exit code 0, 2 PNG captures | `.codex-local/client-evidence/restart-pass.json`, `build/client-evidence/restart2/`, `build/client-restart2.log` |
-| Independent visual review | **PASS:** 15 fresh placed-appearance frames reviewed, including the corrected body/trim recolor | `build/client-evidence/run11/screenshots/` |
-| Installed production JAR | **RUNNING:** no acceptance pass for the current artifact yet | `build/production-manual1.log`, `build/verification/manual.json` when complete |
+| Targeted visual review | **PASS:** 15 fresh client frames reviewed, including the corrected body/trim recolor, worn model and UI | `build/client-evidence/run11/screenshots/` |
+| Installed production JAR | **PENDING:** standalone startup checked, but new-world acceptance paused for the asset correction | `build/production-manual1.log`, `build/verification/manual.json` when complete |
 | Complete release gate and bundle | **PENDING** | `build/verification/release.json` when complete |
-| Hosted CI | **PENDING:** local checks do not establish a hosted workflow result | Hosted workflow result when available |
+| Hosted CI | **FAILED:** Linux found 14 PNG byte mismatches and their manifest; Java tests did not run | [First hosted run](https://github.com/Kadamitas/fabricated-backpacks/actions/runs/33158223653) |
 | Public platform downloads | **PENDING:** no public CurseForge or Modrinth download verified | Each platform must be checked separately |
 
 The main artifact is `build/libs/fabricated-backpacks-0.5.0-alpha.jar`, with
@@ -167,8 +171,8 @@ the production geometry; they are not in-game screenshots.
   and block state stay unchanged. Full client run 11 observed native mesh
   invalidations for each dye layer, and none for repeated appearance packets,
   display rotation changes or 25 idle client ticks. State assertions and real
-  captures passed. Independent review of 15 fresh placed-appearance frames,
-  including the recolored body and trim, also passed.
+  captures passed. Targeted review of 15 fresh client frames, including the
+  recolored body and trim, worn model and UI, also passed.
 
 ## Boundaries
 
