@@ -519,11 +519,15 @@ public final class ConfigGameTests {
             helper.assertValueEqual(ResourceRuntime.tankStoredMb(advanced, 0), 140L, "Advanced collection conserves all seven points");
         } finally { BackpackConfig.configure(previous); }
         ExperienceOrb pending = configOrb(helper, origin, 1.5, 3);
+        Vec3 pendingPosition = pending.position();
         helper.onEachTick(() -> {
             ServerConfig beforeTick = BackpackConfig.get();
             try {
                 BackpackConfig.configure(rules);
                 long elapsed = helper.getLevel().getGameTime() - started;
+                if (!pending.isRemoved()) helper.assertTrue(pending.position().distanceToSqr(pendingPosition) < 1e-12,
+                        "The stationary XP cadence fixture must remain in its original collection volume before work; elapsed="
+                                + elapsed + ", expected=" + pendingPosition + ", actual=" + pending.position());
                 ResourceRuntime.tick(magnet, helper.getLevel(), origin, null);
                 if (elapsed < 7) {
                     helper.assertFalse(pending.isRemoved(), "XP cadence prevents work before its configured deadline");
@@ -546,7 +550,11 @@ public final class ConfigGameTests {
 
     private static ExperienceOrb configOrb(GameTestHelper helper, BlockPos origin, double x, int points) {
         ExperienceOrb orb = new ExperienceOrb(helper.getLevel(), new Vec3(origin.getX() + x, origin.getY() + .5, origin.getZ() + .5), Vec3.ZERO, points);
-        orb.setNoGravity(true); helper.getLevel().addFreshEntity(orb); return orb;
+        // The constructor's third vector biases random launch direction; it does not set velocity.
+        orb.setNoGravity(true);
+        orb.setDeltaMovement(Vec3.ZERO);
+        helper.getLevel().addFreshEntity(orb);
+        return orb;
     }
 
     public static void configuredJukeboxResize(GameTestHelper helper) {

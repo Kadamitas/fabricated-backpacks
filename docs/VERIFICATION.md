@@ -11,8 +11,10 @@ two-client TCP scenario and separate-JVM restart passed. Targeted visual
 review of the client captures is complete. The first hosted Linux run found
 platform-dependent PNG compression. The corrected encoder passes exact-byte
 asset checks under both local Python 3.13.2/zlib and 3.14.3/zlib-ng; all 94 PNGs
-retain identical dimensions and decoded RGBA pixels. All release checks will
-be rerun. Installed-JAR acceptance is pending. The complete
+retain identical dimensions and decoded RGBA pixels. The next local and hosted
+server runs exposed random launch motion in the XP cadence fixture; its actual
+velocity is now cleared without relaxing the deadline or conservation checks.
+Fresh release checks are underway. Installed-JAR acceptance is pending. The complete
 release gate and public downloads remain pending. This is not a completed
 release approval. Earlier development runs
 do not substitute for checks against the current source snapshot and artifact.
@@ -37,7 +39,7 @@ passed at `2026-08-28T09:04:05Z`.
 | Targeted visual review | **PASS:** 15 fresh client frames reviewed, including the corrected body/trim recolor, worn model and UI | `build/client-evidence/run11/screenshots/` |
 | Installed production JAR | **PENDING:** standalone startup checked, but new-world acceptance paused for the asset correction | `build/production-manual1.log`, `build/verification/manual.json` when complete |
 | Complete release gate and bundle | **PENDING** | `build/verification/release.json` when complete |
-| Hosted CI | **FAILED:** Linux found 14 PNG byte mismatches and their manifest; Java tests did not run | [First hosted run](https://github.com/Kadamitas/fabricated-backpacks/actions/runs/33158223653) |
+| Hosted CI | **FAILED:** PNG check and 374 unit cases passed; 1 of 137 server cases failed because the XP cadence fixture could drift | [Second hosted run](https://github.com/Kadamitas/fabricated-backpacks/actions/runs/33159054060) |
 | Public platform downloads | **PENDING:** no public CurseForge or Modrinth download verified | Each platform must be checked separately |
 
 The main artifact is `build/libs/fabricated-backpacks-0.5.0-alpha.jar`, with
