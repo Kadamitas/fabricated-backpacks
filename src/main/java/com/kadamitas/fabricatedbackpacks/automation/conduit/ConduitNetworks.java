@@ -304,12 +304,23 @@ public final class ConduitNetworks {
                     .thenComparingLong(value -> value.topology.nodes().getFirst()));
             // Do not burn the whole allowance by repeatedly retrying capped or empty sources.
             // Later API producers share this tick's work budget and must retain its unused portion.
-            int attempts = active.stream().mapToInt(component -> component.sources.size()).sum();
-            while (!active.isEmpty() && attempts-- > 0 && takeWork()) {
+            // Count probes per component: a shared call count would repeat short source lists
+            // while a larger component still has unvisited physical candidates.
+            int[] remaining = active.stream().mapToInt(component -> component.sources.size()).toArray();
+            int attempts = java.util.Arrays.stream(remaining).sum();
+            while (!active.isEmpty() && attempts > 0) {
                 firstComponent = Math.floorMod(firstComponent, active.size());
-                Component component = active.get(firstComponent);
+                int index = firstComponent;
+                if (remaining[index] == 0) {
+                    firstComponent = (firstComponent + 1) % active.size();
+                    continue;
+                }
+                if (!takeWork()) break;
+                Component component = active.get(index);
                 firstComponent = (firstComponent + 1) % active.size();
-                component.attempt();
+                int visited = component.attempt(remaining[index]);
+                remaining[index] -= visited;
+                attempts -= visited;
             }
             if (level.getGameTime() % 200 == 0) {
                 long oldest = level.getGameTime() - Math.max(1_200, limits().itemIntervalTicks());
@@ -539,34 +550,64 @@ public final class ConduitNetworks {
                         : current != null || lane.world.level.getBlockState(position).isAir();
             });
         }
-        void attempt() {
-            if (!live() || routing || sources.isEmpty() || destinations.isEmpty()) return;
-            sourceIndex = Math.floorMod(sourceIndex, sources.size());
-            Endpoint source = sources.get(sourceIndex);
-            sourceIndex = (sourceIndex + 1) % sources.size();
-            if (!source.current() || !source.conduit.extracts(lane.kind, source.side)) return;
-            Located located = source.locate();
-            if (located == null) return;
-            long now = lane.world.level.getGameTime();
-            ConduitBudget sourceBudget = lane.world.budget(lane.kind, located.identity());
-            long maximum = sourceBudget.available(now, limit(lane.kind), interval(lane.kind));
-            if (maximum == 0 || sourceBudget.receivedThisTick(now)) return;
-            routing = true;
-            try (Transaction transaction = Transaction.openOuter()) {
-                if (lane.kind == ConduitKind.ENERGY && located.storage instanceof EnergyStorage energy && energy.supportsExtraction())
-                    energy(located, energy, maximum, transaction);
-                else if (located.storage instanceof Storage<?> storage && storage.supportsExtraction())
-                    resource(located, storage, maximum, transaction);
-                if (live()) transaction.commit();
-            } catch (RuntimeException failure) { failure(failure); }
-            finally { routing = false; }
+        int attempt(int maximumSources) {
+            if (!live() || routing || sources.isEmpty() || destinations.isEmpty()) return 1;
+            int visited = 0;
+            while (visited < Math.min(maximumSources, sources.size())) {
+                // The caller paid for the first source. Inert faces do not consume the whole
+                // component turn, but every additional physical probe still costs shared work.
+                if (visited > 0 && !lane.world.takeWork()) return visited;
+                visited++;
+                sourceIndex = Math.floorMod(sourceIndex, sources.size());
+                Endpoint source = sources.get(sourceIndex);
+                sourceIndex = (sourceIndex + 1) % sources.size();
+                if (!source.current() || !source.conduit.extracts(lane.kind, source.side)) continue;
+                Located located = source.locate();
+                if (located == null) continue;
+                boolean extracts;
+                try {
+                    extracts = lane.kind == ConduitKind.ENERGY
+                            ? located.storage instanceof EnergyStorage energy && energy.supportsExtraction() && energy.getAmount() > 0
+                            : located.storage instanceof Storage<?> storage && storage.supportsExtraction();
+                } catch (RuntimeException failure) {
+                    failure(failure);
+                    continue;
+                }
+                if (!extracts) continue;
+                long now = lane.world.level.getGameTime();
+                ConduitBudget sourceBudget = lane.world.budget(lane.kind, located.identity());
+                long maximum = sourceBudget.available(now, limit(lane.kind), interval(lane.kind));
+                if (maximum == 0 || sourceBudget.receivedThisTick(now)) continue;
+                routing = true;
+                try (Transaction transaction = Transaction.openOuter()) {
+                    if (lane.kind == ConduitKind.ENERGY && located.storage instanceof EnergyStorage energy)
+                        energy(located, energy, maximum, transaction);
+                    else if (located.storage instanceof Storage<?> storage)
+                        resource(located, storage, maximum, transaction);
+                    if (live()) transaction.commit();
+                } catch (RuntimeException failure) { failure(failure); }
+                finally { routing = false; }
+                return visited;
+            }
+            return visited;
         }
         private Located target(Object source, TransactionContext transaction) {
             if (destinations.isEmpty()) return null;
             Cursor cursor = destinationsBySource.computeIfAbsent(source, ignored -> new Cursor());
-            Endpoint endpoint = destinations.get(cursor.choose(destinations.size(), transaction));
-            if (!endpoint.conduit.mode(lane.kind, endpoint.side).inserts()) return null;
-            return endpoint.locate();
+            for (int probe = 0; probe < destinations.size(); probe++) {
+                // The scheduler/forwarder already paid for the first probe. Extra skips still
+                // consume the shared work budget, even when the enclosing transfer is aborted.
+                if (probe > 0 && !lane.world.takeWork()) return null;
+                Endpoint endpoint = destinations.get(cursor.choose(destinations.size(), transaction));
+                if (!endpoint.conduit.mode(lane.kind, endpoint.side).inserts()) continue;
+                Located located = endpoint.locate();
+                if (located == null || source.equals(located.identity())) continue;
+                boolean inserts = lane.kind == ConduitKind.ENERGY
+                        ? located.storage instanceof EnergyStorage energy && energy.supportsInsertion()
+                        : located.storage instanceof Storage<?> storage && storage.supportsInsertion();
+                if (inserts) return located;
+            }
+            return null;
         }
         private long maximum(Object sourceIdentity, Located target, long requested) {
             if (target == null || sourceIdentity.equals(target.identity())) return 0;

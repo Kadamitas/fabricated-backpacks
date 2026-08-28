@@ -104,7 +104,8 @@ test selection or discovery expectation was changed. Log:
 All749 source hashes, exact test discovery, freshness, and production archive
 checks passed. This scoped audit does not replace the release gate.
 
-Current candidate: `build/index-verification-libs/fabricated-backpacks-0.5.0-alpha.jar`:
+Indexed-storage candidate at that checkpoint:
+`build/index-verification-libs/fabricated-backpacks-0.5.0-alpha.jar`:
 
 ```text
 97cfc3dcf2446c08f2312158ea16392c843a8978d4c5895947047c49e67de6d9
@@ -114,6 +115,36 @@ The rendered-client, restart, JEI and multiplayer observations above precede
 this three-file storage correction. They are not relabeled as tests of the new
 candidate. A Minecraft1.21.1/Cobblemon compatibility port is maintained on a
 separate branch; none of this26.2 evidence establishes that port's compatibility.
+
+## Grounded conduit routing correction
+
+Solid blocks beneath conduits previously consumed whole routing turns despite
+having no transfer interface. Source and destination scans now skip inert
+faces within the existing shared work budget. The scheduler counts visited
+sources per connected component, so a small empty component cannot repeatedly
+take turns before a larger component's remaining sources are visited.
+Physical candidates remain available for fresh API lookups when a machine
+starts exposing a handler without a block replacement or neighbor update.
+
+Fresh epoch `90d1ae8f-e334-4e3f-9309-2fafaca82fee` passed **494 unit tests and
+170 server cases (169 mod cases)**, with no failures, errors or skips.
+The existing conduit scenarios now include stone underneath the routes and
+an energy interface enabled in place. Their same-tick push/pull, exact amount,
+shared limit, rollback and conservation assertions remain in force.
+Unit execution PID: 42736. Execution log:
+`build/automation-verification-grounded-14.log` (56 seconds).
+
+`build/verification/grounded-conduits.json` checks all 749 source/build hashes,
+fresh reports, exact test identities and the isolated production JAR. Its scope
+is `unit-and-server-isolated-output`; the open client still holds the canonical
+JAR, so the same output-only Gradle redirect was used. Current candidate SHA-256:
+
+```text
+e9d69b4b242507035265d9e0c405a87428bc236ca24218c0a4ff469324dffd08
+```
+
+No rendered-client or manual receipt was created for this correction. The
+earlier client observations remain tied to their original checkpoint.
 
 ## Focused commands
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Skip unsupported solid neighbors while selecting conduit destinations, within
+  the shared lookup budget, so grounded pipes retain their transfer cadence.
+  Keep dynamic handlers discoverable on unchanged machine blocks.
+
 - Add native item, fluid and energy conduit lanes in a shared bundle, with
   directional endpoint controls, redstone gates, per-endpoint transfer limits,
   loaded-network routing and atomic resource transfers.

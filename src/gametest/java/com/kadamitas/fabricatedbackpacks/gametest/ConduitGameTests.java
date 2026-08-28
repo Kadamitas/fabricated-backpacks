@@ -424,6 +424,8 @@ public final class ConduitGameTests {
         var first = conduit(helper, new BlockPos(2, 2, 2), ConduitKind.values());
         var middle = conduit(helper, new BlockPos(3, 2, 2), ConduitKind.values());
         var last = conduit(helper, new BlockPos(4, 2, 2), ConduitKind.values());
+        for (var pipe : List.of(first, middle, last))
+            helper.getLevel().setBlockAndUpdate(pipe.getBlockPos().below(), Blocks.STONE.defaultBlockState());
         port(first, Direction.WEST, ConduitMode.EXTRACT); port(last, Direction.EAST, ConduitMode.INSERT);
         helper.runAfterDelay(12, () -> {
             helper.assertValueEqual(count(target.items, Items.DIAMOND), 0, "Wrong-sided item capabilities cannot be bypassed");
@@ -553,15 +555,24 @@ public final class ConduitGameTests {
 
     public static void forwardingAndSharedBudgets(GameTestHelper helper) {
         Machine source = machine(helper, new BlockPos(2, 2, 2)), target = machine(helper, new BlockPos(1, 2, 0));
-        source.energyEnabled = target.energyEnabled = true;
+        source.energyEnabled = true;
+        target.energyEnabled = false;
         source.exportEnergy = false; target.exportEnergy = false; source.energy.amount = 2_000;
         var west = conduit(helper, new BlockPos(1, 2, 2), ConduitKind.ENERGY);
         var north = conduit(helper, new BlockPos(2, 2, 1), ConduitKind.ENERGY);
         var joint = conduit(helper, new BlockPos(1, 2, 1), ConduitKind.ENERGY);
+        for (var pipe : List.of(west, north, joint))
+            helper.getLevel().setBlockAndUpdate(pipe.getBlockPos().below(), Blocks.STONE.defaultBlockState());
         west.setMode(ConduitKind.ENERGY, Direction.EAST, ConduitMode.EXTRACT);
         north.setMode(ConduitKind.ENERGY, Direction.SOUTH, ConduitMode.EXTRACT);
         joint.setMode(ConduitKind.ENERGY, Direction.NORTH, ConduitMode.INSERT);
         helper.runAfterDelay(12, () -> onMachineTick(helper, source, () -> {
+            helper.assertTrue(EnergyStorage.SIDED.find(helper.getLevel(), target.getBlockPos(), Direction.SOUTH) == null,
+                    "The existing physical destination initially exposes no energy handler");
+            BlockState targetState = target.getBlockState();
+            target.energyEnabled = true; // Deliberately no block replacement, mode edit or neighbor notification.
+            helper.assertTrue(helper.getLevel().getBlockEntity(target.getBlockPos()) == target && target.getBlockState() == targetState,
+                    "The destination capability appears on the same physical block without invalidating its candidates");
             var first = EnergyStorage.SIDED.find(helper.getLevel(), west.getBlockPos(), Direction.EAST);
             var alias = EnergyStorage.SIDED.find(helper.getLevel(), north.getBlockPos(), Direction.SOUTH);
             helper.assertTrue(first != null && alias != null, "Both faces expose forwarding receivers");
