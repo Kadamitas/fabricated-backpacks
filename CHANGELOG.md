@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.1-alpha+mc26.2
+
+Experimental alpha for Minecraft 26.2. Back up worlds before testing it. This
+coordinate separates the current changes from the immutable published
+`0.5.0-alpha` artifact. Fresh full-client, separate-JVM restart, multiplayer and
+manual installed-JAR evidence remains required for the exact rebuilt artifact
+before the full-release verification gate can pass.
 
 - Skip unsupported solid neighbors while selecting conduit destinations, within
   the shared lookup budget, so grounded pipes retain their transfer cadence.
@@ -52,9 +58,10 @@
   packet's changed-slot budget, synchronize selected tabs before their contents,
   and expose retained upgrade inventories installed after a menu opens.
 
-This revision is not the published 0.5.0-alpha artifact. See the separate
-[UI revision record](docs/UI_REVISION.md) and
-[automation verification record](docs/AUTOMATION_VERIFICATION.md) for test status.
+The historical [UI revision record](docs/UI_REVISION.md) and
+[automation verification record](docs/AUTOMATION_VERIFICATION.md) retain the
+hashes and test status of their recorded artifacts; they do not attest to this
+new coordinate.
 
 ## 0.5.0-alpha
 

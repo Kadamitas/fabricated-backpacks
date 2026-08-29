@@ -3,9 +3,10 @@
 Target: **Minecraft 26.2, Fabric, Java 25**. The checked-in Gradle wrapper and
 `gradle.properties` define the toolchain and dependency versions.
 
-This guide includes unreleased source changes. A local build may still have
-the `0.5.0-alpha` filename; it is not the immutable published `v0.5.0-alpha`
-download. Identify a tested build by its exact source and artifact hashes.
+This guide includes the current experimental alpha source. Its coordinate comes
+from `gradle.properties` and remains distinct from the immutable published
+`v0.5.0-alpha` download. Identify a tested build by its exact source and artifact
+hashes.
 
 ## Local build
 
@@ -22,8 +23,8 @@ On systems with a POSIX shell, use `./gradlew` in place of `gradlew.bat`.
 Gradle may download the configured toolchain and dependencies on the first run.
 Do not point development runs at an existing personal world.
 
-The main artifact is
-`build/libs/fabricated-backpacks-0.5.0-alpha.jar`. The adjacent sources JAR is
+The main artifact for the current coordinate is
+`build/libs/fabricated-backpacks-0.5.1-alpha+mc26.2.jar`. The adjacent sources JAR is
 for development and is not installed in Minecraft. The runtime JAR includes
 the configured Team Reborn Energy dependency; Fabric Loader and Fabric API
 remain instance dependencies.
@@ -222,7 +223,7 @@ Collect the release artifacts after the recorded checks pass:
 ```
 
 This task writes main/sources JARs and SHA-256 files under
-`release/0.5.0-alpha`. It runs `verifyReleaseEvidence`, which requires fresh,
+`release/0.5.1-alpha+mc26.2`. It runs `verifyReleaseEvidence`, which requires fresh,
 nonempty passing unit/server reports, unchanged source inputs, separate-JVM
 restart evidence, both multiplayer process results and the installed-JAR
 observations. It does not run those client checks for you. Failed, skipped,
