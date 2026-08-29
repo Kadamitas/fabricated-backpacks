@@ -381,19 +381,39 @@ public final class UpgradeGameTests {
         CompactingRuntime.compact(advanced, upgrade(advanced), helper.getLevel(), 64);
         helper.assertValueEqual(count(advanced, Items.IRON_BLOCK), 1, "Compacting gathers split ingredients and cascades nuggets through ingots into a block");
         helper.assertValueEqual(count(advanced, Items.IRON_NUGGET) + count(advanced, Items.IRON_INGOT), 0, "Cascading consumes exactly the reversible ingredient count");
+        BagInventory ingots = bag(UpgradeKind.ADVANCED_COMPACTING);
+        ingots.setItem(0, new ItemStack(Items.IRON_INGOT, 13));
+        ingots.updateSettings(upgrade(ingots), state -> state.putBoolean("compact_anything", true));
+        ingots = BagInventory.of(BackpackTestSupport.roundTrip(helper.getLevel(), ingots.stack()));
+        helper.assertTrue(ingots.settings(upgrade(ingots)).getBooleanOr("compact_anything", false), "A stale unsafe setting survives an old-backpack codec round trip for the migration test");
+        helper.assertValueEqual(CompactingRuntime.compact(ingots, upgrade(ingots), helper.getLevel(), 64), 1,
+                "Only the one reversible iron-block operation is reported from thirteen ingots");
+        helper.assertValueEqual(count(ingots, Items.IRON_BLOCK), 1, "Nine iron ingots compact into their reversible iron block");
+        helper.assertValueEqual(count(ingots, Items.IRON_INGOT), 4, "Four remaining ingots are preserved instead of entering a lossy 2 by 2 recipe");
+        helper.assertValueEqual(count(ingots, Items.IRON_TRAPDOOR), 0, "Iron ingots are never compacted into a lossy trapdoor recipe");
+        BagInventory trapdoor = bag(UpgradeKind.COMPACTING);
+        trapdoor.setItem(0, new ItemStack(Items.IRON_INGOT, 4));
+        trapdoor.updateSettings(upgrade(trapdoor), state -> state.putBoolean("compact_anything", true));
+        helper.assertFalse(UpgradeEngine.action(trapdoor, upgrade(trapdoor).slot(), "compact_anything", BackpackTestSupport.player(helper)),
+                "A forged packet cannot re-enable the removed compact-anything action");
+        helper.assertValueEqual(CompactingRuntime.compact(trapdoor, upgrade(trapdoor), helper.getLevel(), 64), 0,
+                "A stale compact-anything setting reports no lossy operation");
+        helper.assertValueEqual(count(trapdoor, Items.IRON_INGOT), 4, "A stale compact-anything setting cannot consume iron in a lossy recipe");
+        helper.assertValueEqual(count(trapdoor, Items.IRON_TRAPDOOR), 0, "The 2 by 2 iron trapdoor recipe is rejected because it has no exact reverse");
         BagInventory sand = bag(UpgradeKind.COMPACTING);
         sand.setItem(0, new ItemStack(Items.SAND, 4));
-        CompactingRuntime.compact(sand, upgrade(sand), helper.getLevel(), 64);
-        helper.assertValueEqual(count(sand, Items.SAND), 4, "Irreversible recipes are rejected by default");
         sand.updateSettings(upgrade(sand), state -> state.putBoolean("compact_anything", true));
-        CompactingRuntime.compact(sand, upgrade(sand), helper.getLevel(), 64);
-        helper.assertValueEqual(count(sand, Items.SANDSTONE), 1, "Explicit compact-anything permits an ordinary 2 by 2 recipe");
+        helper.assertValueEqual(CompactingRuntime.compact(sand, upgrade(sand), helper.getLevel(), 64), 0,
+                "Irreversible sandstone reports no completed compacting operation");
+        helper.assertValueEqual(count(sand, Items.SAND), 4, "Irreversible sandstone is rejected even when old data enables compact-anything");
+        helper.assertValueEqual(count(sand, Items.SANDSTONE), 0, "Lossy compacting never inserts sandstone");
         BagInventory honey = bag(UpgradeKind.COMPACTING);
         honey.setItem(0, new ItemStack(Items.HONEY_BOTTLE, 4));
         honey.updateSettings(upgrade(honey), state -> state.putBoolean("compact_anything", true));
-        CompactingRuntime.compact(honey, upgrade(honey), helper.getLevel(), 64);
-        helper.assertValueEqual(count(honey, Items.HONEY_BLOCK), 1, "Compacting uses the vanilla honey block recipe");
-        helper.assertValueEqual(count(honey, Items.GLASS_BOTTLE), 4, "All four crafting remainder bottles are retained");
+        helper.assertValueEqual(CompactingRuntime.compact(honey, upgrade(honey), helper.getLevel(), 64), 0,
+                "A recipe with forward container remainders reports no completed operation");
+        helper.assertValueEqual(count(honey, Items.HONEY_BOTTLE), 4, "Recipes with non-reversible container remainders are rejected");
+        helper.assertValueEqual(count(honey, Items.HONEY_BLOCK) + count(honey, Items.GLASS_BOTTLE), 0, "Rejected honey compaction inserts neither output nor remainders");
         BagInventory full = bag(UpgradeKind.ADVANCED_COMPACTING);
         for (int slot = 0; slot < full.getContainerSize(); slot++) full.setItem(slot, new ItemStack(Items.DIRT, 64));
         full.setItem(0, new ItemStack(Items.IRON_NUGGET, 64));
@@ -509,6 +529,15 @@ public final class UpgradeGameTests {
         helper.assertValueEqual(available.size(), 12, "Actual registry supplies twelve distinct supported discs");
         for (int slot = 0; slot < 12; slot++) discs.setItem(slot, available.get(slot).copy());
         BlockPos position = helper.absolutePos(new BlockPos(1, 2, 1));
+        BagInventory basic = bag(UpgradeKind.JUKEBOX);
+        InstalledUpgrade basicUpgrade = upgrade(basic);
+        helper.assertValueEqual(basic.upgradeInventory(basicUpgrade).getContainerSize(), 2,
+                "The basic jukebox exposes both doubled physical disc slots at runtime");
+        basic.upgradeInventory(basicUpgrade).setItem(1, available.getFirst().copy());
+        JukeboxRuntime.action(basic, basicUpgrade, helper.getLevel(), position, null, "play");
+        helper.assertValueEqual(basic.settings(basicUpgrade).getIntOr("active_slot", -1), 1,
+                "The basic jukebox can play a disc stored in its new second slot");
+        JukeboxRuntime.stopUpgrade(basic, basicUpgrade.slot(), helper.getLevel().getServer());
         JukeboxRuntime.tick(bag, upgrade, helper.getLevel(), position, null);
         JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "play");
         helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 0, "Playback begins at first occupied record slot");

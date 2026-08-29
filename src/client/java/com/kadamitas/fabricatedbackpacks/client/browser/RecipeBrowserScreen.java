@@ -413,7 +413,8 @@ final class RecipeBrowserScreen extends Screen {
             String id = recipe.source().recipe().toString();
             graphics.text(font, font.plainSubstrByWidth(id, rightWidth - 6), rightX + 3, height - 65, 0xFF86ADAE);
             if (mouseY >= height - 67 && mouseY < height - 54 && mouseX >= rightX) {
-                graphics.setTooltipForNextFrame(Component.literal(id), mouseX, mouseY);
+                graphics.setTooltipForNextFrame(recipe.source().recipe().equals(BackpackRegistry.id("netherite_backpack"))
+                        ? text("netherite_direct_recipe") : Component.literal(id), mouseX, mouseY);
             }
             String station = recipe.stations().isEmpty() ? categoryName(recipe.source().category()).getString() : recipe.stations().getFirst().getHoverName().getString();
             graphics.text(font, font.plainSubstrByWidth(station, Math.max(0, rightWidth - 108)), rightX + 27, height - 47, 0xFFD4D9CC);

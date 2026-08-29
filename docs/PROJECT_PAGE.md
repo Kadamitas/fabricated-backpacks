@@ -13,8 +13,8 @@ display on the outside.
 - Craft, cut stone, repair, smith, smelt, smoke and blast with portable workstations.
 - Store fluids, energy and experience, with upgrades for compatible containers
   and automation.
-- Play records from a real jukebox inventory: one slot in the basic upgrade,
-  **twelve physical record slots** in the advanced upgrade, with previous/next,
+- Play records from a real jukebox inventory: two slots in the basic upgrade,
+  **twenty-four physical record slots** by default in the advanced upgrade, with paged libraries up to 256 records, previous/next,
   shuffle, repeat and moving audio.
 - Add conditional food and potion use, tool selection, protection, nested storage
   or mob capture. Server settings control capacities and upgrade limits.
@@ -33,19 +33,21 @@ and **Fabric API 0.158.0+26.2** or a newer compatible 26.2 build. The Energy API
 Install the same mod version on the client and server.
 
 The first backpack is crafted from four leather, four string and a chest.
+The final tier directly smiths a Diamond Backpack with the vanilla Netherite
+Upgrade Smithing Template and a Netherite Ingot, preserving its contents.
 Press **G** for equipment, **B** to open a backpack, **O** for the recipe browser,
 **C** to use deposit/restock on a looked-at container and **K** for tool selection.
 These keys can be rebound in Minecraft's Controls screen.
 
 ## Alpha notice
 
-**0.5.0-alpha: back up your worlds.** This release does not import other mods'
+**0.5.2-alpha: back up your worlds.** This release does not import other mods'
 backpack saves or provide their accessory and recipe-viewer APIs. Exact executed
 test results and any remaining limitations are documented with the release.
 
-[Feature catalog](https://github.com/Kadamitas/fabricated-backpacks/blob/codex/fabricated-backpacks/docs/FEATURES.md)
-· [Gameplay screenshots](https://github.com/Kadamitas/fabricated-backpacks/blob/codex/fabricated-backpacks/docs/GALLERY.md)
-· [Verification](https://github.com/Kadamitas/fabricated-backpacks/blob/codex/fabricated-backpacks/docs/VERIFICATION.md)
+[Feature catalog](https://github.com/Kadamitas/fabricated-backpacks/blob/v0.5.2-alpha%2Bmc26.2/docs/FEATURES.md)
+· [Gameplay screenshots](https://github.com/Kadamitas/fabricated-backpacks/blob/v0.5.2-alpha%2Bmc26.2/docs/GALLERY.md)
+· [Verification](https://github.com/Kadamitas/fabricated-backpacks/blob/v0.5.2-alpha%2Bmc26.2/docs/VERIFICATION_0.5.2.md)
 · [Source and issues](https://github.com/Kadamitas/fabricated-backpacks)
 
 Code and original project artwork are licensed under MIT.

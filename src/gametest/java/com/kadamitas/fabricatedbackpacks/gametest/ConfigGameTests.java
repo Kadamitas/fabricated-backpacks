@@ -235,7 +235,7 @@ public final class ConfigGameTests {
             fresh.setFilter(upgrade(fresh, 1), 1, new ItemStack(Items.EMERALD));
             helper.assertTrue(fresh.filterItems(upgrade(fresh, 1)).isEmpty(), "A forged new filter row cannot expand its configured layout");
             BagInventory basic = bag(BackpackTier.LEATHER, UpgradeKind.JUKEBOX);
-            helper.assertValueEqual(basic.inventorySlots(upgrade(basic, 0)), 1, "Basic jukebox storage remains one physical slot");
+            helper.assertValueEqual(basic.inventorySlots(upgrade(basic, 0)), 2, "Basic jukebox storage uses its doubled two-slot library");
         } finally { BackpackConfig.configure(previous); }
         helper.succeed();
     }
@@ -567,26 +567,32 @@ public final class ConfigGameTests {
             BackpackConfig.configure(ServerConfig.defaults());
             bag = bag(BackpackTier.NETHERITE, UpgradeKind.ADVANCED_JUKEBOX);
             upgrade = upgrade(bag, 0);
+            helper.assertValueEqual(bag.upgradeInventory(upgrade).getContainerSize(), 24,
+                    "A fresh advanced jukebox starts with the doubled twenty-four-slot default");
             bag.upgradeInventory(upgrade).setItem(0, new ItemStack(Items.MUSIC_DISC_CAT));
             bag.upgradeInventory(upgrade).setItem(5, new ItemStack(Items.MUSIC_DISC_BLOCKS));
             JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "play");
             JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "next");
-            helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 5, "The original twelve-slot session has active audio and history");
+            helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 5, "The doubled twenty-four-slot default has active audio and history");
             originalFinish = bag.settings(upgrade).getLongOr("song_finish", 0);
         } finally { BackpackConfig.configure(previous); }
         helper.runAfterDelay(2, () -> {
             ServerConfig beforeTick = BackpackConfig.get();
             try {
-                BackpackConfig.configure(ConfigFile.decode("{\"upgrades\":{\"jukebox\":{\"size\":16,\"rowWidth\":6}}}"));
+                BackpackConfig.configure(ConfigFile.decode("{\"upgrades\":{\"jukebox\":{\"size\":200,\"rowWidth\":6}}}"));
                 var expanded = bag.upgradeInventory(upgrade);
-                helper.assertValueEqual(expanded.getContainerSize(), 16, "Live server configuration expands the real disc inventory");
-                expanded.setItem(14, new ItemStack(Items.MUSIC_DISC_FAR));
-                expanded.setItem(15, new ItemStack(Items.MUSIC_DISC_CHIRP));
+                helper.assertValueEqual(expanded.getContainerSize(), 200, "Live server configuration expands the real disc inventory to a 200-record library");
+                expanded.setItem(198, new ItemStack(Items.MUSIC_DISC_FAR));
+                expanded.setItem(199, new ItemStack(Items.MUSIC_DISC_CHIRP));
                 JukeboxRuntime.tick(bag, upgrade, helper.getLevel(), position, null);
                 helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 5, "Growing an existing session retains its unchanged active disc");
                 helper.assertValueEqual(bag.settings(upgrade).getLongOr("song_finish", 0), originalFinish, "A later resize tick does not restart active audio");
                 JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "next");
-                helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 14, "Expanded queue includes actual new high-index records");
+                helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 198, "Expanded queue includes actual new high-index records");
+                JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "next");
+                helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 199, "Playback reaches the final physical slot in a 200-record library");
+                JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "previous");
+                helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 198, "Playback history returns from physical slot 199 to 198");
                 JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "previous");
                 helper.assertValueEqual(bag.settings(upgrade).getIntOr("active_slot", -1), 5, "Playback history remains usable after expansion");
                 JukeboxRuntime.action(bag, upgrade, helper.getLevel(), position, null, "shuffle");
@@ -594,7 +600,7 @@ public final class ConfigGameTests {
                 BackpackConfig.configure(ConfigFile.decode("{\"upgrades\":{\"jukebox\":{\"size\":2}}}"));
                 JukeboxRuntime.tick(bag, upgrade, helper.getLevel(), position, null);
                 helper.assertTrue(bag.settings(upgrade).getBooleanOr("playing", false), "A smaller configured default cannot truncate the saved disc inventory or stop an unaffected song");
-                helper.assertValueEqual(bag.upgradeInventory(upgrade).getContainerSize(), 16, "Existing auxiliary extent preserves all owned discs");
+                helper.assertValueEqual(bag.upgradeInventory(upgrade).getContainerSize(), 200, "Existing 200-slot auxiliary extent preserves all owned discs");
                 JukeboxRuntime.stopUpgrade(bag, upgrade.slot(), helper.getLevel().getServer());
                 BagInventory restored = BagInventory.of(roundTrip(helper.getLevel(), bag.stack()));
                 InstalledUpgrade restoredUpgrade = upgrade(restored, 0);

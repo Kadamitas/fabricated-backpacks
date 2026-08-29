@@ -280,6 +280,10 @@ class AssetGenerationTest(unittest.TestCase):
         for tier in assets.TIERS[1:]:
             recipe = self.recipes[tier.item]
             self.assertEqual(f"{assets.MOD}:backpack_smithing" if tier.material == "netherite" else f"{assets.MOD}:backpack_upgrade", recipe["type"])
+        netherite = self.recipes["netherite_backpack"]
+        self.assertEqual("minecraft:netherite_upgrade_smithing_template", netherite["template"])
+        self.assertEqual(f"{assets.MOD}:diamond_backpack", netherite["base"])
+        self.assertEqual("minecraft:netherite_ingot", netherite["addition"])
         for tier in assets.TIERS:
             table = json.loads(self.outputs[f"{assets.DATA}/loot_table/blocks/{tier.item}.json"])
             self.assertEqual([], table["pools"])

@@ -23,9 +23,33 @@ public final class ConfigFile {
         if (text.length() > MAX_BYTES) throw new IllegalArgumentException("Configuration is larger than 1 MiB");
         JsonElement parsed = JsonParser.parseString(text);
         if (!parsed.isJsonObject()) throw new IllegalArgumentException("Configuration must be a JSON object");
+        JsonObject supplied = migrate(parsed.getAsJsonObject());
         JsonObject merged = JSON.toJsonTree(ServerConfig.defaults()).getAsJsonObject();
-        merge(merged, parsed.getAsJsonObject(), "");
+        merge(merged, supplied, "");
         return JSON.fromJson(merged, ServerConfig.class);
+    }
+
+    /**
+     * Format 1 shipped with twelve advanced-jukebox slots. Treat that exact historical
+     * value as its old default while preserving every custom size. Format 2 makes an
+     * explicit twelve-slot choice stable instead of repeatedly guessing user intent.
+     */
+    private static JsonObject migrate(JsonObject source) {
+        JsonObject migrated = source.deepCopy();
+        JsonElement format = migrated.get("format");
+        if (format == null || !format.isJsonPrimitive() || !format.getAsJsonPrimitive().isNumber()
+                || format.getAsBigDecimal().compareTo(java.math.BigDecimal.ONE) != 0) return migrated;
+        migrated.addProperty("format", ServerConfig.CURRENT_FORMAT);
+        JsonElement upgrades = migrated.get("upgrades");
+        if (upgrades == null || !upgrades.isJsonObject()) return migrated;
+        JsonElement jukebox = upgrades.getAsJsonObject().get("jukebox");
+        if (jukebox == null || !jukebox.isJsonObject()) return migrated;
+        JsonElement size = jukebox.getAsJsonObject().get("size");
+        if (size != null && size.isJsonPrimitive() && size.getAsJsonPrimitive().isNumber()
+                && size.getAsBigDecimal().compareTo(java.math.BigDecimal.valueOf(12)) == 0) {
+            jukebox.getAsJsonObject().addProperty("size", 24);
+        }
+        return migrated;
     }
 
     private static void merge(JsonObject defaults, JsonObject supplied, String prefix) {

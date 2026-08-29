@@ -24,7 +24,7 @@ Gradle may download the configured toolchain and dependencies on the first run.
 Do not point development runs at an existing personal world.
 
 The main artifact for the current coordinate is
-`build/libs/fabricated-backpacks-0.5.1-alpha+mc26.2.jar`. The adjacent sources JAR is
+`build/libs/fabricated-backpacks-0.5.2-alpha+mc26.2.jar`. The adjacent sources JAR is
 for development and is not installed in Minecraft. The runtime JAR includes
 the configured Team Reborn Energy dependency; Fabric Loader and Fabric API
 remain instance dependencies.
@@ -77,6 +77,7 @@ runs against the same checkout or shared development world.
 ```powershell
 .\gradlew.bat test
 .\gradlew.bat runGameTest
+.\gradlew.bat runGameTest -PgameTestFilter="fabricated_backpacks_tests:*jukebox*"
 .\gradlew.bat runClientGameTest
 .\gradlew.bat runClientGameTest -PclientScenario=restart
 .\tools\run-multiplayer.ps1
@@ -223,7 +224,7 @@ Collect the release artifacts after the recorded checks pass:
 ```
 
 This task writes main/sources JARs and SHA-256 files under
-`release/0.5.1-alpha+mc26.2`. It runs `verifyReleaseEvidence`, which requires fresh,
+`release/0.5.2-alpha+mc26.2`. It runs `verifyReleaseEvidence`, which requires fresh,
 nonempty passing unit/server reports, unchanged source inputs, separate-JVM
 restart evidence, both multiplayer process results and the installed-JAR
 observations. It does not run those client checks for you. Failed, skipped,

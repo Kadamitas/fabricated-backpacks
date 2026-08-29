@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.2-alpha+mc26.2
+
+Patch alpha for Minecraft 26.2. Back up worlds before testing it.
+
+- Keep every rebindable gameplay action inactive while a menu is open. This
+  includes keyboard and mouse bindings, the recipe browser and all five upgrade
+  shortcuts; workstation menus retain an explicit Recipe browser button.
+- Render full exact item counts in storage slots and backpack previews instead
+  of abbreviating large values.
+- Add contextual help to every settings control and icon-only upgrade control.
+  Help appears only while Shift is held and includes complete fluid-filter
+  descriptions even when their visible row labels are clipped.
+- Restrict compacting to exact reversible recipes with no crafting remainders.
+  Legacy unsafe settings can no longer turn ingots into lossy outputs such as
+  trapdoors or turn sand into sandstone.
+- Double jukebox libraries to two slots in the basic upgrade and twenty-four in
+  the advanced upgrade. Add paired previous/next pages for saved or configured
+  libraries up to 256 slots, including tested 200-record playback and persistence.
+- Migrate the historical format-1 advanced-jukebox default from 12 to 24 while
+  preserving custom sizes; format 2 keeps a deliberate 12-slot choice stable.
+- Clarify the direct Netherite progression in backpack help and the recipe
+  browser: Diamond Backpack + vanilla Netherite Upgrade Smithing Template +
+  Netherite Ingot, with the backpack's complete component state preserved.
+- Add focused client scenarios for menu-safe bindings and a 200-disc library,
+  plus a selectable server GameTest filter for targeted development runs.
+
 ## 0.5.1-alpha+mc26.2
 
 Experimental alpha for Minecraft 26.2. Back up worlds before testing it. This

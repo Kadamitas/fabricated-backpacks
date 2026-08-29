@@ -157,6 +157,18 @@ class PlaylistTest {
     }
 
     @Test
+    void twoHundredSlotLibraryPlaysHighIndexDiscsAndKeepsHistory() {
+        Random random = new Random(10);
+        Playlist first = Playlist.stopped(200, List.of(0, 99, 199), false, Playlist.Repeat.ALL).play(random);
+        assertEquals(0, first.activeSlot());
+        Playlist last = first.next(random).next(random);
+        assertEquals(199, last.activeSlot());
+        assertEquals(List.of(0, 99), last.history());
+        assertEquals(99, last.previous().activeSlot());
+        assertEquals(200, last.slotCount());
+    }
+
+    @Test
     void shrinkingTrimsHistoryAndStopsOnlyForAnAffectedActiveDisc() {
         Random random = new Random(9);
         Playlist repeated = Playlist.stopped(16, List.of(0, 1, 15), true, Playlist.Repeat.ALL).play(random);
@@ -176,7 +188,7 @@ class PlaylistTest {
         assertTrue(removed.history().isEmpty());
         assertTrue(removed.shuffle());
         assertEquals(Playlist.Repeat.ALL, removed.repeat());
-        assertThrows(IllegalArgumentException.class, () -> smaller.updateSlots(17, List.of(0), Set.of(), random));
+        assertThrows(IllegalArgumentException.class, () -> smaller.updateSlots(257, List.of(0), Set.of(), random));
     }
 
     @Test
@@ -191,7 +203,7 @@ class PlaylistTest {
     @Test
     void invalidSavedAndRuntimeStatesAreRejected() {
         assertThrows(IllegalArgumentException.class, () -> Playlist.empty(0));
-        assertThrows(IllegalArgumentException.class, () -> Playlist.empty(17));
+        assertThrows(IllegalArgumentException.class, () -> Playlist.empty(257));
         assertThrows(IndexOutOfBoundsException.class,
                 () -> Playlist.stopped(12, List.of(12), false, Playlist.Repeat.OFF));
         assertThrows(IllegalArgumentException.class,

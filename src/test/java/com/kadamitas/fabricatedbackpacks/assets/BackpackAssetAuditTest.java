@@ -270,7 +270,7 @@ class BackpackAssetAuditTest {
                 assertText(lang, "tooltip." + NAMESPACE + "." + item);
             }
         }
-        assertTrue(lang.get("tooltip.fabricated_backpacks.advanced_jukebox_upgrade").getAsString().contains("twelve"));
+        assertTrue(lang.get("tooltip.fabricated_backpacks.advanced_jukebox_upgrade").getAsString().contains("twenty-four"));
     }
 
     @Test
@@ -318,6 +318,11 @@ class BackpackAssetAuditTest {
         expected.remove("infinity_upgrade");
         expected.remove("stack_upgrade_omega_tier");
         assertEquals(expected, craftable);
+        JsonObject netherite = json(DATA.resolve("recipe/netherite_backpack.json"));
+        assertEquals(NAMESPACE + ":backpack_smithing", netherite.get("type").getAsString());
+        assertEquals("minecraft:netherite_upgrade_smithing_template", netherite.get("template").getAsString());
+        assertEquals(NAMESPACE + ":diamond_backpack", netherite.get("base").getAsString());
+        assertEquals("minecraft:netherite_ingot", netherite.get("addition").getAsString());
     }
 
     @Test

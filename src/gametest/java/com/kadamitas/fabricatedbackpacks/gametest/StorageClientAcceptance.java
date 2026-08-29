@@ -13,7 +13,9 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -22,6 +24,7 @@ import net.minecraft.world.item.Items;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
+import java.util.Set;
 
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests.*;
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackTestSupport.*;
@@ -85,6 +88,7 @@ final class StorageClientAcceptance {
         check(!noResultsVisible(context), "Clearing search removes the empty-state label");
         clickButton(context, "Prefs");
         context.waitForScreen(BackpackSettingsScreen.class);
+        checkSettingsTooltips(context);
         clickButton(context, "Slot tools");
         context.waitForScreen(StorageToolsScreen.class);
         clickButton(context, "Remember occupied");
@@ -120,6 +124,59 @@ final class StorageClientAcceptance {
         context.waitForScreen(BackpackScreen.class);
         context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
+    }
+
+    static void checkSettingsTooltips(ClientGameTestContext context) {
+        context.waitTicks(2);
+        checkSettingsTooltips(context, false);
+        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        try {
+            context.waitTicks(2);
+            checkSettingsTooltips(context, true);
+        } finally {
+            context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        }
+        context.waitTicks(2);
+        checkSettingsTooltips(context, false);
+    }
+
+    private static void checkSettingsTooltips(ClientGameTestContext context, boolean expected) {
+        context.runOnClient(client -> {
+            check(client.gui.screen() instanceof BackpackSettingsScreen, "Context-help checks run on the real backpack settings screen");
+            List<AbstractWidget> widgets = client.gui.screen().children().stream()
+                    .filter(AbstractWidget.class::isInstance).map(AbstractWidget.class::cast)
+                    .filter(widget -> widget instanceof Button || widget instanceof EditBox).filter(widget -> widget.visible).toList();
+            Set<String> expectedLabels = Set.of("Edit slots", "Equipment", "Slot tools", "Backpack name", "Rename",
+                    "Keep search", "Keep tab", "Exact memory", "Shift into tab", "Share worn bag", "Use my defaults",
+                    "Displayed storage slot", "Display slot", "Rotate45°", "Depth -", "Depth +", "Settings template name",
+                    "<", ">", "Save", "Preview", "Load", "Delete", "Export pack", "Save as my defaults", "Back to backpack");
+            Set<String> actualLabels = widgets.stream().map(StorageClientAcceptance::canonicalSettingLabel)
+                    .collect(java.util.stream.Collectors.toSet());
+            check(widgets.size() == 26 && actualLabels.equals(expectedLabels),
+                    "Every settings control is included in contextual-help coverage: " + actualLabels);
+            for (AbstractWidget widget : widgets) {
+                String label = canonicalSettingLabel(widget);
+                var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) widget)
+                        .fabricatedBackpacksTests$tooltip().get();
+                if (!expected) {
+                    check(tooltip == null, "Settings context help stays hidden without Shift: " + label);
+                    continue;
+                }
+                check(tooltip != null, "Holding Shift attaches context help to settings control: " + label);
+                String help = tooltip.toCharSequence(client).stream().map(ConfiguredClientAcceptance::plain)
+                        .collect(java.util.stream.Collectors.joining(" ")).replaceAll("\\s+", " ").strip();
+                check(!help.isBlank() && !help.equalsIgnoreCase(widget.getMessage().getString()),
+                        "Settings help explains the control instead of repeating its label: " + label + " -> " + help);
+                if (label.equals("Depth -")) check(help.contains("outward") && help.contains("1/16") && help.contains("-16") && help.contains("16"),
+                        "Depth - explains direction, step size, and bounded range: " + help);
+                if (label.equals("Depth +")) check(help.contains("deeper") && help.contains("1/16") && help.contains("-16") && help.contains("16"),
+                        "Depth + explains direction, step size, and bounded range: " + help);
+            }
+        });
+    }
+
+    private static String canonicalSettingLabel(AbstractWidget widget) {
+        return widget.getMessage().getString().replaceFirst(": (?:On|Off)$", "");
     }
 
     private static void largeStorageDrag(ClientGameTestContext context, TestSingleplayerContext world) {

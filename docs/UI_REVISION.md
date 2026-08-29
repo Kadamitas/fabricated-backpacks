@@ -29,8 +29,9 @@ below it, preserving their physical filter indices.
 
 The header separates sorting from the sort-order selector. The settings tab
 also provides equipment and memory/no-sort editing, keeping those labels off
-the main screen. Basic backpacks show only the two sort controls in the header;
-Ctrl+F and the recipe-browser key remain available.
+the main screen. Basic backpacks show only the two sort controls in the header.
+Ctrl+F remains available there; the recipe-browser key is gameplay-only because
+all rebindable gameplay actions stay inactive while any menu is open.
 
 **B** still opens the equipped backpack with empty hands. **G** opens the native
 equipment slot. Both are ordinary rebindable Minecraft controls.

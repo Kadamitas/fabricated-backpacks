@@ -72,6 +72,7 @@ public final class BackpackIconButton extends Button {
     private Icon icon;
     private boolean selected;
     private boolean embedded;
+    private boolean automaticTooltip = true;
     private ItemStack item = ItemStack.EMPTY;
     public BackpackIconButton(int x, int y, int width, int height, Component label, Icon icon, Runnable action) {
         super(x, y, width, height, label, press(action), DEFAULT_NARRATION);
@@ -87,8 +88,17 @@ public final class BackpackIconButton extends Button {
     public boolean isSelected() { return selected; }
     public BackpackIconButton setIcon(Icon value) { icon = Objects.requireNonNull(value); return this; }
     public Icon getIcon() { return icon; }
+    /** Keep the accessible message while allowing a screen to own contextual tooltip visibility. */
+    public BackpackIconButton setAutomaticTooltip(boolean value) {
+        automaticTooltip = value;
+        setTooltip(value ? Tooltip.create(getMessage()) : null);
+        return this;
+    }
     public BackpackIconButton setItem(ItemStack value) { item = value == null ? ItemStack.EMPTY : value.copy(); return this; }
-    @Override public void setMessage(Component label) { super.setMessage(label); setTooltip(Tooltip.create(label)); }
+    @Override public void setMessage(Component label) {
+        super.setMessage(label);
+        if (automaticTooltip) setTooltip(Tooltip.create(label));
+    }
     @Override protected void extractContents(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         if (alpha <= 0 || getWidth() <= 2 || getHeight() <= 2) return;
         boolean hot = active && isHoveredOrFocused();

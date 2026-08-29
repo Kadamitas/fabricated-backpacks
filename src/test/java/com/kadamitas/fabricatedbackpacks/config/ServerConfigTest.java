@@ -41,7 +41,7 @@ class ServerConfigTest {
             "{\"carriers\":{\"midDifficulty\":5,\"highDifficulty\":4}}", "{\"carriers\":{\"maximumDiscs\":13}}",
             "{\"carriers\":{\"lootTables\":{\"minecraft:zombie\":\"../secret\"}}}",
             "{\"storage\":{\"disallowedItems\":[\"#not a tag\"]}}", "{\"capture\":{\"hostileLimit\":121}}",
-            "{\"format\":2}"
+            "{\"format\":3}"
     })
     void malformedRulesCannotPartiallyApply(String json) { assertThrows(RuntimeException.class, () -> ConfigFile.decode(json)); }
 
@@ -82,7 +82,7 @@ class ServerConfigTest {
             "{\"tank\":{\"stackRatio\":1.01}}", "{\"battery\":{\"capacityPerRow\":499}}",
             "{\"magnet\":{\"range\":33}}", "{\"feeding\":{\"hungryTicks\":0}}",
             "{\"pump\":{\"worldRange\":17}}", "{\"experience\":{\"mendingPoints\":21}}",
-            "{\"alchemy\":{\"interval\":0}}", "{\"jukebox\":{\"size\":17}}", "{\"jukebox\":{\"rowWidth\":7}}"
+            "{\"alchemy\":{\"interval\":0}}", "{\"jukebox\":{\"size\":257}}", "{\"jukebox\":{\"rowWidth\":7}}"
     })
     void upgradeBoundsAreRejectedBeforeApplication(String settings) {
         assertThrows(RuntimeException.class, () -> ConfigFile.decode("{\"upgrades\":" + settings + "}"));

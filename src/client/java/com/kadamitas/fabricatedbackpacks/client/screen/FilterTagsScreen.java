@@ -16,6 +16,7 @@ public final class FilterTagsScreen extends Screen {
     private final BackpackScreen parent;
     private final boolean cookingInput;
     private EditBox tag;
+    private final ShiftTooltips tooltips = new ShiftTooltips();
     private int left, top, page;
     private String fingerprint = "";
     private String input = "";
@@ -23,23 +24,28 @@ public final class FilterTagsScreen extends Screen {
     @Override protected void init() {
         left = (width - 330) / 2;
         top = Math.max(4, (height - 236) / 2);
-        tag = addRenderableWidget(new EditBox(font, left + 10, top + 28, 218, 18, Component.literal("Tag identifier")));
+        tooltips.clear();
+        tag = tooltips.add(addRenderableWidget(new EditBox(font, left + 10, top + 28, 218, 18, Component.literal("Tag identifier"))),
+                "Enter a namespaced item tag such as minecraft:logs. The upgrade matches items belonging to selected tags.");
         tag.setMaxLength(156); tag.setValue(input); tag.setHint(Component.literal("minecraft:logs")); tag.setResponder(value -> input = value);
-        button("Add / remove", 232, 28, 88, () -> toggle(input));
+        tooltips.add(button("Add / remove", 232, 28, 88, () -> toggle(input)),
+                "Toggle the entered tag in this upgrade's selected-tag list. Invalid or unnamespaced identifiers are rejected.");
         List<String> selected = selected();
         int pages = Math.max(1, Math.ceilDiv(selected.size(), 7));
         page = Math.clamp(page, 0, pages - 1);
         for (int row = 0; row < 7 && page * 7 + row < selected.size(); row++) {
             String id = selected.get(page * 7 + row);
-            button(id, 10, 60 + row * 20, 310, () -> toggle(id));
+            tooltips.add(button(id, 10, 60 + row * 20, 310, () -> toggle(id)),
+                    "Remove the selected tag " + id + " from this upgrade's filter.");
         }
-        button("<", 10, 207, 28, () -> { page = Math.floorMod(page - 1, pages); rebuildWidgets(); });
-        button(">", 42, 207, 28, () -> { page = (page + 1) % pages; rebuildWidgets(); });
-        button("Back", 240, 207, 80, this::onClose);
+        tooltips.add(button("<", 10, 207, 28, () -> { page = Math.floorMod(page - 1, pages); rebuildWidgets(); }), "Show the previous page of selected tags.");
+        tooltips.add(button(">", 42, 207, 28, () -> { page = (page + 1) % pages; rebuildWidgets(); }), "Show the next page of selected tags.");
+        tooltips.add(button("Back", 240, 207, 80, this::onClose), "Return to the selected upgrade tab. Tag changes apply immediately.");
         fingerprint = selected.toString();
+        tooltips.refresh(minecraft);
     }
-    private void button(String text, int x, int y, int width, Runnable action) {
-        addRenderableWidget(Button.builder(Component.literal(text), ignored -> action.run()).bounds(left + x, top + y, width, 18).build());
+    private Button button(String text, int x, int y, int width, Runnable action) {
+        return addRenderableWidget(Button.builder(Component.literal(text), ignored -> action.run()).bounds(left + x, top + y, width, 18).build());
     }
     private List<String> selected() {
         return parent.getMenu().selected().map(upgrade -> Arrays.stream(parent.getMenu().bag().settings(upgrade).getStringOr(cookingInput ? "input_tags" : "tags", "").split(","))
@@ -51,6 +57,7 @@ public final class FilterTagsScreen extends Screen {
     @Override public void tick() {
         if (minecraft.player == null || minecraft.player.containerMenu != parent.getMenu()) { minecraft.gui.setScreen(null); return; }
         if (!fingerprint.equals(selected().toString())) rebuildWidgets();
+        else tooltips.refresh(minecraft);
     }
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         graphics.fill(left, top, left + 330, top + 236, 0xffccb996);

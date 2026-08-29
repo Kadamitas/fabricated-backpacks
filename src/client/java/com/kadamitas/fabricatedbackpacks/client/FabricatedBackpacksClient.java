@@ -17,6 +17,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
 import org.lwjgl.glfw.GLFW;
 
@@ -54,18 +55,20 @@ public final class FabricatedBackpacksClient implements ClientModInitializer {
         com.kadamitas.fabricatedbackpacks.client.browser.RecipeBrowserClient.initialize();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             BackpackAudio.tick(client);
-            if (client.player == null) return;
-            while (open.consumeClick()) if (client.gui.screen() == null) send("open");
-            while (gear.consumeClick()) if (client.gui.screen() == null) send("equipment");
-            while (transfer.consumeClick()) if (client.gui.screen() == null) send("transfer");
-            while (deposit.consumeClick()) if (client.gui.screen() == null) send("deposit");
-            while (restock.consumeClick()) if (client.gui.screen() == null) send("restock");
-            while (tool.consumeClick()) if (client.gui.screen() == null) send("tool_cycle");
-            while (browser.consumeClick()) com.kadamitas.fabricatedbackpacks.client.browser.RecipeBrowserClient.open(client.gui.screen());
+            consumeInWorld(client, open, () -> send("open"));
+            consumeInWorld(client, gear, () -> send("equipment"));
+            consumeInWorld(client, transfer, () -> send("transfer"));
+            consumeInWorld(client, deposit, () -> send("deposit"));
+            consumeInWorld(client, restock, () -> send("restock"));
+            consumeInWorld(client, tool, () -> send("tool_cycle"));
+            consumeInWorld(client, browser, () -> com.kadamitas.fabricatedbackpacks.client.browser.RecipeBrowserClient.open(null));
         });
     }
     private static KeyMapping key(String action, int code, KeyMapping.Category category) {
         return KeyMappingHelper.registerKeyMapping(new KeyMapping("key.fabricated_backpacks." + action, code, category));
+    }
+    private static void consumeInWorld(Minecraft client, KeyMapping mapping, Runnable action) {
+        while (mapping.consumeClick()) if (client.player != null && client.gui.screen() == null) action.run();
     }
     private static void send(String action) { ClientPlayNetworking.send(new MenuAction(-1, action, 0, 0, "")); }
 }

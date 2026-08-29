@@ -58,6 +58,7 @@ import net.minecraft.world.item.crafting.RecipeMap;
 import net.minecraft.world.item.crafting.StonecutterRecipe;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 import net.minecraft.world.item.crafting.display.RecipeDisplay;
+import net.minecraft.world.item.crafting.display.SmithingRecipeDisplay;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.gamerules.GameRules;
@@ -134,7 +135,17 @@ public final class BrowserGameTests {
                     .filter(display -> display.isEnabled(helper.getLevel().enabledFeatures())).count();
             helper.assertValueEqual((long) audit.entries.size(), enabledDisplays, "No bounded production recipe display silently disappears");
             helper.assertTrue(audit.recipeIds.contains(Identifier.fromNamespaceAndPath("fabricated_backpacks", "backpack")), "The base backpack is discoverable");
-            helper.assertTrue(audit.recipeIds.contains(Identifier.fromNamespaceAndPath("fabricated_backpacks", "netherite_backpack")), "Preserving smithing recipes are discoverable");
+            Identifier netheriteId = Identifier.fromNamespaceAndPath("fabricated_backpacks", "netherite_backpack");
+            helper.assertTrue(audit.recipeIds.contains(netheriteId), "The direct Netherite Backpack smithing recipe is discoverable");
+            BrowserRecipeEntry netherite = audit.entries.stream().filter(entry -> entry.recipe().equals(netheriteId)).findFirst().orElseThrow();
+            helper.assertTrue(netherite.display() instanceof SmithingRecipeDisplay, "The indexed Netherite Backpack recipe keeps its native smithing layout");
+            SmithingRecipeDisplay smithing = (SmithingRecipeDisplay) netherite.display();
+            helper.assertTrue(smithing.template().resolveForStacks(context).stream().anyMatch(stack -> stack.is(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE)),
+                    "The browser identifies the vanilla Netherite Upgrade Smithing Template directly");
+            helper.assertTrue(smithing.base().resolveForStacks(context).stream().anyMatch(stack -> stack.is(BackpackRegistry.item(BackpackTier.DIAMOND))),
+                    "The browser identifies the Diamond Backpack base directly");
+            helper.assertTrue(smithing.addition().resolveForStacks(context).stream().anyMatch(stack -> stack.is(Items.NETHERITE_INGOT)),
+                    "The browser identifies the Netherite Ingot addition directly");
             helper.assertFalse(audit.recipeIds.contains(Identifier.fromNamespaceAndPath("fabricated_backpacks", "infinity_upgrade")), "Creative infinity has no fabricated survival recipe");
             helper.assertTrue(fixture.player.getInventory().isEmpty(), "Catalog browsing grants no inventory items");
             fixture.send(new BrowserCatalogRequest(page.epoch(), page.total()));

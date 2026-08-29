@@ -101,7 +101,7 @@ DESCRIPTIONS = {
     "blasting": "Process ores and metals with fuel in a built-in blast furnace.",
     "crafting": "Craft with a full three-by-three workbench.",
     "stonecutter": "Cut stone using recipes from a built-in stonecutter.",
-    "jukebox": "Play a music disc from the carried or placed backpack.",
+    "jukebox": "Play from a two-disc playlist in the carried or placed backpack.",
     "tool_swapper": "Switch to a suitable tool stored in the backpack.",
     "tank": "Store fluid in a tank, with dedicated container slots.",
     "battery": "Store energy and charge compatible items.",
@@ -577,6 +577,7 @@ def translations(upgrades):
         "tooltip.fabricated_backpacks.contents_summary": "%s items in %s / %s slots",
         "tooltip.fabricated_backpacks.contents_empty": "The backpack is empty.",
         "tooltip.fabricated_backpacks.contents_counts": "Large counts use k / M / B; total above is exact.",
+        "tooltip.fabricated_backpacks.netherite_progression": "Smith with the vanilla Netherite Upgrade Smithing Template + Netherite Ingot.",
         "tooltip.fabricated_backpacks.upgrade_base": "A blank frame for crafting backpack upgrades.",
         "tooltip.fabricated_backpacks.advanced": "Expanded controls and matching options.",
         "tooltip.fabricated_backpacks.automatic": "Automatically supplies inputs and collects results.",
@@ -605,7 +606,7 @@ def translations(upgrades):
             name = ("Advanced " if advanced else "Automatic " if automatic else "") + display + " Upgrade"
             description = DESCRIPTIONS[family]
             if advanced and family == "jukebox":
-                description = "Manage a twelve-disc playlist with track, shuffle and repeat controls."
+                description = "Manage a twenty-four-disc paged playlist with track, shuffle and repeat controls."
             elif advanced:
                 description += " Expanded controls and matching options."
             elif automatic:

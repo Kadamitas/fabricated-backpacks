@@ -89,6 +89,9 @@ tasks.withType(Test).configureEach {
 
 tasks.named('runGameTest') {
     systemProperty 'fabric-api.gametest.report-file', layout.buildDirectory.file('gametest-results.xml').get().asFile.absolutePath
+    providers.gradleProperty('gameTestFilter').orNull?.with { selector ->
+        systemProperty 'fabric-api.gametest.filter', selector
+    }
 }
 
 tasks.named('runClientGameTest') {

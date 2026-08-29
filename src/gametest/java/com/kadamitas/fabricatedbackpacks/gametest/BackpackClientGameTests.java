@@ -2,7 +2,9 @@ package com.kadamitas.fabricatedbackpacks.gametest;
 
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlock;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
+import com.kadamitas.fabricatedbackpacks.client.screen.BackpackIconButton;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackScreen;
+import com.kadamitas.fabricatedbackpacks.client.screen.BackpackSettingsScreen;
 import com.kadamitas.fabricatedbackpacks.client.screen.EquipmentScreen;
 import com.kadamitas.fabricatedbackpacks.client.render.BackpackRendering;
 import com.kadamitas.fabricatedbackpacks.client.render.BackpackVisualState;
@@ -16,6 +18,7 @@ import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
+import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -27,10 +30,14 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.CameraType;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -40,10 +47,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
+import com.mojang.blaze3d.platform.InputConstants;
 import org.lwjgl.glfw.GLFW;
 
 import java.nio.file.Files;
@@ -55,6 +64,11 @@ import java.util.UUID;
 /** A real rendered client, a newly created world, actual mouse/key input, and save/reopen checks. */
 public final class BackpackClientGameTests implements FabricClientGameTest {
     private static final List<String> RECORDS = List.of("13", "cat", "blocks", "chirp", "far", "mall", "mellohi", "stal", "strad", "ward", "11", "wait");
+    private static final List<String> MOD_KEY_BINDINGS = List.of(
+            "key.fabricated_backpacks.open", "key.fabricated_backpacks.equipment", "key.fabricated_backpacks.browser",
+            "key.fabricated_backpacks.transfer", "key.fabricated_backpacks.deposit", "key.fabricated_backpacks.restock",
+            "key.fabricated_backpacks.tool_cycle", "key.fabricated_backpacks.upgrade_1", "key.fabricated_backpacks.upgrade_2",
+            "key.fabricated_backpacks.upgrade_3", "key.fabricated_backpacks.upgrade_4", "key.fabricated_backpacks.upgrade_5");
     private final List<String> evidence = new ArrayList<>();
 
     @Override public void runTest(ClientGameTestContext context) {
@@ -72,6 +86,24 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                     wornAppearance(context, world);
                 }
                 System.out.println("FABRICATED_BACKPACKS_WORN_APPEARANCE_PASS");
+                return;
+            }
+            case "input" -> {
+                try (var world = context.worldBuilder().create()) {
+                    setup(world);
+                    world.getConnection().waitForChunksRender();
+                    inputIsolation(context, world);
+                }
+                System.out.println("FABRICATED_BACKPACKS_INPUT_ISOLATION_PASS");
+                return;
+            }
+            case "jukebox_pages" -> {
+                try (var world = context.worldBuilder().create()) {
+                    setupJukeboxPages(world);
+                    world.getConnection().waitForChunksRender();
+                    jukeboxPages(context, world);
+                }
+                System.out.println("FABRICATED_BACKPACKS_JUKEBOX_PAGES_PASS");
                 return;
             }
             case "multiplayer_host" -> { MultiplayerClientAcceptance.host(context); return; }
@@ -97,6 +129,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             context.waitForScreen(BackpackScreen.class);
             context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().bag().getItem(0).getCount() == 200_000);
             check(world.getServer().computeOnServer(server -> bag(world).getItem(0).getCount()) == 200_000, "Enlarged count must survive server/client menu synchronization");
+            inputIsolation(context, world);
             transferStorageWithMouse(context, world);
             fillTwelveRecordSlots(context, world);
             ConfiguredClientAcceptance.referenceLayout(context, world);
@@ -188,6 +221,178 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         } catch (java.io.IOException exception) { throw new AssertionError("Could not write client acceptance evidence", exception); }
     }
 
+    private static void inputIsolation(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.waitForScreen(BackpackScreen.class);
+        context.runOnClient(client -> {
+            var screen = (BackpackScreen) client.gui.screen();
+            var state = new GuiRenderState();
+            screen.extractRenderState(new GuiGraphicsExtractor(client, state, -1, -1), -1, -1, 0);
+            var labels = new ArrayList<String>();
+            state.forEachText(rendered -> labels.add(ConfiguredClientAcceptance.plain(
+                    ConfiguredClientAcceptance.nativeText(rendered))));
+            check(labels.contains("200000"), "A large stored stack renders its full exact count: " + labels);
+        });
+        selectUpgrade(context, 0);
+        context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 0);
+        checkUpgradeSettingTooltips(context);
+        clickButton(context, "Prefs");
+        context.waitForScreen(BackpackSettingsScreen.class);
+        StorageClientAcceptance.checkSettingsTooltips(context);
+        clickButton(context, "Back to backpack");
+        context.waitForScreen(BackpackScreen.class);
+        searchBrowser(context, "seed");
+        int containerId = context.computeOnClient(client -> client.player.containerMenu.containerId);
+        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.getInput().typeChars("b");
+        context.waitTicks(3);
+        check(context.computeOnClient(client -> client.gui.screen() instanceof BackpackScreen screen
+                        && screen.getMenu().containerId == containerId
+                        && screen.children().stream().filter(EditBox.class::isInstance).map(EditBox.class::cast)
+                        .anyMatch(box -> box.visible && box.active && box.isFocused() && box.getValue().equals("seedb"))),
+                "Typing physical B into a backpack search field keeps the same menu focused and enters the letter");
+
+        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.waitFor(client -> client.gui.screen() == null);
+        context.getInput().pressKey(GLFW.GLFW_KEY_E);
+        context.waitForScreen(InventoryScreen.class);
+        for (int press = 0; press < 3; press++) context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.waitTicks(5);
+        check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
+                "Repeated backpack key presses are ignored while an inventory menu is open");
+        world.getServer().waitFor(server -> player(world).containerMenu == player(world).inventoryMenu);
+        allBindingsIgnoreMenus(context, world);
+        context.getInput().holdKey(GLFW.GLFW_KEY_B);
+        try {
+            context.waitTicks(3);
+            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.waitFor(client -> client.gui.screen() == null);
+            context.waitTicks(5);
+            world.getServer().waitFor(server -> player(world).containerMenu == player(world).inventoryMenu);
+            check(context.computeOnClient(client -> client.gui.screen() == null),
+                    "A held backpack key consumed by a menu does not queue an open after that menu closes");
+        } finally {
+            context.getInput().releaseKey(GLFW.GLFW_KEY_B);
+        }
+        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.waitForScreen(BackpackScreen.class);
+    }
+
+    private static void checkUpgradeSettingTooltips(ClientGameTestContext context) {
+        context.waitTicks(2);
+        checkUpgradeSettingTooltips(context, false);
+        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        try {
+            context.waitTicks(2);
+            checkUpgradeSettingTooltips(context, true);
+        } finally {
+            context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        }
+        context.waitTicks(2);
+        checkUpgradeSettingTooltips(context, false);
+    }
+
+    private static void checkUpgradeSettingTooltips(ClientGameTestContext context, boolean expected) {
+        context.runOnClient(client -> {
+            check(client.gui.screen() instanceof BackpackScreen, "Upgrade context-help checks run on the real backpack screen");
+            var names = java.util.Set.of("Play", "Stop", "Previous", "Next", "Shuffle", "Repeat");
+            List<BackpackIconButton> controls = client.gui.screen().children().stream()
+                    .filter(BackpackIconButton.class::isInstance).map(BackpackIconButton.class::cast)
+                    .filter(button -> names.contains(button.getMessage().getString().replaceFirst(":.*$", ""))).toList();
+            check(controls.size() == names.size(), "All six advanced-jukebox settings are covered by Shift-only context help: "
+                    + controls.stream().map(button -> button.getMessage().getString()).toList());
+            for (BackpackIconButton control : controls) {
+                String label = control.getMessage().getString();
+                var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) control)
+                        .fabricatedBackpacksTests$tooltip().get();
+                if (!expected) {
+                    check(tooltip == null, "Upgrade context help stays hidden without Shift: " + label);
+                    continue;
+                }
+                check(tooltip != null, "Holding Shift attaches context help to upgrade setting: " + label);
+                String help = tooltip.toCharSequence(client).stream().map(ConfiguredClientAcceptance::plain)
+                        .collect(java.util.stream.Collectors.joining(" ")).replaceAll("\\s+", " ").strip();
+                check(help.length() > label.length() + 12 && !help.equalsIgnoreCase(label),
+                        "Upgrade help explains the setting instead of repeating its label: " + label + " -> " + help);
+                if (label.equals("Play")) check(help.contains("first occupied disc slot"),
+                        "Play help explains which physical record starts: " + help);
+                if (label.startsWith("Repeat")) check(help.contains("OFF, ALL, and ONE"),
+                        "Repeat help explains every available mode: " + help);
+            }
+        });
+    }
+
+    private static void allBindingsIgnoreMenus(ClientGameTestContext context, TestSingleplayerContext world) {
+        ItemStack bagBefore = world.getServer().computeOnServer(server -> player(world).getInventory().getItem(0).copy());
+        ItemStack wornBefore = world.getServer().computeOnServer(server -> BackpackEquipment.get(player(world)).copy());
+        context.runOnClient(client -> {
+            var actual = java.util.Arrays.stream(client.options.keyMappings).map(KeyMapping::getName)
+                    .filter(name -> name.startsWith("key.fabricated_backpacks.")).collect(java.util.stream.Collectors.toSet());
+            check(actual.equals(java.util.Set.copyOf(MOD_KEY_BINDINGS)),
+                    "The menu-isolation matrix covers every registered Fabricated Backpacks binding: " + actual);
+        });
+        try {
+            for (String name : MOD_KEY_BINDINGS) {
+                bindOnly(context, name, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F10);
+                boolean upgrade = name.contains(".upgrade_");
+                if (upgrade) context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_ALT);
+                try {
+                    context.getInput().pressKey(GLFW.GLFW_KEY_F10);
+                    context.waitTicks(2);
+                } finally {
+                    if (upgrade) context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_ALT);
+                }
+                check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
+                        name + " cannot replace or close an open keyboard-driven menu");
+
+                bindOnly(context, name, InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_4);
+                if (upgrade) context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_ALT);
+                try {
+                    context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_4);
+                    context.waitTicks(2);
+                } finally {
+                    if (upgrade) context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_ALT);
+                }
+                check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
+                        name + " cannot replace or close an open mouse-driven menu");
+            }
+
+            context.runOnClient(client -> {
+                InputConstants.Key key = InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_F10);
+                for (String name : MOD_KEY_BINDINGS) KeyMapping.get(name).setKey(key);
+                KeyMapping.resetMapping();
+                KeyMapping.click(key);
+            });
+            context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_ALT);
+            try { context.waitTicks(3); }
+            finally { context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_ALT); }
+            check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
+                    "Even pending clicks for every mod binding are drained without acting while a menu is open");
+            check(world.getServer().computeOnServer(server -> player(world).containerMenu == player(world).inventoryMenu
+                            && ItemStack.matches(player(world).getInventory().getItem(0), bagBefore)
+                            && ItemStack.matches(BackpackEquipment.get(player(world)), wornBefore)),
+                    "Menu-blocked bindings cannot mutate storage, equipment, or upgrade settings on the server");
+        } finally {
+            context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_ALT);
+            context.runOnClient(client -> {
+                for (String name : MOD_KEY_BINDINGS) {
+                    KeyMapping mapping = KeyMapping.get(name);
+                    mapping.setKey(mapping.getDefaultKey());
+                }
+                KeyMapping.resetMapping();
+            });
+        }
+    }
+
+    private static void bindOnly(ClientGameTestContext context, String selected, InputConstants.Type type, int code) {
+        context.runOnClient(client -> {
+            InputConstants.Key unbound = InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_UNKNOWN);
+            for (String name : MOD_KEY_BINDINGS) KeyMapping.get(name).setKey(unbound);
+            KeyMapping.get(selected).setKey(type.getOrCreate(code));
+            KeyMapping.resetMapping();
+        });
+    }
+
     private static void setup(TestSingleplayerContext world) {
         world.getServer().runCommand("fill -12 79 -12 12 79 12 minecraft:stone");
         world.getServer().runCommand("time set day");
@@ -224,6 +429,166 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             player.inventoryMenu.broadcastChanges();
         });
         world.getConnection().waitForClientboundPackets();
+    }
+
+    private static void setupJukeboxPages(TestSingleplayerContext world) {
+        world.getServer().runCommand("fill -4 79 -4 4 79 4 minecraft:stone");
+        world.getServer().runCommand("time set day");
+        world.getServer().runCommand("weather clear");
+        world.getServer().runOnServer(server -> {
+            ServerPlayer player = player(world);
+            player.getInventory().clearContent();
+            player.setGameMode(GameType.SURVIVAL);
+            player.teleportTo(.5, 80, .5);
+            BagInventory bag = BackpackTestSupport.bag(BackpackTier.NETHERITE, UpgradeKind.ADVANCED_JUKEBOX);
+            var records = new SimpleContainer(200);
+            for (int slot = 0; slot < records.getContainerSize(); slot++) records.setItem(slot, new ItemStack(Items.MUSIC_DISC_13));
+            records.setItem(99, new ItemStack(Items.MUSIC_DISC_BLOCKS));
+            records.setItem(199, new ItemStack(Items.MUSIC_DISC_WAIT));
+            bag.upgrades().getItem(0).set(BagComponents.CONTENTS, InventorySnapshot.capture(records));
+            bag.upgrades().setChanged();
+            bag.stack().set(DataComponents.CUSTOM_NAME, Component.literal("Two Hundred Disc Backpack"));
+            player.getInventory().setItem(0, bag.stack());
+            player.getInventory().setSelectedSlot(0);
+            player.inventoryMenu.broadcastChanges();
+        });
+        world.getConnection().waitForClientboundPackets();
+    }
+
+    private static void jukeboxPages(ClientGameTestContext context, TestSingleplayerContext world) {
+        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.waitForScreen(BackpackScreen.class);
+        selectUpgrade(context, 0);
+        context.waitFor(client -> {
+            var screen = (BackpackScreen) client.gui.screen();
+            var inventory = screen.getMenu().bag().upgradeInventory(screen.getMenu().selected().orElseThrow());
+            return inventory.getContainerSize() == 200 && java.util.stream.IntStream.range(0, 200)
+                    .allMatch(slot -> !inventory.getItem(slot).isEmpty());
+        });
+        world.getServer().waitFor(server -> {
+            BagInventory live = bag(world);
+            var inventory = live.upgradeInventory(BackpackTestSupport.upgrade(live, 0));
+            return inventory.getContainerSize() == 200 && java.util.stream.IntStream.range(0, 200)
+                    .allMatch(slot -> !inventory.getItem(slot).isEmpty());
+        });
+
+        List<Integer> firstPage = visibleJukeboxSlots(context);
+        check(!firstPage.isEmpty() && firstPage.getFirst() == 0
+                        && java.util.stream.IntStream.range(0, firstPage.size()).allMatch(index -> firstPage.get(index) == index),
+                "The focused client begins on one contiguous first page of the 200-slot jukebox");
+        clickButton(context, jukeboxPageButton(context, "Previous slots "));
+        List<Integer> lastPage = visibleJukeboxSlots(context);
+        check(!lastPage.isEmpty() && lastPage.getLast() == 199
+                        && lastPage.getFirst() == Math.floorDiv(199, firstPage.size()) * firstPage.size(),
+                "Previous from page one wraps to the partial page containing physical record slot 199");
+        int finalSlot = context.computeOnClient(client -> ((BackpackScreen) client.gui.screen()).getMenu().auxiliaryStart() + 199);
+        clickSlot(context, finalSlot);
+        world.getServer().waitFor(server -> player(world).containerMenu.getCarried().is(Items.MUSIC_DISC_WAIT)
+                && player(world).containerMenu.getSlot(finalSlot).getItem().isEmpty());
+        world.getConnection().waitForClientboundPackets();
+        context.waitFor(client -> client.player.containerMenu.getCarried().is(Items.MUSIC_DISC_WAIT)
+                && client.player.containerMenu.getSlot(finalSlot).getItem().isEmpty());
+        separateJukeboxClicks(context);
+        clickSlot(context, finalSlot);
+        world.getServer().waitFor(server -> player(world).containerMenu.getCarried().isEmpty()
+                && player(world).containerMenu.getSlot(finalSlot).getItem().is(Items.MUSIC_DISC_WAIT));
+        world.getConnection().waitForClientboundPackets();
+        context.waitFor(client -> client.player.containerMenu.getCarried().isEmpty()
+                && client.player.containerMenu.getSlot(finalSlot).getItem().is(Items.MUSIC_DISC_WAIT));
+        clickButton(context, jukeboxPageButton(context, "Next slots "));
+        check(visibleJukeboxSlots(context).equals(firstPage), "Next from the last jukebox page wraps back to the exact first page");
+        navigateToJukeboxSlot(context, 99);
+        check(visibleJukeboxSlots(context).contains(99), "Forward page controls expose the middle physical record slot 99");
+        context.takeScreenshot("jukebox-pages-200-middle");
+
+        world.getServer().runOnServer(server -> {
+            BagInventory bag = bag(world);
+            var records = bag.upgradeInventory(BackpackTestSupport.upgrade(bag, 0));
+            records.clearContent();
+            records.setItem(0, new ItemStack(Items.MUSIC_DISC_13));
+            records.setItem(99, new ItemStack(Items.MUSIC_DISC_BLOCKS));
+            records.setItem(199, new ItemStack(Items.MUSIC_DISC_WAIT));
+            player(world).containerMenu.broadcastChanges();
+        });
+        world.getConnection().waitForClientboundPackets();
+        context.waitFor(client -> {
+            var menu = ((BackpackScreen) client.gui.screen()).getMenu();
+            var records = menu.bag().upgradeInventory(menu.selected().orElseThrow());
+            return java.util.stream.IntStream.range(0, 200).filter(slot -> !records.getItem(slot).isEmpty()).boxed().toList()
+                    .equals(List.of(0, 99, 199));
+        });
+
+        navigateToJukeboxSlot(context, 0);
+        try (var audio = new ClientAudioProbe(context)) {
+            clickButton(context, "Play");
+            awaitJukeboxSlot(world, 0);
+            audio.awaitActive(1);
+            context.takeScreenshot("jukebox-pages-playing-0");
+
+            clickButton(context, "Next");
+            awaitJukeboxSlot(world, 99);
+            audio.awaitActive(1);
+            navigateToJukeboxSlot(context, 99);
+            context.takeScreenshot("jukebox-pages-playing-99");
+
+            clickButton(context, "Next");
+            awaitJukeboxSlot(world, 199);
+            audio.awaitActive(1);
+            navigateToJukeboxSlot(context, 199);
+            context.takeScreenshot("jukebox-pages-playing-199");
+
+            clickButton(context, "Stop");
+            world.getServer().waitFor(server -> !bag(world).settings(BackpackTestSupport.upgrade(bag(world), 0))
+                    .getBooleanOr("playing", false));
+            audio.awaitActive(0);
+        }
+    }
+
+    private static void awaitJukeboxSlot(TestSingleplayerContext world, int slot) {
+        world.getServer().waitFor(server -> {
+            BagInventory bag = bag(world);
+            var state = bag.settings(BackpackTestSupport.upgrade(bag, 0));
+            return state.getBooleanOr("playing", false) && state.getIntOr("active_slot", -1) == slot;
+        });
+    }
+
+    private static List<Integer> visibleJukeboxSlots(ClientGameTestContext context) {
+        return context.computeOnClient(client -> {
+            var menu = ((BackpackScreen) client.gui.screen()).getMenu();
+            return java.util.stream.IntStream.range(0, menu.auxiliaryCount())
+                    .filter(index -> menu.getSlot(menu.auxiliaryStart() + index).isActive()).boxed().toList();
+        });
+    }
+
+    private static String jukeboxPageButton(ClientGameTestContext context, String prefix) {
+        return context.computeOnClient(client -> client.gui.screen().children().stream()
+                .filter(net.minecraft.client.gui.components.AbstractWidget.class::isInstance)
+                .map(net.minecraft.client.gui.components.AbstractWidget.class::cast)
+                .filter(widget -> widget.visible && widget.active && widget.getMessage().getString().startsWith(prefix))
+                .map(widget -> widget.getMessage().getString()).findFirst().orElseThrow());
+    }
+
+    private static void navigateToJukeboxSlot(ClientGameTestContext context, int physicalSlot) {
+        var pages = new java.util.HashSet<String>();
+        while (!visibleJukeboxSlots(context).contains(physicalSlot)) {
+            String next = jukeboxPageButton(context, "Next slots ");
+            check(pages.add(next) && pages.size() <= 200,
+                    "Jukebox paging must reach physical slot " + physicalSlot + " without cycling: " + pages);
+            clickButton(context, next);
+        }
+    }
+
+    private static void separateJukeboxClicks(ClientGameTestContext context) {
+        long before = context.computeOnClient(client -> net.minecraft.util.Util.getMillis());
+        try {
+            Thread.sleep(net.minecraft.client.MouseHandler.DOUBLE_CLICK_THRESHOLD_MS + 1);
+        } catch (InterruptedException failure) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while separating two physical jukebox-slot clicks", failure);
+        }
+        check(context.computeOnClient(client -> net.minecraft.util.Util.getMillis()) - before
+                        >= net.minecraft.client.MouseHandler.DOUBLE_CLICK_THRESHOLD_MS,
+                "The high-slot return click occurs outside Minecraft's native double-click window");
     }
 
     private static void transferStorageWithMouse(ClientGameTestContext context, TestSingleplayerContext world) {

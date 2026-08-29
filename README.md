@@ -4,15 +4,15 @@
 
 Modular backpacks for **Minecraft Java Edition 26.2 on Fabric**.
 
-**0.5.0-alpha is a development build.** Back up worlds before testing it.
+**0.5.2-alpha is a development build.** Back up worlds before testing it.
 The feature list describes the current implementation, not a claim that every
 interaction or multiplayer scenario has passed acceptance testing. Release
-evidence belongs in [Verification](docs/VERIFICATION.md).
+evidence belongs in the [0.5.2 verification record](docs/VERIFICATION_0.5.2.md).
 
-The working branch also contains an **unreleased interface, worn-model and
-automation revision**. See the [UI revision record](docs/UI_REVISION.md) and
+This alpha also contains the interface, worn-model and automation revision.
+See the [UI revision record](docs/UI_REVISION.md) and
 [automation verification record](docs/AUTOMATION_VERIFICATION.md) for their separate
-test status; the existing alpha download is unchanged.
+test scope.
 
 ## What is included
 
@@ -64,6 +64,8 @@ test mod. Build instructions are in [Building and testing](docs/BUILDING.md).
 The leather backpack uses four leather, four string and a chest. The recipe
 browser shows the arrangement and subsequent tier recipes. Tier upgrades retain
 the source backpack's components rather than crafting an empty replacement.
+For the final tier, smith a Diamond Backpack directly with the vanilla Netherite
+Upgrade Smithing Template and a Netherite Ingot.
 
 Use a held backpack to open it. Sneak-use it on a block to place it, unless an
 installed deposit/restock upgrade handles that container interaction. Use a
@@ -97,8 +99,8 @@ does not cascade through unrelated carried bags; separate optional bindings
 can force a particular transfer direction.
 
 The backpack's **Items** button opens the browser. Native workstation screens
-also provide a **Recipe browser** button and accept its configured opening key
-when a text field is not focused. Put down the cursor item before opening it.
+also provide an explicit **Recipe browser** button. Configured gameplay bindings
+stay inactive while any menu is open. Put down the cursor item before opening it.
 
 Within the browser, click or R shows recipes; right click or U shows uses.
 Shift-click, middle click or B toggles an item bookmark. Ctrl+F focuses search,
