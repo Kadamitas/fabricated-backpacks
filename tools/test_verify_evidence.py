@@ -56,6 +56,10 @@ class EvidenceGateTest(unittest.TestCase):
         self.multiplayer_id = "9f2b4d93-1d7c-44bc-94c3-8d2410f4e116"
         for name in ("build.gradle", "settings.gradle", "gradle.properties", "gradlew", "gradlew.bat", "LICENSE", ".gitattributes", ".gitignore"):
             self.write(self.root / name, b"synthetic gate-test fixture\n")
+        self.version = "0.5.1-alpha+mc26.2"
+        self.minecraft = "26.2"
+        self.write(self.root / "gradle.properties",
+                   f"minecraft_version={self.minecraft}\nmod_version={self.version}\n".encode())
         self.unit_source = self.root / "src/test/java/example/RuleTest.java"
         self.write(self.unit_source, b'package example; class RuleTest { @Test void invariant() {} }')
         self.server_source = self.root / "src/gametest/java/com/kadamitas/fabricatedbackpacks/gametest/BackpackGameTests.java"
@@ -71,8 +75,8 @@ class EvidenceGateTest(unittest.TestCase):
         for name in sorted(gate.expected_server_ids()) + ["minecraft:always_pass"]:
             ET.SubElement(server, "testcase", classname="platform", name=name)
         self.xml(self.server, server)
-        self.jar = self.root / "build/libs/fabricated-backpacks-0.5.0-alpha.jar"
-        self.metadata = {"id": "fabricated_backpacks", "version": "0.5.0-alpha", "license": "MIT", "depends": {"minecraft": "26.2"},
+        self.jar = self.root / f"build/libs/fabricated-backpacks-{self.version}.jar"
+        self.metadata = {"id": "fabricated_backpacks", "version": self.version, "license": "MIT", "depends": {"minecraft": self.minecraft},
                          "entrypoints": {"main": ["example.Main"], "client": ["example.Client"]}, "jars": [{"file": "META-INF/jars/energy-5.0.0.jar"}]}
         self.clean_jar = zip_bytes({"fabric.mod.json": json.dumps(self.metadata).encode(),
                                    "com/kadamitas/fabricatedbackpacks/FabricatedBackpacks.class": b"\xca\xfe\xba\xbe synthetic",
@@ -158,6 +162,8 @@ class EvidenceGateTest(unittest.TestCase):
         automated = gate.verify(False)
         self.assertEqual((1, 3, 2), (automated["unit_tests"], automated["server_tests"], automated["mod_server_tests"]))
         self.assertEqual("unit-and-server", automated["scope"])
+        self.assertEqual((self.version, self.minecraft),
+                         (automated["artifact"]["version"], automated["artifact"]["minecraft"]))
         self.assertNotIn("client", automated)
         released = gate.verify(True)
         self.assertEqual(gate.sha256(self.jar), released["artifact"]["sha256"])
@@ -423,7 +429,8 @@ class EvidenceGateTest(unittest.TestCase):
         self.assertTrue(gate.verify(False)["passed"])
 
     def test_release_coordinates_and_energy_loading_are_checked(self) -> None:
-        for field, value in (("version", "9.0"), ("id", "another_mod"), ("license", "unknown"), ("jars", [])):
+        for field, value in (("version", "9.0"), ("id", "another_mod"), ("license", "unknown"),
+                             ("depends", {"minecraft": "1.21.1"}), ("jars", [])):
             with self.subTest(field=field):
                 with ZipFile(io.BytesIO(self.clean_jar)) as archive:
                     entries = {name: archive.read(name) for name in archive.namelist()}
@@ -432,6 +439,40 @@ class EvidenceGateTest(unittest.TestCase):
                 self.write(self.jar, zip_bytes(entries))
                 with self.assertRaises(ValueError):
                     gate.verify(False)
+
+    def test_release_coordinates_are_derived_from_gradle_properties(self) -> None:
+        version = "0.5.2-beta.1+mc26.2"
+        metadata = {**self.metadata, "version": version}
+        with ZipFile(io.BytesIO(self.clean_jar)) as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+        entries["fabric.mod.json"] = json.dumps(metadata).encode()
+        replacement = self.root / f"build/libs/fabricated-backpacks-{version}.jar"
+        self.write(replacement, zip_bytes(entries))
+        self.jar.unlink()
+        self.jar = replacement
+        self.write(self.root / "gradle.properties",
+                   f"minecraft_version={self.minecraft}\nmod_version={version}\n".encode())
+        self.start_record()
+
+        artifact = gate.verify(False)["artifact"]
+
+        self.assertEqual(version, artifact["version"])
+        self.assertEqual(self.jar.relative_to(self.root).as_posix(), artifact["path"])
+
+    def test_invalid_or_ambiguous_gradle_coordinates_fail_closed(self) -> None:
+        cases = {
+            "missing version": f"minecraft_version={self.minecraft}\n",
+            "duplicate version": (f"minecraft_version={self.minecraft}\nmod_version={self.version}\n"
+                                  f"mod_version={self.version}\n"),
+            "unsafe version": f"minecraft_version={self.minecraft}\nmod_version=../../release\n",
+            "wrong target suffix": "minecraft_version=26.3\nmod_version=0.5.1-alpha+mc26.2\n",
+            "malformed property": f"minecraft_version={self.minecraft}\nmod_version={self.version}\nbroken\n",
+        }
+        for name, content in cases.items():
+            with self.subTest(name=name):
+                self.write(self.root / "gradle.properties", content.encode())
+                with self.assertRaises(ValueError):
+                    gate.release_coordinates()
 
     def test_multiplayer_rejects_mixed_processes_runs_roles_and_profiles(self) -> None:
         mutations = (

@@ -44,7 +44,7 @@ public final class CompactingRuntime {
     private static UpgradeConfig.Compacting configured;
     private CompactingRuntime() { }
 
-    /** Configuration is validated before publication; each recipe still needs its reverse unless explicitly allowed. */
+    /** Configuration is validated before publication; every recipe must have an exact, remainder-free reverse. */
     private static void configureShapes(UpgradeConfig.Compacting rules) {
         if (rules == configured) return;
         extraShapes = rules.extraShapes().stream().map(shape -> new Shape(shape.width(), shape.height(), shape.pattern())).toList();
@@ -98,13 +98,12 @@ public final class CompactingRuntime {
         CraftingRecipe recipe = selected.get().value();
         ItemStack result = recipe.assemble(input);
         if (result.isEmpty() || ItemStack.isSameItem(result, candidate)) return false;
-        if (!bag.settings(upgrade).getBooleanOr("compact_anything", false) && !reversible(level, candidate, result, shape.ingredients())) return false;
+        List<ItemStack> remainders = recipe.getRemainingItems(input);
+        if (remainders.stream().anyMatch(stack -> !stack.isEmpty())) return false;
+        if (!reversible(level, candidate, result, shape.ingredients())) return false;
         List<ItemStack> plan = InventoryMoves.snapshot(storage);
         if (!InventoryMoves.removeExact(storage, plan, candidate, shape.ingredients())) return false;
         if (!InventoryMoves.insertIntoPlan(storage, plan, result, false).isEmpty()) return false;
-        for (ItemStack remainder : recipe.getRemainingItems(input)) {
-            if (!InventoryMoves.insertIntoPlan(storage, plan, remainder, false).isEmpty()) return false;
-        }
         InventoryMoves.commit(storage, plan);
         return true;
     }

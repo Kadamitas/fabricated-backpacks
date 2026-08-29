@@ -5,7 +5,9 @@ import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.menu.WorkstationMenus;
+import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -49,7 +51,7 @@ final class BrowserClientAcceptance {
         });
         world.getConnection().waitForClientboundPackets();
         openHovered(context, 3);
-        clickButton(context, "1");
+        selectUpgrade(context, 0);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 0);
         context.waitFor(client -> client.gui.screen().children().stream().anyMatch(widget -> widget instanceof AbstractWidget button && button.getMessage().getString().equals("Open station")));
         clickButton(context, "Open station");
@@ -58,7 +60,8 @@ final class BrowserClientAcceptance {
         int originalScale = context.computeOnClient(client -> client.options.guiScale().get());
         try {
             context.runOnClient(client -> { client.options.guiScale().set(3); client.resizeGui(); });
-            context.getInput().pressKey(GLFW.GLFW_KEY_O);
+            awaitButton(context, "Recipe browser");
+            clickButton(context, "Recipe browser");
             waitBrowser(context);
             context.waitTicks(3);
             context.takeScreenshot("browser-empty-search-gui-three");
@@ -92,7 +95,8 @@ final class BrowserClientAcceptance {
                 "Taking the result consumes all four ingredients once");
         context.takeScreenshot("browser-recipe-transfer-crafted");
 
-        context.getInput().pressKey(GLFW.GLFW_KEY_O);
+        awaitButton(context, "Recipe browser");
+        clickButton(context, "Recipe browser");
         waitBrowser(context);
         searchBrowser(context, "@minecraft \"crafting table\"");
         clickButton(context, "Crafting Table");
@@ -131,12 +135,13 @@ final class BrowserClientAcceptance {
         openHovered(context, 3);
         clickSlot(context, 1);
         clickPlayerSlot(context, 29);
-        clickButton(context, "2");
+        selectUpgrade(context, 1);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 1);
         awaitButton(context, "Open station");
         clickButton(context, "Open station");
         context.waitForScreen(net.minecraft.client.gui.screens.inventory.StonecutterScreen.class);
-        context.getInput().pressKey(GLFW.GLFW_KEY_O);
+        awaitButton(context, "Recipe browser");
+        clickButton(context, "Recipe browser");
         waitBrowser(context);
         searchBrowser(context, "@minecraft \"stone slab\"");
         clickButton(context, "Stone Slab");
@@ -168,14 +173,9 @@ final class BrowserClientAcceptance {
         context.waitFor(client -> client.gui.screen() == null);
 
         openHovered(context, 3);
-        clickButton(context, "3");
+        selectUpgrade(context, 2);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 2);
-        double[] ghost = context.computeOnClient(client -> {
-            var screen = (BackpackScreen) client.gui.screen();
-            return new double[]{(screen.width - screen.getMenu().imageWidth()) / 2.0 + screen.getMenu().storageWidth() + 59,
-                    (screen.height - screen.getMenu().imageHeight()) / 2.0 + 62};
-        });
-        clickAt(context, ghost[0], ghost[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        clickGhost(context, 0);
         waitBrowser(context);
         searchBrowser(context, "@minecraft \"diamond\" -ore -block -sword -axe -pickaxe -shovel -hoe -helmet -chestplate -leggings -boots -horse");
         context.waitTicks(12);
@@ -214,7 +214,7 @@ final class BrowserClientAcceptance {
         context.waitFor(client -> client.gui.screen() == null);
 
         openHovered(context, 3);
-        clickButton(context, "4");
+        selectUpgrade(context, 3);
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 3);
         clickButton(context, "Items");
         waitBrowser(context);
@@ -307,9 +307,16 @@ final class BrowserClientAcceptance {
         check(context.computeOnClient(client -> ((com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess) client.gui.screen())
                 .fabricatedBackpacks$hoveredSlot().getItem() == client.player.getInventory().getItem(inventorySlot)),
                 "The rendered inventory cursor targets the requested physical backpack slot");
-        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.runOnClient(client -> {
+            var screen = (InventoryScreen) client.gui.screen();
+            var hovered = ((com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess) screen)
+                    .fabricatedBackpacks$hoveredSlot();
+            int menuSlot = client.player.containerMenu.slots.indexOf(hovered);
+            check(menuSlot >= 0, "The hovered backpack resolves to an authorized menu slot");
+            ClientPlayNetworking.send(new MenuAction(client.player.containerMenu.containerId, "open_slot", menuSlot, 0, ""));
+        });
         context.waitForScreen(BackpackScreen.class);
         check(context.computeOnClient(client -> ((BackpackScreen) client.gui.screen()).getMenu().source().inventorySlot()) == inventorySlot,
-                "The inventory shortcut opens the hovered backpack, not another equipped item");
+                "The authorized slot action opens the hovered backpack, not another equipped item");
     }
 }

@@ -25,7 +25,7 @@ public record SettingsTemplate(CustomData main, InventorySnapshot memory, List<U
             "display_depth", "keep_tab", "keep_search", "shift_into_tab", "share_access", "sort_order", "inception_nested_first",
             "inception_inner_upgrades", "inception_outer_inventory");
     private static final Set<String> UPGRADE_KEYS = Set.of("enabled", "filter_mode", "filter_match", "match_damage", "match_components",
-            "tag_match", "tags", "filter_direction", "void_mode", "work_in_gui", "compact_anything", "hunger_mode", "feed_when_hurt",
+            "tag_match", "tags", "filter_direction", "void_mode", "work_in_gui", "hunger_mode", "feed_when_hurt",
             "magnet_items", "magnet_xp", "tool_mode", "swap_weapons", "alchemy_targets", "alchemy_match_duration", "alchemy_match_amplifier",
             "alchemy_match_all", "alchemy_all_missing", "input_filter_mode", "input_filter_match", "input_match_damage", "input_match_components",
             "input_tag_match", "input_tags", "fuel_filter_mode", "repeat", "shuffle", "direction", "handlers",

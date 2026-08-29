@@ -41,9 +41,23 @@ class ServerConfigTest {
             "{\"carriers\":{\"midDifficulty\":5,\"highDifficulty\":4}}", "{\"carriers\":{\"maximumDiscs\":13}}",
             "{\"carriers\":{\"lootTables\":{\"minecraft:zombie\":\"../secret\"}}}",
             "{\"storage\":{\"disallowedItems\":[\"#not a tag\"]}}", "{\"capture\":{\"hostileLimit\":121}}",
-            "{\"format\":2}"
+            "{\"format\":3}"
     })
     void malformedRulesCannotPartiallyApply(String json) { assertThrows(RuntimeException.class, () -> ConfigFile.decode(json)); }
+
+    @ParameterizedTest @ValueSource(strings = {
+            "{\"conduits\":{\"itemsPerOperation\":0}}", "{\"conduits\":{\"itemsPerOperation\":65}}",
+            "{\"conduits\":{\"itemIntervalTicks\":0}}", "{\"conduits\":{\"fluidMbPerTick\":-1}}",
+            "{\"conduits\":{\"energyPerTick\":1000000001}}", "{\"conduits\":{\"maximumNetworkNodes\":16385}}",
+            "{\"conduits\":{\"maximumEndpointVisitsPerTick\":0}}", "{\"conduits\":{\"unknownRate\":5}}",
+            "{\"engine\":{\"waterCapacityMb\":0}}", "{\"engine\":{\"waterMbPerTick\":4001}}",
+            "{\"engine\":{\"energyCapacity\":39}}", "{\"engine\":{\"energyPerTick\":32001}}",
+            "{\"engine\":{\"energyOutputPerTick\":0}}", "{\"engine\":{\"containerTransferMbPerTick\":0}}",
+            "{\"engine\":{\"energyCapacity\":1000000000001}}", "{\"engine\":null}"
+    })
+    void invalidAutomationCannotStartOrPartiallyReplaceRules(String settings) {
+        assertThrows(RuntimeException.class, () -> ConfigFile.decode("{\"automation\":" + settings + "}"));
+    }
 
     @Test void dropProbabilitySaturatesWithoutLosingTheLootingIncrement() {
         var rules = ServerConfig.defaults().carriers();
@@ -68,7 +82,7 @@ class ServerConfigTest {
             "{\"tank\":{\"stackRatio\":1.01}}", "{\"battery\":{\"capacityPerRow\":499}}",
             "{\"magnet\":{\"range\":33}}", "{\"feeding\":{\"hungryTicks\":0}}",
             "{\"pump\":{\"worldRange\":17}}", "{\"experience\":{\"mendingPoints\":21}}",
-            "{\"alchemy\":{\"interval\":0}}", "{\"jukebox\":{\"size\":17}}", "{\"jukebox\":{\"rowWidth\":7}}"
+            "{\"alchemy\":{\"interval\":0}}", "{\"jukebox\":{\"size\":257}}", "{\"jukebox\":{\"rowWidth\":7}}"
     })
     void upgradeBoundsAreRejectedBeforeApplication(String settings) {
         assertThrows(RuntimeException.class, () -> ConfigFile.decode("{\"upgrades\":" + settings + "}"));

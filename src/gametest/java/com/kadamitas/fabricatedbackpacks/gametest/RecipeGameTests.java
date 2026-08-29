@@ -85,7 +85,7 @@ final class RecipeGameTests {
         CraftingRecipe recipe = (CraftingRecipe) holder.value();
         BagInventory source = bag(BackpackTier.NETHERITE, UpgradeKind.ADVANCED_JUKEBOX);
         source.setItem(119, new ItemStack(Items.DIAMOND, 37));
-        source.upgradeInventory(upgrade(source, 0)).setItem(11, new ItemStack(Items.MUSIC_DISC_13));
+        source.upgradeInventory(upgrade(source, 0)).setItem(23, new ItemStack(Items.MUSIC_DISC_13));
         source.remember(0, new ItemStack(Items.EMERALD));
         source.stack().set(DataComponents.CUSTOM_NAME, Component.literal("Tinted expedition"));
         source.stack().set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(List.of(.25F), List.of(true), List.of("retained"), List.of(0x123456, 0xfedcba)));
@@ -121,7 +121,7 @@ final class RecipeGameTests {
         helper.assertTrue(menu.grid().isEmpty(), "Dye crafting consumes exactly one source bag and the one dye");
         BagInventory loaded = BagInventory.of(roundTrip(helper.getLevel(), menu.getCarried()));
         helper.assertValueEqual(count(loaded, Items.DIAMOND), 37, "Dyeing preserves main storage after serialization");
-        helper.assertTrue(loaded.upgradeInventory(upgrade(loaded, 0)).getItem(11).is(Items.MUSIC_DISC_13), "Dyeing preserves the final advanced record slot");
+        helper.assertTrue(loaded.upgradeInventory(upgrade(loaded, 0)).getItem(23).is(Items.MUSIC_DISC_13), "Dyeing preserves the final default advanced record slot");
         player.closeContainer();
         helper.succeed();
     }
@@ -130,7 +130,7 @@ final class RecipeGameTests {
         var player = player(helper);
         BagInventory source = bag(BackpackTier.NETHERITE, UpgradeKind.STACK_UPGRADE_TIER_4, UpgradeKind.ADVANCED_JUKEBOX);
         source.setItem(119, new ItemStack(Items.DIAMOND, 999));
-        source.upgradeInventory(upgrade(source, 1)).setItem(11, new ItemStack(Items.MUSIC_DISC_13));
+        source.upgradeInventory(upgrade(source, 1)).setItem(23, new ItemStack(Items.MUSIC_DISC_13));
         source.remember(0, new ItemStack(Items.EMERALD));
         source.toggleNoSort(1);
         source.stack().set(DataComponents.CUSTOM_NAME, Component.literal("Washed expedition"));
@@ -150,7 +150,7 @@ final class RecipeGameTests {
         player.closeContainer();
         BagInventory loaded = BagInventory.of(roundTrip(helper.getLevel(), player.getMainHandItem()));
         helper.assertValueEqual(count(loaded, Items.DIAMOND), 999, "Wash and save preserve enhanced main storage counts");
-        helper.assertTrue(loaded.upgradeInventory(upgrade(loaded, 1)).getItem(11).is(Items.MUSIC_DISC_13), "Wash and save preserve the last advanced record slot");
+        helper.assertTrue(loaded.upgradeInventory(upgrade(loaded, 1)).getItem(23).is(Items.MUSIC_DISC_13), "Wash and save preserve the final default advanced record slot");
         helper.assertValueEqual(loaded.identity(), source.identity(), "Washing preserves the physical backpack identity");
         source.stack().set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(List.of(.25F), List.of(true), List.of("retained"), List.of(0xff0000, 0x00ff00)));
         helper.getLevel().setBlockAndUpdate(pos, Blocks.WATER_CAULDRON.defaultBlockState().setValue(LayeredCauldronBlock.LEVEL, 1));

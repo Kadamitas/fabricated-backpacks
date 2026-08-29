@@ -2,6 +2,7 @@ package com.kadamitas.fabricatedbackpacks.block;
 
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
+import com.kadamitas.fabricatedbackpacks.resource.PlacedEnergyTransfer;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -22,6 +23,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import team.reborn.energy.api.EnergyStorage;
 
 public final class BackpackBlockEntity extends BlockEntity implements WorldlyContainer {
     private ItemStack stack;
@@ -29,12 +31,16 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
     private int viewers;
     private final BackpackLidAnimation lidAnimation = new BackpackLidAnimation();
     private ItemStack lastSentVisual = ItemStack.EMPTY;
+    private final PlacedEnergyTransfer energyTransfer = new PlacedEnergyTransfer(this);
+    private int clientEnergySupport;
 
     public BackpackBlockEntity(BlockPos pos, BlockState state) {
         super(BackpackRegistry.BLOCK_ENTITY, pos, state);
         stack = new ItemStack(state.getBlock());
     }
     public ItemStack stack() { return stack; }
+    public EnergyStorage energyStorage(Direction side) { return energyTransfer.storage(side); }
+    public int clientEnergySupport() { return clientEnergySupport; }
     public BagInventory inventory() {
         if (inventory == null) {
             inventory = BagInventory.of(stack);
@@ -47,6 +53,7 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
         if (!BackpackRegistry.isBackpack(newStack)) throw new IllegalArgumentException("Not a backpack");
         stack = newStack.copyWithCount(1);
         inventory = null;
+        energyTransfer.contentsReplaced();
         setChanged();
         synchronize();
     }
@@ -67,11 +74,15 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
     @Override protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
         ItemStack previous = stack;
+        int previousEnergySupport = clientEnergySupport;
         stack = input.read("backpack", ItemStackTemplate.CODEC).map(ItemStackTemplate::create).orElseGet(() -> new ItemStack(getBlockState().getBlock()));
         inventory = null;
+        energyTransfer.contentsReplaced();
         viewers = 0;
+        clientEnergySupport = input.getIntOr("energy_ports", 0) & 0x3fff;
         if (level != null && level.isClientSide() && !isRemoved()
-                && (meshTint(previous, 0) != meshTint(stack, 0) || meshTint(previous, 1) != meshTint(stack, 1))) {
+                && (meshTint(previous, 0) != meshTint(stack, 0) || meshTint(previous, 1) != meshTint(stack, 1)
+                    || previousEnergySupport != clientEnergySupport)) {
             // BE data updates the live lid immediately, but the tinted body lives in the chunk mesh.
             // An equal block state does not otherwise invalidate that mesh after a dye update.
             BlockState state = getBlockState();
@@ -84,6 +95,8 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
     }
     @Override public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
+        // Public connection flags are enough for cable rendering; contents and quantities stay private.
+        tag.putInt("energy_ports", energyTransfer.supportMask());
         tag.put("backpack", ItemStackTemplate.CODEC.encodeStart(net.minecraft.resources.RegistryOps.create(net.minecraft.nbt.NbtOps.INSTANCE, registries),
                 ItemStackTemplate.fromNonEmptyStack(visualStack())).getOrThrow());
         return tag;
@@ -103,6 +116,7 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
         if (level instanceof ServerLevel serverLevel) {
             if (state.getValue(BackpackBlock.OPEN) != (entity.viewers > 0)) entity.updateOpen();
             com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal.tick(entity.inventory(), serverLevel, pos, null);
+            entity.energyTransfer.tick(serverLevel, pos);
             if (serverLevel.getServer().getTickCount() % 20 == 0)
                 com.kadamitas.fabricatedbackpacks.gameplay.BackpackRuntime.archiveTree(entity.inventory(), serverLevel, null);
             if (level.getGameTime() % 10 == 0) {

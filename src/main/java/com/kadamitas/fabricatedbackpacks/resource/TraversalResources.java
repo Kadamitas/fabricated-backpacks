@@ -5,9 +5,11 @@ import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal;
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal.Node;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
+import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
+import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
 import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
 import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
@@ -23,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -33,14 +36,14 @@ final class TraversalResources {
     private TraversalResources() {}
 
     static Storage<ItemVariant> items(BagInventory root, Direction direction, BooleanSupplier available, Runnable changed) {
-        Storage<ItemVariant> ordered = new DynamicStorage<>(root, ItemVariant::blank, available, changed,
+        DynamicStorage<ItemVariant> ordered = new DynamicStorage<>(root, ItemVariant::blank, available, changed,
                 node -> {
-                    Storage<ItemVariant> physical = new BackpackItemStorage(node.inventory(), direction);
+                    SlottedStorage<ItemVariant> physical = new BackpackItemStorage(node.inventory(), direction);
                     return node.parent() == null ? physical : new VoidItemStorage(node.inventory(), physical, () -> live(root, node, available));
                 },
                 item -> UpgradeEngine.acceptsInput(root, item.toStack()),
                 item -> UpgradeEngine.acceptsOutput(root, item.toStack()), true);
-        return new VoidItemStorage(root, ordered, () -> live(root, new Node(root, null, -1), available));
+        return new VoidItemStorage(root, new IndexedItems(ordered), () -> live(root, new Node(root, null, -1), available));
     }
 
     static Storage<FluidVariant> fluids(BagInventory root, boolean rateLimited) {
@@ -62,7 +65,13 @@ final class TraversalResources {
     static EnergyStorage energy(BagInventory root) { return energy(root, () -> true, NO_CHANGE); }
 
     static EnergyStorage energy(BagInventory root, BooleanSupplier available, Runnable changed) {
-        return new DynamicEnergy(root, available, changed);
+        return new DynamicEnergy(root, available, changed, false,
+                (node, upgrade) -> new BackpackBattery(node.inventory(), upgrade));
+    }
+
+    static EnergyStorage externalEnergy(BagInventory root, BooleanSupplier available, Runnable changed,
+                                        BiFunction<Node, InstalledUpgrade, EnergyStorage> batteries) {
+        return new DynamicEnergy(root, available, changed, true, batteries);
     }
 
     private static boolean live(BagInventory root, Node node, BooleanSupplier available) {
@@ -95,6 +104,42 @@ final class TraversalResources {
         }
     }
 
+    /** Indexed access keeps a pipe's ordinal cursor useful even when each lookup returns a fresh facade. */
+    private static final class IndexedItems implements SlottedStorage<ItemVariant> {
+        private record Extent(Node node, int slots) {}
+        private final DynamicStorage<ItemVariant> storage;
+        private List<Extent> layout = List.of();
+        private List<SingleSlotStorage<ItemVariant>> slots = List.of();
+
+        IndexedItems(DynamicStorage<ItemVariant> storage) { this.storage = storage; }
+
+        @Override public List<SingleSlotStorage<ItemVariant>> getSlots() {
+            List<Node> nodes = storage.nodes(false);
+            List<Extent> current = nodes.stream().map(node -> new Extent(node, node.inventory().getContainerSize())).toList();
+            if (!current.equals(layout)) {
+                // Cache addresses, not resource values. Each existing view still checks its physical
+                // attachment and live policies; changed child ordering or geometry rebuilds the index.
+                List<SingleSlotStorage<ItemVariant>> updated = storage.views(nodes);
+                layout = current;
+                slots = updated;
+            }
+            return slots;
+        }
+        @Override public int getSlotCount() { return getSlots().size(); }
+        @Override public SingleSlotStorage<ItemVariant> getSlot(int slot) { return getSlots().get(slot); }
+        @Override public boolean supportsInsertion() { return storage.supportsInsertion(); }
+        @Override public boolean supportsExtraction() { return storage.supportsExtraction(); }
+        @Override public long insert(ItemVariant resource, long maximum, TransactionContext transaction) {
+            return storage.insert(resource, maximum, transaction);
+        }
+        @Override public long extract(ItemVariant resource, long maximum, TransactionContext transaction) {
+            return storage.extract(resource, maximum, transaction);
+        }
+        @Override public Iterator<StorageView<ItemVariant>> iterator() {
+            return getSlots().stream().map(slot -> (StorageView<ItemVariant>) slot).iterator();
+        }
+    }
+
     private static final class DynamicStorage<T extends TransferVariant<?>> implements Storage<T> {
         private record Part<T>(Node node, Storage<T> storage, Persist persistence) {}
         private final BagInventory root;
@@ -123,11 +168,23 @@ final class TraversalResources {
             return itemStorage && resource instanceof ItemVariant item && BackpackRegistry.isBackpack(item.toStack());
         }
 
-        private List<Part<T>> parts(boolean rootOnly) {
+        private List<Node> nodes(boolean rootOnly) {
             if (!available.getAsBoolean()) return List.of();
             List<Node> nodes = rootOnly ? List.of(new Node(root, null, -1)) : BackpackTraversal.inventoryBags(root);
-            return nodes.stream().filter(node -> live(root, node, available))
-                    .map(node -> new Part<>(node, factory.apply(node), new Persist(node, changed, root))).toList();
+            return nodes.stream().filter(node -> live(root, node, available)).toList();
+        }
+        private List<Part<T>> parts(boolean rootOnly) { return parts(nodes(rootOnly)); }
+        private List<Part<T>> parts(List<Node> nodes) {
+            return nodes.stream().map(node -> new Part<>(node, factory.apply(node), new Persist(node, changed, root))).toList();
+        }
+
+        @Override public boolean supportsInsertion() {
+            // Item admission has its own filter/void policy; only fluid ports derive support from their tanks.
+            return itemStorage || parts(false).stream().anyMatch(part -> part.storage.supportsInsertion());
+        }
+
+        @Override public boolean supportsExtraction() {
+            return itemStorage || parts(false).stream().anyMatch(part -> part.storage.supportsExtraction());
         }
 
         @Override public long insert(T resource, long maximum, TransactionContext transaction) {
@@ -160,13 +217,19 @@ final class TraversalResources {
             return extracted;
         }
 
-        @Override public Iterator<StorageView<T>> iterator() {
-            List<StorageView<T>> views = new ArrayList<>();
-            for (Part<T> part : parts(false)) for (StorageView<T> leaf : part.storage) {
+        private List<SingleSlotStorage<T>> views(List<Node> nodes) {
+            List<SingleSlotStorage<T>> views = new ArrayList<>();
+            for (Part<T> part : parts(nodes)) for (StorageView<T> leaf : part.storage) {
                 views.add(new SingleSlotStorage<>() {
                     private boolean visible() {
                         return live(root, part.node, available)
                                 && !(BackpackTraversal.usesChildren(root) && carrier(leaf.getResource()));
+                    }
+                    @Override public boolean supportsInsertion() {
+                        return itemStorage || visible() && leaf instanceof Storage<?> storage && storage.supportsInsertion();
+                    }
+                    @Override public boolean supportsExtraction() {
+                        return itemStorage || visible() && leaf instanceof Storage<?> storage && storage.supportsExtraction();
                     }
                     @Override public boolean isResourceBlank() { return getResource().isBlank(); }
                     @Override public T getResource() { return visible() ? leaf.getResource() : blank.get(); }
@@ -189,12 +252,16 @@ final class TraversalResources {
                     }
                 });
             }
-            return views.iterator();
+            return List.copyOf(views);
+        }
+        @Override public Iterator<StorageView<T>> iterator() {
+            return views(nodes(false)).stream().map(slot -> (StorageView<T>) slot).iterator();
         }
     }
 
-    private record DynamicEnergy(BagInventory root, BooleanSupplier available, Runnable changed) implements EnergyStorage {
-        private record Part(Node node, BackpackBattery battery, Persist persistence) {}
+    private record DynamicEnergy(BagInventory root, BooleanSupplier available, Runnable changed, boolean external,
+                                 BiFunction<Node, InstalledUpgrade, EnergyStorage> batteries) implements EnergyStorage {
+        private record Part(Node node, InstalledUpgrade upgrade, EnergyStorage battery, Persist persistence) {}
 
         private List<Part> parts() {
             if (!available.getAsBoolean()) return List.of();
@@ -202,10 +269,21 @@ final class TraversalResources {
             for (Node node : BackpackTraversal.inventoryBags(root)) {
                 if (!live(root, node, available)) continue;
                 for (var upgrade : node.inventory().installedUpgrades()) if (upgrade.kind() == UpgradeKind.BATTERY) {
-                    parts.add(new Part(node, new BackpackBattery(node.inventory(), upgrade), new Persist(node, changed)));
+                    parts.add(new Part(node, upgrade, batteries.apply(node, upgrade), new Persist(node, changed)));
                 }
             }
             return parts;
+        }
+
+        private boolean output(Part part) {
+            return !external || part.node.inventory().settings(part.upgrade).getBooleanOr("external_output", true);
+        }
+
+        @Override public boolean supportsInsertion() {
+            return parts().stream().anyMatch(part -> part.battery.getCapacity() > 0 && part.battery.supportsInsertion());
+        }
+        @Override public boolean supportsExtraction() {
+            return parts().stream().anyMatch(part -> output(part) && part.battery.getCapacity() > 0 && part.battery.supportsExtraction());
         }
 
         @Override public long getAmount() {
@@ -235,7 +313,7 @@ final class TraversalResources {
             if (maximum == 0) return 0;
             long extracted = 0;
             for (Part part : parts()) {
-                if (!live(root, part.node, available)) continue;
+                if (!live(root, part.node, available) || !output(part)) continue;
                 part.persistence.prepare(transaction);
                 extracted += part.battery.extract(maximum - extracted, transaction);
                 if (extracted == maximum) break;

@@ -1,14 +1,17 @@
 package com.kadamitas.fabricatedbackpacks.menu;
 
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
+import com.kadamitas.fabricatedbackpacks.domain.BackpackLayout;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
+import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import com.kadamitas.fabricatedbackpacks.upgrade.JukeboxRuntime;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
+import net.minecraft.network.protocol.game.ClientboundContainerSetDataPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -23,7 +26,8 @@ import net.minecraft.world.item.ItemStack;
 import java.util.Optional;
 
 public final class BackpackMenu extends AbstractContainerMenu implements BackpackSessionMenu {
-    public static final int VISIBLE_ROWS = 6;
+    /** Initial request only; live geometry must use visibleRows(). */
+    public static final int VISIBLE_ROWS = BackpackLayout.DEFAULT_ROWS;
     private final BagInventory bag;
     private final BagOpeningData source;
     private final Player owner;
@@ -32,16 +36,22 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
     private boolean leaseClosed;
     private boolean removed;
     private int retainedViews;
-    private final int[] state = {0, -1, 0}; // storage page, selected upgrade, memory/no-sort editing
+    private final int[] state = {0, -1, 0, BackpackLayout.DEFAULT_ROWS}; // page, upgrade, editing, requested rows
     private final int upgradeStart;
     private final int auxiliaryStart;
     private final int auxiliaryCount;
     private int visibleAuxiliaryFirst;
     private int visibleAuxiliaryCount = Integer.MAX_VALUE;
+    private int visibleUpgradeFirst;
+    private int visibleUpgradeCount = Integer.MAX_VALUE;
     private int[] storageRanks;
     private int filteredSize;
     private final int playerStart;
     private final Container auxiliary;
+    private int cachedSelectedSlot = -1;
+    private ItemStack cachedSelectedStack = ItemStack.EMPTY;
+    private boolean cachedSelectedEmpty = true;
+    private Optional<InstalledUpgrade> cachedSelection = Optional.empty();
 
     public BackpackMenu(int id, Inventory inventory, BagOpeningData data) {
         this(id, inventory, data, BagInventory.clientOf(data.stack()), null);
@@ -61,22 +71,26 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
             int saved = bag.settings().getIntOr("last_tab", -1);
             if (saved >= 0 && saved < bag.upgrades().getContainerSize()) state[1] = saved;
         }
-        int columns = bag.columns();
+        BackpackLayout layout = layout();
+        int columns = layout.columns();
         for (int index = 0; index < bag.getContainerSize(); index++) {
             final int slotIndex = index;
-            addSlot(new Slot(bag, index, 8 + index % columns * 18, 32 + index / columns % VISIBLE_ROWS * 18) {
+            addSlot(new Slot(bag, index, layout.storageX() + index % columns * 18,
+                    layout.storageY() + index / columns % visibleRows() * 18) {
                 @Override public boolean mayPlace(ItemStack stack) { return bag.canPlaceItem(slotIndex, stack, owner); }
                 @Override public boolean mayPickup(Player player) { return bag.canTakeItem(player.getInventory(), slotIndex, getItem()); }
                 @Override public int getMaxStackSize(ItemStack stack) { return bag.capacity(stack); }
                 @Override public int getMaxStackSize() { return Integer.MAX_VALUE; }
                 @Override public boolean isActive() { return storageRank(slotIndex) >= 0
-                        && storageRank(slotIndex) / (columns * VISIBLE_ROWS) == state[0] && !bag.blocked(slotIndex); }
+                        && storageRank(slotIndex) / (columns * visibleRows()) == state[0] && !bag.blocked(slotIndex); }
             });
         }
         upgradeStart = slots.size();
         for (int index = 0; index < bag.upgrades().getContainerSize(); index++) {
             final int upgradeSlot = index;
-            addSlot(new Slot(bag.upgrades(), index, storageWidth() + 9, 32 + index * 18) {
+            addSlot(new Slot(bag.upgrades(), index, layout.upgradeSlotX(), layout.upgradeSlotY(index)) {
+                @Override public boolean isActive() { return !owner.level().isClientSide()
+                        || upgradeSlot >= visibleUpgradeFirst && upgradeSlot - visibleUpgradeFirst < visibleUpgradeCount; }
                 @Override public boolean mayPlace(ItemStack stack) {
                     UpgradeKind kind = BackpackRegistry.kind(stack).orElse(null);
                     if (kind == UpgradeKind.INCEPTION && nestedDepth() > 0) return false;
@@ -89,12 +103,15 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
                 @Override public int getMaxStackSize() { return 1; }
             });
         }
-        auxiliaryCount = Math.max(16, bag.installedUpgrades().stream().mapToInt(bag::inventorySlots).max().orElse(0));
+        // Slot IDs stay fixed while upgrades are installed. A retained larger inventory must be
+        // reachable immediately, even when it was not present in the opening snapshot.
+        auxiliaryCount = InventorySnapshot.MAX_SLOTS;
         auxiliary = new SelectedUpgradeInventory();
         auxiliaryStart = slots.size();
         for (int index = 0; index < auxiliaryCount; index++) {
             final int auxiliarySlot = index;
-            addSlot(new Slot(auxiliary, index, storageWidth() + 51 + index % 4 * 18, 54 + index / 4 * 18) {
+            addSlot(new Slot(auxiliary, index, layout.panelX() + 8 + index % layout.panelColumns() * 18,
+                    layout.storageY() + 32 + index / layout.panelColumns() * 18) {
                 @Override public boolean mayPlace(ItemStack stack) { return validAuxiliary(auxiliarySlot, stack); }
                 @Override public boolean isActive() {
                     return selected().filter(upgrade -> !isWorkstation(upgrade.kind()) && auxiliarySlot < bag.inventorySlots(upgrade)
@@ -108,18 +125,34 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
             });
         }
         playerStart = slots.size();
-        addStandardInventorySlots(inventory, 8, inventoryY());
+        addStandardInventorySlots(inventory, layout.inventoryX(), layout.inventoryY());
         for (int index = 0; index < state.length; index++) addDataSlot(DataSlot.shared(state, index));
         if (placed != null) placed.open();
     }
 
     public BagInventory bag() { return bag; }
+    public int upgradeSlotStart() { return upgradeStart; }
+    public void setUpgradeWindow(int first, int count) {
+        if (!owner.level().isClientSide()) return;
+        int nextFirst = Math.clamp(first, 0, bag.upgrades().getContainerSize());
+        int nextCount = Math.clamp(count, 0, bag.upgrades().getContainerSize());
+        if (nextFirst != visibleUpgradeFirst || nextCount != visibleUpgradeCount) resetQuickCraft();
+        visibleUpgradeFirst = nextFirst;
+        visibleUpgradeCount = nextCount;
+    }
     public int auxiliaryStart() { return auxiliaryStart; }
     public int auxiliaryCount() { return auxiliaryCount; }
     public void setAuxiliaryWindow(int first, int count) {
         if (!owner.level().isClientSide()) return;
-        visibleAuxiliaryFirst = Math.clamp(first, 0, auxiliaryCount);
-        visibleAuxiliaryCount = Math.clamp(count, 0, auxiliaryCount);
+        int nextFirst = Math.clamp(first, 0, auxiliaryCount);
+        int nextCount = Math.clamp(count, 0, auxiliaryCount);
+        if (nextFirst != visibleAuxiliaryFirst || nextCount != visibleAuxiliaryCount) resetQuickCraft();
+        visibleAuxiliaryFirst = nextFirst;
+        visibleAuxiliaryCount = nextCount;
+    }
+    @Override public void setData(int id, int value) {
+        if ((id == 0 || id == 1 || id == 3) && state[id] != value) resetQuickCraft();
+        super.setData(id, value);
     }
     public int nestedDepth() { return lease == null ? 0 : lease.nestedDepth(); }
     public boolean locks(ItemStack stack) { return stack == bag.stack() || lease != null && lease.locks(stack); }
@@ -138,8 +171,9 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
     }
     public BagOpeningData source() { return source; }
     public int page() { return state[0]; }
-    public int pages() { return storageRanks == null ? Math.ceilDiv(bag.rows(), VISIBLE_ROWS)
-            : Math.max(1, Math.ceilDiv(filteredSize, bag.columns() * VISIBLE_ROWS)); }
+    public int visibleRows() { return Math.min(bag.rows(), Math.clamp(state[3], BackpackLayout.MIN_ROWS, BackpackLayout.MAX_ROWS)); }
+    public int pages() { return storageRanks == null ? Math.ceilDiv(bag.rows(), visibleRows())
+            : Math.max(1, Math.ceilDiv(filteredSize, bag.columns() * visibleRows())); }
     public boolean filtering() { return storageRanks != null; }
     public int filteredSize() { return storageRanks == null ? bag.getContainerSize() : filteredSize; }
     public int storageRank(int slot) { return storageRanks == null ? slot : storageRanks[slot]; }
@@ -150,19 +184,40 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
         int size = 0;
         if (next != null) for (int slot = 0; slot < next.length; slot++)
             next[slot] = mask.charAt(slot) == '1' && !bag.blocked(slot) ? size++ : -1;
-        if (!java.util.Arrays.equals(storageRanks, next)) { storageRanks = next; filteredSize = size; state[0] = 0; }
+        if (!java.util.Arrays.equals(storageRanks, next)) {
+            resetQuickCraft();
+            storageRanks = next;
+            filteredSize = size;
+            state[0] = 0;
+        }
         return true;
     }
     public int editMode() { return state[2]; }
     public int selectedSlot() { return state[1]; }
-    public int storageWidth() { return bag.columns() * 18 + 16; }
-    public int inventoryY() { return Math.min(VISIBLE_ROWS, bag.rows()) * 18 + 49; }
-    public int imageWidth() {
+    public BackpackLayout layout() {
         int columns = bag.installedUpgrades().stream().mapToInt(upgrade -> Math.max(bag.filterColumns(upgrade), bag.inventoryColumns(upgrade))).max().orElse(4);
-        return storageWidth() + Math.max(144, 67 + columns * 18);
+        return new BackpackLayout(bag.columns(), visibleRows(), bag.upgrades().getContainerSize(), columns);
     }
-    public int imageHeight() { return 238; }
-    public Optional<InstalledUpgrade> selected() { return bag.installedUpgrades().stream().filter(upgrade -> upgrade.slot() == state[1]).findFirst(); }
+    public int storageWidth() { return layout().storageWidth(); }
+    public int storageX() { return layout().storageX(); }
+    public int storageY() { return layout().storageY(); }
+    public int inventoryX() { return layout().inventoryX(); }
+    public int inventoryY() { return layout().inventoryY(); }
+    public int imageWidth() { return layout().imageWidth(); }
+    public int imageHeight() { return layout().imageHeight(); }
+    public int panelX() { return layout().panelX(); }
+    public int panelWidth() { return layout().panelWidth(); }
+    public Optional<InstalledUpgrade> selected() {
+        int slot = state[1];
+        ItemStack stack = slot >= 0 && slot < bag.upgrades().getContainerSize() ? bag.upgrades().getItem(slot) : ItemStack.EMPTY;
+        if (slot != cachedSelectedSlot || stack != cachedSelectedStack || stack.isEmpty() != cachedSelectedEmpty) {
+            cachedSelectedSlot = slot;
+            cachedSelectedStack = stack;
+            cachedSelectedEmpty = stack.isEmpty();
+            cachedSelection = BackpackRegistry.kind(stack).map(kind -> new InstalledUpgrade(slot, kind, stack));
+        }
+        return cachedSelection;
+    }
     public static boolean isWorkstation(UpgradeKind kind) {
         return kind == UpgradeKind.CRAFTING || kind == UpgradeKind.ANVIL || kind == UpgradeKind.SMITHING || kind == UpgradeKind.STONECUTTER;
     }
@@ -229,13 +284,27 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
 
     @Override public boolean clickMenuButton(Player player, int action) {
         if (!stillValid(player)) return false;
-        if (action >= 100 && action < 100 + bag.upgrades().getContainerSize()) {
-            state[1] = action - 100;
-            bag.updateSettings(tag -> tag.putInt("last_tab", state[1]));
+        if (action >= 1000 && action < 1000 + bag.upgrades().getContainerSize()) {
+            selectUpgrade(action - 1000);
+        }
+        else if (action >= 200 && action < 300) {
+            if (action < 203 || action > 212 || player.level().isClientSide()) return false;
+            int previousRows = visibleRows(), previousPage = state[0];
+            long firstVisibleRow = (long) previousPage * previousRows;
+            state[3] = action - 200;
+            state[0] = (int) Math.min(pages() - 1L, Math.max(0L, firstVisibleRow / visibleRows()));
+            if (visibleRows() != previousRows || state[0] != previousPage) resetQuickCraft();
+        }
+        else if (action >= 100 && action < 100 + bag.upgrades().getContainerSize()) {
+            selectUpgrade(action - 100);
         }
         else switch (action) {
             case 0 -> bag.sort("name", player);
-            case 1 -> state[0] = (state[0] + 1) % pages();
+            case 1 -> {
+                int next = (state[0] + 1) % pages();
+                if (state[0] != next) resetQuickCraft();
+                state[0] = next;
+            }
             case 2 -> state[2] = (state[2] + 1) % 3;
             case 3 -> bag.sort("count", player);
             case 4 -> bag.sort("mod", player);
@@ -244,12 +313,34 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
             case 7 -> StorageActions.memory(bag, false);
             case 8 -> StorageActions.noSort(bag, true);
             case 9 -> StorageActions.noSort(bag, false);
+            case 10 -> {
+                String next = switch (preferences().getStringOr("sort_order", "name")) {
+                    case "name" -> "count";
+                    case "count" -> "mod";
+                    case "mod" -> "tags";
+                    default -> "name";
+                };
+                bag.updateSettings(tag -> tag.putString("sort_order", next));
+            }
             default -> { return false; }
         }
         persist();
         broadcastChanges();
         if (player instanceof ServerPlayer serverPlayer) com.kadamitas.fabricatedbackpacks.network.BackpackNetworking.sendSettings(serverPlayer, this);
         return true;
+    }
+
+    private void selectUpgrade(int slot) {
+        // Vanilla retains Slot objects during a drag; these auxiliary slots change their target here.
+        boolean changed = state[1] != slot;
+        if (changed) resetQuickCraft();
+        state[1] = slot;
+        bag.updateSettings(tag -> tag.putInt("last_tab", slot));
+        if (changed && owner instanceof ServerPlayer player) {
+            // Vanilla broadcasts slot contents before data slots. Select the client target first so
+            // incoming auxiliary contents cannot be written into the previously selected upgrade.
+            player.connection.send(new ClientboundContainerSetDataPacket(containerId, 1, slot));
+        }
     }
 
     public void persist() {

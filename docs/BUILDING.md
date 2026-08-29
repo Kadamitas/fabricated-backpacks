@@ -3,6 +3,11 @@
 Target: **Minecraft 26.2, Fabric, Java 25**. The checked-in Gradle wrapper and
 `gradle.properties` define the toolchain and dependency versions.
 
+This guide includes the current experimental alpha source. Its coordinate comes
+from `gradle.properties` and remains distinct from the immutable published
+`v0.5.0-alpha` download. Identify a tested build by its exact source and artifact
+hashes.
+
 ## Local build
 
 Install a Java 25 JDK and make it available to Gradle. On Windows, use
@@ -18,8 +23,8 @@ On systems with a POSIX shell, use `./gradlew` in place of `gradlew.bat`.
 Gradle may download the configured toolchain and dependencies on the first run.
 Do not point development runs at an existing personal world.
 
-The main artifact is
-`build/libs/fabricated-backpacks-0.5.0-alpha.jar`. The adjacent sources JAR is
+The main artifact for the current coordinate is
+`build/libs/fabricated-backpacks-0.5.2-alpha+mc26.2.jar`. The adjacent sources JAR is
 for development and is not installed in Minecraft. The runtime JAR includes
 the configured Team Reborn Energy dependency; Fabric Loader and Fabric API
 remain instance dependencies.
@@ -54,7 +59,8 @@ game files in Gradle's cache.
 
 Edit the generator or its explicit language inputs, not generated files.
 Regenerate after changes to the upgrade catalog,
-`tools/assets/ui_strings.json` or `tools/assets/browser_strings.json`.
+`tools/assets/ui_strings.json`, `tools/assets/browser_strings.json` or
+`tools/assets/automation_strings.json`.
 The generated manifest records input and output hashes; a stale manifest is a
 test failure, not something to bypass.
 
@@ -71,6 +77,7 @@ runs against the same checkout or shared development world.
 ```powershell
 .\gradlew.bat test
 .\gradlew.bat runGameTest
+.\gradlew.bat runGameTest -PgameTestFilter="fabricated_backpacks_tests:*jukebox*"
 .\gradlew.bat runClientGameTest
 .\gradlew.bat runClientGameTest -PclientScenario=restart
 .\tools\run-multiplayer.ps1
@@ -87,6 +94,50 @@ The full client test archives its closed world and expectations under
 JVM: it verifies that archived world, equipment, stored items and bookmarks.
 Loom clears the normal test run directory before a new client run, so preserve
 failure logs and screenshots before retrying.
+
+For a focused worn-model iteration, use
+`.\gradlew.bat runClientGameTest -PclientScenario=appearance`. It creates a fresh
+world and records actual rear, armor, dye, and crouch views. This focused run
+does not produce a full-client passing receipt and cannot replace the complete
+client or multiplayer scenarios.
+
+For a conduit/engine change, use the focused automation paths instead of
+walking through unrelated backpack screens:
+
+```powershell
+.\gradlew.bat runClientGameTest -PclientScenario=automation
+.\gradlew.bat runClientGameTest -PclientScenario=automation_restart
+.\tools\run-multiplayer.ps1 -Scenario automation
+```
+
+These exercise actual conduit placement, hand mining, physical interface and
+wrench input, machine-side controls, item/fluid/energy transfers, persistence
+and two real TCP clients. They write separate automation receipts and do not
+claim the full backpack scenario ran. See the
+[automation verification record](AUTOMATION_VERIFICATION.md) for executed results.
+
+### Optional JEI development and tests
+
+The adapter compiles against JEI's public Fabric API pinned to **30.28.0.191**
+for Minecraft **26.2**. JEI is not embedded in the main JAR and is absent from
+default development/test runtimes. The built-in item/fluid picker works without
+it. Opt in to the actual JEI runtime for a development session or its focused
+drag-and-drop scenario:
+
+```powershell
+.\gradlew.bat runClient -PwithJei=true
+.\gradlew.bat runClientGameTest -PclientScenario=automation_jei -PwithJei=true
+```
+
+Run the normal `automation` scenario without that flag as well. The optional
+scenario targets real JEI search and item/fluid/container ghost dragging, with
+server filter updates and unchanged inventory. Its separate
+`automation-jei-pass.json` receipt is valid only after successful execution;
+listing the command here is not a pass claim or a replacement for the native
+client, restart or multiplayer checks. For a normal installed client, install
+the compatible JEI mod separately only if wanted.
+
+### Multiplayer and evidence scope
 
 The PowerShell multiplayer launcher prepares both launch commands in one
 Gradle invocation, then starts two separate Minecraft JVMs with different
@@ -173,7 +224,7 @@ Collect the release artifacts after the recorded checks pass:
 ```
 
 This task writes main/sources JARs and SHA-256 files under
-`release/0.5.0-alpha`. It runs `verifyReleaseEvidence`, which requires fresh,
+`release/0.5.2-alpha+mc26.2`. It runs `verifyReleaseEvidence`, which requires fresh,
 nonempty passing unit/server reports, unchanged source inputs, separate-JVM
 restart evidence, both multiplayer process results and the installed-JAR
 observations. It does not run those client checks for you. Failed, skipped,

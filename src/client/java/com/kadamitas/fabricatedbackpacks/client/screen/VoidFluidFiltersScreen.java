@@ -5,7 +5,6 @@ import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -17,6 +16,7 @@ public final class VoidFluidFiltersScreen extends Screen {
     private record Row(int index, Button button) {}
     private final BackpackScreen parent;
     private final List<Row> rows = new ArrayList<>();
+    private final ShiftTooltips tooltips = new ShiftTooltips();
     private int left, top, page;
 
     VoidFluidFiltersScreen(BackpackScreen parent) { super(Component.literal("Fluid filters")); this.parent = parent; }
@@ -25,6 +25,7 @@ public final class VoidFluidFiltersScreen extends Screen {
         left = (width - 304) / 2;
         top = Math.max(2, (height - 226) / 2);
         rows.clear();
+        tooltips.clear();
         int count = parent.getMenu().selected().map(upgrade -> parent.getMenu().bag().filterSlots(upgrade)).orElse(0);
         int pages = Math.max(1, Math.ceilDiv(count, 7));
         page = Math.clamp(page, 0, pages - 1);
@@ -35,25 +36,30 @@ public final class VoidFluidFiltersScreen extends Screen {
                     .bounds(left + 10, top + 55 + (index % 7) * 20, 284, 18).build());
             rows.add(new Row(index, button));
         }
-        addRenderableWidget(Button.builder(Component.literal("<"), ignored -> { page = Math.floorMod(page - 1, pages); rebuildWidgets(); })
-                .bounds(left + 10, top + 201, 28, 16).build());
-        addRenderableWidget(Button.builder(Component.literal(">"), ignored -> { page = (page + 1) % pages; rebuildWidgets(); })
-                .bounds(left + 42, top + 201, 28, 16).build());
-        addRenderableWidget(Button.builder(Component.literal("Back"), ignored -> onClose()).bounds(left + 234, top + 201, 60, 16).build());
+        tooltips.add(addRenderableWidget(Button.builder(Component.literal("<"), ignored -> { page = Math.floorMod(page - 1, pages); rebuildWidgets(); })
+                .bounds(left + 10, top + 201, 28, 16).build()), "Show the previous page of fluid filters.");
+        tooltips.add(addRenderableWidget(Button.builder(Component.literal(">"), ignored -> { page = (page + 1) % pages; rebuildWidgets(); })
+                .bounds(left + 42, top + 201, 28, 16).build()), "Show the next page of fluid filters.");
+        tooltips.add(addRenderableWidget(Button.builder(Component.literal("Back"), ignored -> onClose()).bounds(left + 234, top + 201, 60, 16).build()),
+                "Return to the void upgrade tab. Fluid-filter changes apply immediately.");
         refresh();
+        tooltips.refresh(minecraft);
     }
 
     private void refresh() {
         parent.getMenu().selected().ifPresent(upgrade -> rows.forEach(row -> {
             Component description = ResourceRuntime.fluidFilterDescription(parent.getMenu().bag(), upgrade.slot(), row.index());
             row.button().setMessage(Component.literal(font.plainSubstrByWidth(description.getString(), 276)));
-            row.button().setTooltip(Tooltip.create(description));
+            tooltips.add(row.button(), Component.literal("Fluid filter " + (row.index() + 1) + ": ")
+                    .append(description.copy()).append(Component.literal(
+                            ". Click with a filled container on the cursor to copy that fluid; an empty cursor clears this row.")));
         }));
     }
 
     @Override public void tick() {
         if (!valid()) { minecraft.gui.setScreen(null); return; }
         refresh();
+        tooltips.refresh(minecraft);
     }
     private boolean valid() { return minecraft.player != null && minecraft.player.isAlive() && minecraft.player.containerMenu == parent.getMenu(); }
     @Override public void onClose() { minecraft.gui.setScreen(valid() ? parent : null); }

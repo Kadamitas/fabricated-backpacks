@@ -9,12 +9,16 @@ world does not reload this file. There is no configuration-reload command.
 and actual saved geometry to clients; a client's local file cannot raise a
 server limit.
 
-Files use format `1`, are limited to 1 MiB and may contain only the fields
+Files use format `2`, are limited to 1 MiB and may contain only the fields
 described below. Partial files inherit defaults. Unknown fields, invalid
 values, nulls and unsupported formats reject the new configuration as a whole.
 The error is logged, the file remains untouched and the previous configuration
 is retained; on initial startup that previous configuration is the defaults.
 Check the log after editing.
+
+Format-1 files remain readable. Their historical advanced-jukebox default of
+`size:12` is interpreted as 24 slots; other configured sizes are preserved.
+Set `format` to `2` before deliberately choosing 12 slots under the new format.
 
 This document describes implemented settings, not completed testing. See
 [Verification](VERIFICATION.md) for executed checks.
@@ -23,7 +27,7 @@ This document describes implemented settings, not completed testing. See
 
 ```json
 {
-  "format": 1,
+  "format": 2,
   "capacities": {
     "backpack": {"slots": 36, "upgrades": 2}
   },
@@ -35,7 +39,7 @@ This document describes implemented settings, not completed testing. See
     "filters": {
       "advanced_pickup_upgrade": {"slots": 64, "columns": 6}
     },
-    "jukebox": {"size": 16, "rowWidth": 6},
+    "jukebox": {"size": 200, "rowWidth": 6},
     "magnet": {"range": 3, "advancedRange": 5, "activeTicks": 10, "idleTicks": 40},
     "allowAlwaysVoid": false
   }
@@ -153,7 +157,7 @@ different bound is shown; 20 ticks is one second at normal server speed.
 | `pump` | `playerRange:3`, `worldRange:4` | Player radius 1–32; world search range 1–16 |
 | `pump` | `handTicks:3`, `handlerTicks:20`, `idleTicks:40`, `handGraceTicks:60` | Grace 0–1200; world work also accounts for distance |
 | `experience` | `range:3`, `interval:5`, `transferPoints:50`, `allowMending:true`, `mendingPoints:5` | Radius 1–32; transfer 1–10000 XP points; mending 1–20. Saved player budgets are capped by these settings |
-| `jukebox` | `size:12`, `rowWidth:4` | Advanced size 1–16, columns 1–6. Basic remains one record |
+| `jukebox` | `size:24`, `rowWidth:4` | Advanced size 1–256, columns 1–6. The paged UI supports 200-disc libraries; basic holds two records |
 | `allowAlwaysVoid` | `true` | If false, a saved ALWAYS setting falls back to storage-overflow behavior |
 
 Tank and battery resource capacity/rate use the resolved backpack row count
@@ -161,6 +165,13 @@ and stack multiplier. `stackRatio:0` removes stack-upgrade scaling; `1` applies
 it fully, with intermediate values interpolating its contribution. Rates do
 not make a full tank or battery accept more than its capacity. Existing excess
 after changed configuration can be extracted without being discarded.
+
+Placed batteries additionally share their configured output rate across
+neighboring receivers per server tick. The per-backpack **External energy
+output** switch defaults to On; Off allows external charging but prevents
+external discharge. Item charging/discharging remains separate. See
+[Item, fluid and energy integration](INTEGRATION.md) for the shared APIs,
+equipment context and connection rules in the unreleased working revision.
 
 ### Stack multipliers
 
@@ -191,8 +202,11 @@ The basic upgrade still cannot use shapes exceeding 2×2.
 `compacting.itemOverrides` maps full item IDs to shape lists, up to 1024 items.
 For example, `{"example:material":[{"width":2,"height":2,"pattern":"1110"}]}`
 selects a three-cell shape for that item. Shapes require actual current recipes;
-they do not define outputs or bypass the default reversible-recipe check.
-The saved “compact anything” control explicitly permits irreversible packing.
+they do not define outputs or bypass the reversible-recipe check. Every selected
+recipe must have an exact one-item unpacking recipe that restores the same item,
+components and quantity. Both directions must be free of crafting remainders.
+Legacy “compact anything” data is ignored, so lossy recipes such as iron ingots
+into iron trapdoors are never used.
 
 ## Capture and monster carriers
 
@@ -382,3 +396,47 @@ operator export creates a new pack and never overwrites an existing one. These
 bounded settings resources are distinct from administrator whole-backpack
 JSON templates. Browser bookmarks are client-local in
 `config/fabricated-backpacks-browser.json`.
+
+## Native automation (working branch)
+
+The existing configuration file accepts an `automation` section. Older files
+inherit its defaults; invalid or unknown fields fail validation before rules
+are applied. The following values are defaults, not additional configuration
+files:
+
+```json
+{
+  "automation": {
+    "conduits": {
+      "itemsPerOperation": 8,
+      "itemIntervalTicks": 10,
+      "fluidMbPerTick": 100,
+      "energyPerTick": 256,
+      "maximumNetworkNodes": 2048,
+      "maximumEndpointVisitsPerTick": 128
+    },
+    "engine": {
+      "waterCapacityMb": 4000,
+      "energyCapacity": 32000,
+      "waterMbPerTick": 1,
+      "energyPerTick": 40,
+      "energyOutputPerTick": 256,
+      "containerTransferMbPerTick": 1000
+    }
+  }
+}
+```
+
+Conduit bandwidth is shared across the faces of each physical endpoint.
+The network-size limit rejects oversized connected networks; the endpoint
+work limit bounds routing work per dimension/tick. Resources stay in their
+machines while a route is unavailable or being rebuilt. These are endpoint
+bandwidth limits, not simulated per-segment pipe pressure or cable resistance.
+
+Engine water is configured in mB but persisted in exact Fabric droplets;
+fractional transfers are retained. Both generation quanta must fit their
+configured capacity. Reducing capacity preserves stored excess; filling and
+generation stop until the excess is recovered. The engine's On/Off control
+pauses generation, not external item/fluid access or output of stored energy.
+
+See [Native conduits and steam engine](AUTOMATION.md) for the player controls.

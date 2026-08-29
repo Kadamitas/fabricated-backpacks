@@ -15,7 +15,7 @@ import net.minecraft.world.phys.AABB;
 /** A resolved item model snapshot shared by placed and worn displays. No live inventory is retained. */
 final class BackpackDisplayState {
     private static final float POCKET_Y = 4.05F / 16F;
-    private static final float POCKET_FRONT = 2.70F / 16F;
+    private static final float POCKET_FRONT = 1.45F / 16F;
     private static final float DISPLAY_SIZE = 3.25F / 16F;
     final ItemStackRenderState item = new ItemStackRenderState();
     private float rotation;

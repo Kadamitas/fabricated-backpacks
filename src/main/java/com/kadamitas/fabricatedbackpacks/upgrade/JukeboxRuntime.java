@@ -186,7 +186,7 @@ public final class JukeboxRuntime {
 
     private static List<ItemStack> discSnapshot(Container inventory) {
         // A malformed old auxiliary component may retain extra physical items;
-        // only the supported 1..16 record slots participate in audio playback.
+        // only the supported 1..256 record slots participate in audio playback.
         int slots = Math.min(inventory.getContainerSize(), Playlist.MAX_SLOTS);
         if (slots == 0) return List.of(ItemStack.EMPTY);
         List<ItemStack> result = new ArrayList<>(slots);

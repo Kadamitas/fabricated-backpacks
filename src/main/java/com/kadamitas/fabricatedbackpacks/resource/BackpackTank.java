@@ -13,7 +13,7 @@ import net.minecraft.nbt.CompoundTag;
 import java.util.Objects;
 
 /** Writes through to the upgrade item; separate API handles therefore observe one resource. */
-public final class BackpackTank extends SnapshotParticipant<BackpackTank.State>
+public final class BackpackTank extends SnapshotParticipant<BackpackTank.Snapshot>
         implements SingleSlotStorage<FluidVariant> {
     private final BagInventory bag;
     private final InstalledUpgrade upgrade;
@@ -37,6 +37,9 @@ public final class BackpackTank extends SnapshotParticipant<BackpackTank.State>
                 && bag.upgrades().getItem(upgrade.slot()) == upgrade.stack()
                 && upgrade.stack().getCount() == 1;
     }
+
+    @Override public boolean supportsInsertion() { return attached(); }
+    @Override public boolean supportsExtraction() { return attached(); }
 
     @Override public long getAmount() {
         if (!attached()) return 0;
@@ -64,7 +67,7 @@ public final class BackpackTank extends SnapshotParticipant<BackpackTank.State>
         long accepted = Math.min(operationLimit(maximum), Math.max(0, getCapacity() - stored));
         if (accepted == 0) return 0;
         updateSnapshots(transaction);
-        write(new State(resource, stored + accepted));
+        write(resource, stored + accepted);
         return accepted;
     }
 
@@ -75,7 +78,7 @@ public final class BackpackTank extends SnapshotParticipant<BackpackTank.State>
         long extracted = Math.min(operationLimit(maximum), stored);
         if (extracted == 0) return 0;
         updateSnapshots(transaction);
-        write(new State(resource, stored - extracted));
+        write(resource, stored - extracted);
         return extracted;
     }
 
@@ -84,19 +87,28 @@ public final class BackpackTank extends SnapshotParticipant<BackpackTank.State>
                 BackpackConfig.get().upgrades().tank().transfer(bag.rows(), bag.multiplier()))) : requested;
     }
 
-    @Override protected State createSnapshot() { return new State(getResource(), getAmount()); }
-    @Override protected void readSnapshot(State snapshot) { write(snapshot); }
+    @Override protected Snapshot createSnapshot() {
+        return new Snapshot(upgrade.stack().get(ResourceComponents.TANK_FLUID),
+                ResourceSettingsSnapshot.capture(upgrade.stack(), "amount", "amount_droplets"));
+    }
+    @Override protected void readSnapshot(Snapshot snapshot) {
+        bag.upgrades();
+        if (snapshot.fluid == null) upgrade.stack().remove(ResourceComponents.TANK_FLUID);
+        else upgrade.stack().set(ResourceComponents.TANK_FLUID, snapshot.fluid);
+        snapshot.settings.restore(upgrade.stack());
+        bag.upgrades().setChanged();
+    }
     @Override protected void onFinalCommit() { committed.run(); }
 
-    private void write(State state) {
-        if (state.droplets == 0) upgrade.stack().remove(ResourceComponents.TANK_FLUID);
-        else upgrade.stack().set(ResourceComponents.TANK_FLUID, state.fluid);
-        FluidAmount amount = FluidAmount.fromDroplets(state.droplets);
+    private void write(FluidVariant fluid, long droplets) {
+        if (droplets == 0) upgrade.stack().remove(ResourceComponents.TANK_FLUID);
+        else upgrade.stack().set(ResourceComponents.TANK_FLUID, fluid);
+        FluidAmount amount = FluidAmount.fromDroplets(droplets);
         bag.updateSettings(upgrade, tag -> {
             tag.putLong("amount", amount.millibuckets());
             tag.putLong("amount_droplets", amount.remainderDroplets());
         });
     }
 
-    record State(FluidVariant fluid, long droplets) {}
+    record Snapshot(FluidVariant fluid, ResourceSettingsSnapshot settings) {}
 }

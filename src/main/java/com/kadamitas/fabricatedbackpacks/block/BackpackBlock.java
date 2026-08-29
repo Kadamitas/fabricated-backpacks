@@ -37,9 +37,11 @@ import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiConsumer;
 
 public final class BackpackBlock extends BaseEntityBlock implements SimpleWaterloggedBlock {
@@ -47,7 +49,14 @@ public final class BackpackBlock extends BaseEntityBlock implements SimpleWaterl
     public static final BooleanProperty OPEN = BlockStateProperties.OPEN;
     public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
     public static final MapCodec<BackpackBlock> CODEC = simpleCodec(BackpackBlock::new);
-    private static final VoxelShape SHAPE = Block.box(2, 0, 2, 14, 14, 14);
+    // Five closed-model groups cover the shell, front pouch, side pouches and
+    // handle. The visual lid does not change collision while viewers open it.
+    private static final Map<Direction, VoxelShape> SHAPES = Shapes.rotateHorizontal(Shapes.or(
+            Block.box(2.75, .5, 3.75, 13.25, 12.25, 13.125),
+            Block.box(3.75, 2.125, 1.5, 12.25, 7.375, 5.125),
+            Block.box(.75, 2, 5.5, 3.25, 7.25, 11),
+            Block.box(12.75, 2, 5.5, 15.25, 7.25, 11),
+            Block.box(6, 12.25, 10.5, 10, 13.5, 11.25)));
 
     public BackpackBlock(Properties properties) {
         super(properties);
@@ -55,7 +64,7 @@ public final class BackpackBlock extends BaseEntityBlock implements SimpleWaterl
     }
     @Override protected MapCodec<BackpackBlock> codec() { return CODEC; }
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(FACING, OPEN, WATERLOGGED); }
-    @Override protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return SHAPE; }
+    @Override protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return SHAPES.get(state.getValue(FACING)); }
     @Override public BlockState getStateForPlacement(BlockPlaceContext context) {
         return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite())
                 .setValue(WATERLOGGED, context.getLevel().getFluidState(context.getClickedPos()).is(Fluids.WATER));

@@ -19,6 +19,7 @@ import re
 import struct
 import sys
 import zlib
+import generate_automation_assets as automation
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -100,7 +101,7 @@ DESCRIPTIONS = {
     "blasting": "Process ores and metals with fuel in a built-in blast furnace.",
     "crafting": "Craft with a full three-by-three workbench.",
     "stonecutter": "Cut stone using recipes from a built-in stonecutter.",
-    "jukebox": "Play a music disc from the carried or placed backpack.",
+    "jukebox": "Play from a two-disc playlist in the carried or placed backpack.",
     "tool_swapper": "Switch to a suitable tool stored in the backpack.",
     "tank": "Store fluid in a tank, with dedicated container slots.",
     "battery": "Store energy and charge compatible items.",
@@ -402,9 +403,21 @@ def backpack_elements(tier: Tier, opened: bool):
     add("base_welt_back", (2.875, .5, 11.625), (13.125, 1.25, 12.125), "trim", 1)
     add("base_welt_left", (2.875, .5, 5.375), (3.375, 1.25, 11.625), "trim", 1)
     add("base_welt_right", (12.625, .5, 5.375), (13.125, 1.25, 11.625), "trim", 1)
-    add("front_pocket", (4, 2.125, 2.75), (12, 6.625, 5.125), overrides={"north": ("pocket", 0)})
-    add("pocket_flap", (3.75, 6.625, 2.5), (12.25, 7.375, 5.125), "trim", 1)
-    add("pocket_latch", (7.375, 5.75, 2.375), (8.625, 7.375, 2.75), "fittings", None)
+    add("front_pocket", (4, 2.125, 2), (12, 6.625, 5.125), overrides={"north": ("pocket", 0)})
+    add("pocket_flap", (3.75, 6.625, 1.75), (12.25, 7.375, 5.125), "trim", 1)
+    add("pocket_latch", (7.375, 5.75, 1.625), (8.625, 7.375, 2), "fittings", None)
+    # Attached lower side pouches give the pack a readable rear/side silhouette.
+    # Their caps stay below the moving lid; mirroring preserves torso centering.
+    for side in ("left", "right"):
+        for name, start, end, texture, tint in (
+                ("body", (1, 2.125, 5.75), (3.25, 6.625, 10.75), "body", 0),
+                ("cap", (.875, 6.625, 5.5), (3.25, 7.25, 11), "trim", 1),
+                ("strap", (.875, 3.125, 7.625), (1.125, 7, 8.875), "trim", 1),
+                ("clasp", (.75, 4.875, 7.375), (1, 5.625, 9.125), "fittings", None),
+                ("welt", (.875, 2.125, 5.625), (3.25, 2.625, 10.875), "trim", 1)):
+            if side == "right":
+                start, end = (16 - end[0], *start[1:]), (16 - start[0], *end[1:])
+            add(f"side_pocket_{side}_{name}", start, end, texture, tint)
     # Shoulder straps form a real gap against the rear shell.
     for side, x in (("left", 4), ("right", 10.5)):
         add(f"strap_{side}_upper", (x, 9.5, 11.875), (x + 1.5, 11, 13), "trim", 1)
@@ -435,15 +448,15 @@ def backpack_elements(tier: Tier, opened: bool):
         add("side_clip_left", (2.75, 6.125, 7.125), (3.25, 8.125, 9.125), "fittings", None)
         add("side_clip_right", (12.75, 6.125, 7.125), (13.25, 8.125, 9.125), "fittings", None)
     if tier.material == "gold":
-        add("gold_pocket_edge", (4, 2.125, 2.5), (12, 2.625, 2.875), "fittings", None)
+        add("gold_pocket_edge", (4, 2.125, 1.75), (12, 2.625, 2.125), "fittings", None)
     if tier.material == "diamond":
-        add("diamond_pocket_seal", (7.375, 3.75, 2.25), (8.625, 5, 2.75), "fittings", None,
-            rotation={"origin": [8, 4.375, 2.5], "axis": "z", "angle": 45, "rescale": False})
+        add("diamond_pocket_seal", (7.375, 3.75, 1.5), (8.625, 5, 2), "fittings", None,
+            rotation={"origin": [8, 4.375, 1.75], "axis": "z", "angle": 45, "rescale": False})
     if tier.material == "netherite":
-        add("netherite_pocket_guard", (4, 2.125, 2.375), (12, 2.875, 2.875), "fittings", None)
+        add("netherite_pocket_guard", (4, 2.125, 1.625), (12, 2.875, 2.125), "fittings", None)
         add("netherite_flap_guard", (3, 11.75, 4.375), (13, 12.25, 5.375), "fittings", None, rotation=hinge)
-        add("netherite_side_guard_left", (2.75, 2, 7.875), (3.25, 5.5, 8.625), "fittings", None)
-        add("netherite_side_guard_right", (12.75, 2, 7.875), (13.25, 5.5, 8.625), "fittings", None)
+        add("netherite_side_guard_left", (.75, 2, 7.875), (1.25, 4.375, 8.625), "fittings", None)
+        add("netherite_side_guard_right", (14.75, 2, 7.875), (15.25, 4.375, 8.625), "fittings", None)
     return parts
 
 
@@ -564,6 +577,7 @@ def translations(upgrades):
         "tooltip.fabricated_backpacks.contents_summary": "%s items in %s / %s slots",
         "tooltip.fabricated_backpacks.contents_empty": "The backpack is empty.",
         "tooltip.fabricated_backpacks.contents_counts": "Large counts use k / M / B; total above is exact.",
+        "tooltip.fabricated_backpacks.netherite_progression": "Smith with the vanilla Netherite Upgrade Smithing Template + Netherite Ingot.",
         "tooltip.fabricated_backpacks.upgrade_base": "A blank frame for crafting backpack upgrades.",
         "tooltip.fabricated_backpacks.advanced": "Expanded controls and matching options.",
         "tooltip.fabricated_backpacks.automatic": "Automatically supplies inputs and collects results.",
@@ -592,7 +606,7 @@ def translations(upgrades):
             name = ("Advanced " if advanced else "Automatic " if automatic else "") + display + " Upgrade"
             description = DESCRIPTIONS[family]
             if advanced and family == "jukebox":
-                description = "Manage a twelve-disc playlist with track, shuffle and repeat controls."
+                description = "Manage a twenty-four-disc paged playlist with track, shuffle and repeat controls."
             elif advanced:
                 description += " Expanded controls and matching options."
             elif automatic:
@@ -605,7 +619,7 @@ def translations(upgrades):
         lang[f"item.{MOD}.{item}"] = f"Stack Conversion: {first} to {second}"
         lang[f"tooltip.{MOD}.{item}"] = f"Combine with a {first} stack upgrade to obtain tier {second}."
     # UI prose lives in one explicit input, so regeneration never discards it.
-    for filename in ("ui_strings.json", "browser_strings.json"):
+    for filename in ("ui_strings.json", "browser_strings.json", "automation_strings.json"):
         ui_path = ROOT / "tools/assets" / filename
         if ui_path.exists():
             additions = json.loads(ui_path.read_text(encoding="utf-8"))
@@ -733,7 +747,7 @@ def generate():
             "note": "Suggested unscaled player-body local cuboids: native_from=offset-source_to; native_to=offset-source_from. Native +Y is down and +Z is behind the wearer. Verify armor clearance and pose in game.",
             "axis_sign": [-1, -1, -1], "offset": [8, 13.75, 15.375],
         },
-        "wear_transform": {"translation_pixels": [0, 1, 1], "scale": [.72, .72, .55], "armor_clearance_pixels": 1},
+        "wear_transform": {"translation_pixels": [0, 0, .70], "scale": [.90, 1.00, .70], "armor_clearance_pixels": 1},
         "flap_hinge": {"origin": [8, 11.25, 11.75], "axis": "x", "closed_angle": 0, "open_angle": 45, "duration_ticks": 8},
         "tiers": [{"id": tier.item, "material": tier.material,
                    "closed_model": f"{MOD}:block/{tier.item}_closed", "open_model": f"{MOD}:block/{tier.item}_open",
@@ -745,15 +759,17 @@ def generate():
                              for element in backpack_elements(tier, False)]} for tier in TIERS],
     }
     put_json(f"{ASSET}/backpack_profiles.json", profiles)
+    automation.generate(sys.modules[__name__], put_json, put_png, models)
     put_png(PROJECT_ICON, project_icon(rasters, models))
     manifest = {
         "schema": 1, "generator": "tools/generate_assets.py", "license": "MIT",
-        "registered_item_count": 71, "backpack_tier_count": 6, "upgrade_count": 54, "conversion_count": 10,
+        "registered_item_count": 76, "backpack_tier_count": 6, "upgrade_count": 54, "conversion_count": 10,
+        "automation_items": list(automation.ITEMS),
         "creative_only": ["infinity_upgrade", "stack_upgrade_omega_tier"],
         "loot_policy": "Backpack block code drops its persisted ItemStack; generated block loot pools are empty to prevent duplicate drops.",
         "texture_policy": "16x16 pixel-cluster item and block textures; 64x64 tiled material atlases; 128x128 mod emblem; 512x512 original production-model project icon. No generated file depends on an external image.",
         "inputs": {str(path.relative_to(ROOT)).replace("\\", "/"): hashlib.sha256(path.read_bytes()).hexdigest()
-                   for path in (Path(__file__).resolve(), ROOT / "tools/assets/ui_strings.json", ROOT / "tools/assets/browser_strings.json",
+                   for path in (Path(__file__).resolve(), ROOT / "tools/generate_automation_assets.py", ROOT / "tools/assets/automation_strings.json", ROOT / "tools/assets/ui_strings.json", ROOT / "tools/assets/browser_strings.json",
                                 ROOT / "src/main/java/com/kadamitas/fabricatedbackpacks/domain/UpgradeKind.java") if path.exists()},
         "files": {path.removeprefix("src/main/resources/"): hashlib.sha256(contents).hexdigest()
                   for path, contents in sorted(outputs.items()) if path.startswith("src/main/resources/")},
@@ -950,6 +966,8 @@ def review_images(rasters, models):
     report = {"kind": "offline_production_asset_render", "minecraft_client_capture": False,
               "model_views": 35, "upgrade_icons": len(items), "animation_frames": animation_frames,
               "images": ["backpack-models.png", "backpack-six-faces.png", "flap-animation.png", "upgrade-icons.png", "logo.png", "project-icon.png"]}
+    report["images"].extend(automation.review(sys.modules[__name__], rasters, models, output))
+    report["automation_model_views"] = 17
     (output / "review.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return output
 

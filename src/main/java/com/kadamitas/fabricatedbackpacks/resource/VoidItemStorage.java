@@ -6,9 +6,10 @@ import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeFilters;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
+import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
 import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
 import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
+import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
 import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
 
 import java.util.Iterator;
@@ -16,12 +17,12 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 
 /** The item API uses the same explicit void admission modes as native pickup; leaf storage owns rollback. */
-final class VoidItemStorage implements Storage<ItemVariant> {
+final class VoidItemStorage implements SlottedStorage<ItemVariant> {
     private final BagInventory bag;
-    private final Storage<ItemVariant> storage;
+    private final SlottedStorage<ItemVariant> storage;
     private final BooleanSupplier available;
 
-    VoidItemStorage(BagInventory bag, Storage<ItemVariant> storage, BooleanSupplier available) {
+    VoidItemStorage(BagInventory bag, SlottedStorage<ItemVariant> storage, BooleanSupplier available) {
         this.bag = bag;
         this.storage = storage;
         this.available = available;
@@ -59,5 +60,14 @@ final class VoidItemStorage implements Storage<ItemVariant> {
 
     @Override public Iterator<StorageView<ItemVariant>> iterator() {
         return available.getAsBoolean() ? storage.iterator() : List.<StorageView<ItemVariant>>of().iterator();
+    }
+
+    @Override public int getSlotCount() { return available.getAsBoolean() ? storage.getSlotCount() : 0; }
+    @Override public SingleSlotStorage<ItemVariant> getSlot(int slot) {
+        if (!available.getAsBoolean()) throw new IndexOutOfBoundsException("Backpack item storage is no longer available");
+        return storage.getSlot(slot);
+    }
+    @Override public List<SingleSlotStorage<ItemVariant>> getSlots() {
+        return available.getAsBoolean() ? storage.getSlots() : List.of();
     }
 }

@@ -22,7 +22,7 @@ public record UpgradeConfig(Map<String, Filter> filters, Map<String, Integer> it
                             Stack stack, Tank tank, Battery battery, Pump pump, Experience experience,
                             Jukebox jukebox, boolean allowAlwaysVoid) {
     public static final int MAX_FILTERS = 64;
-    public static final int MAX_AUXILIARY = 16;
+    public static final int MAX_AUXILIARY = 256;
     private static final Pattern IDENTIFIER = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
 
     public UpgradeConfig {
@@ -76,7 +76,7 @@ public record UpgradeConfig(Map<String, Filter> filters, Map<String, Integer> it
         return new UpgradeConfig(filters, itemLimits, groupLimits, Cooking.defaults(), Compacting.defaults(),
                 new Magnet(3, 5, 10, 40), new Feeding(3, 100, 10), new AreaWork(3, 5), new AreaWork(3, 5),
                 Stack.defaults(), new Tank(4_000, 1, 20, 1_000, 20), new Battery(10_000, 1, 20),
-                new Pump(3, 4, 3, 20, 40, 60), new Experience(3, 5, 50, true, 5), new Jukebox(12, 4), true);
+                new Pump(3, 4, 3, 20, 40, 60), new Experience(3, 5, 50, true, 5), new Jukebox(24, 4), true);
     }
 
     public record Filter(int slots, int columns) {

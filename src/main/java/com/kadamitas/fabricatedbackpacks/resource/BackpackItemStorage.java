@@ -3,7 +3,7 @@ package com.kadamitas.fabricatedbackpacks.resource;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
+import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
 import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
 import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
 import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
@@ -16,7 +16,7 @@ import java.util.Iterator;
 import java.util.List;
 
 /** Fabric's generic container adapter does not consult Container.canTakeItem; these views do. */
-public final class BackpackItemStorage implements Storage<ItemVariant> {
+public final class BackpackItemStorage implements SlottedStorage<ItemVariant> {
     private final BagInventory bag;
     private final ContainerStorage delegate;
     private final List<View> views;
@@ -53,6 +53,11 @@ public final class BackpackItemStorage implements Storage<ItemVariant> {
     @Override public Iterator<StorageView<ItemVariant>> iterator() {
         return views.stream().map(view -> (StorageView<ItemVariant>) view).iterator();
     }
+
+    @Override public int getSlotCount() { return views.size(); }
+    @Override public SingleSlotStorage<ItemVariant> getSlot(int slot) { return views.get(slot); }
+
+    SingleSlotStorage<ItemVariant> slot(int slot) { return getSlot(slot); }
 
     private final class View extends SnapshotParticipant<ItemStack> implements SingleSlotStorage<ItemVariant> {
         private final int slot;

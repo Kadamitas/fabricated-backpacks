@@ -31,6 +31,10 @@ CLIENT = ROOT / ".codex-local/client-evidence"
 MAX_EVIDENCE_BYTES = 64 * 1024 * 1024
 MAX_JAR_BYTES = 512 * 1024 * 1024
 MOD_TEST_PREFIX = "fabricated_backpacks_tests:"
+VERSION_PATTERN = re.compile(
+    r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"
+)
+MINECRAFT_VERSION_PATTERN = re.compile(r"[0-9]+(?:\.[0-9]+){1,2}(?:[-+][0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?")
 
 
 def require(condition: bool, message: str) -> None:
@@ -67,6 +71,36 @@ def positive_pid(value: object, context: str) -> int:
 def canonical_uuid(value: object, context: str) -> str:
     require(isinstance(value, str) and str(uuid.UUID(value)) == value, f"Invalid canonical run/profile UUID in {context}")
     return value
+
+
+def project_properties() -> dict[str, str]:
+    path = ROOT / "gradle.properties"
+    require(path.is_file(), "Missing gradle.properties")
+    properties: dict[str, str] = {}
+    for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith(("#", "!")):
+            continue
+        require("=" in line, f"Malformed gradle.properties line {number}")
+        key, value = (part.strip() for part in line.split("=", 1))
+        require(re.fullmatch(r"[A-Za-z0-9_.-]+", key) is not None and bool(value),
+                f"Malformed gradle.properties line {number}")
+        require(key not in properties, f"Duplicate gradle.properties key: {key}")
+        properties[key] = value
+    return properties
+
+
+def release_coordinates() -> tuple[str, str]:
+    properties = project_properties()
+    version = properties.get("mod_version")
+    minecraft = properties.get("minecraft_version")
+    require(isinstance(version, str) and VERSION_PATTERN.fullmatch(version) is not None,
+            "Missing or invalid mod_version in gradle.properties")
+    require(isinstance(minecraft, str) and MINECRAFT_VERSION_PATTERN.fullmatch(minecraft) is not None,
+            "Missing or invalid minecraft_version in gradle.properties")
+    require(version.endswith(f"+mc{minecraft}"),
+            "mod_version must identify the configured Minecraft target")
+    return version, minecraft
 
 
 def inputs() -> dict[str, str]:
@@ -287,13 +321,16 @@ def archive_names(jar: ZipFile, context: str) -> list[str]:
     return names
 
 
-def audit_jar(path: Path, started: float) -> dict:
+def audit_jar(path: Path, started: float, version: str, minecraft: str) -> dict:
     check_fresh(path, started, MAX_JAR_BYTES)
     with ZipFile(path) as jar:
         names = archive_names(jar, path.name)
         metadata = object_json(jar.read("fabric.mod.json"), "production fabric.mod.json")
-        require(metadata.get("id") == "fabricated_backpacks" and metadata.get("version") == "0.5.0-alpha", "Unexpected release coordinates")
-        require(metadata.get("depends", {}).get("minecraft") == "26.2", "Unexpected game target")
+        require(metadata.get("id") == "fabricated_backpacks" and metadata.get("version") == version,
+                "Unexpected release coordinates")
+        dependencies = metadata.get("depends")
+        require(isinstance(dependencies, dict) and dependencies.get("minecraft") == minecraft,
+                "Unexpected game target")
         require(metadata.get("license") == "MIT", "Unexpected project license")
         entrypoints = metadata.get("entrypoints")
         require(isinstance(entrypoints, dict) and "main" in entrypoints and "client" in entrypoints, "Missing production entrypoints")
@@ -307,7 +344,8 @@ def audit_jar(path: Path, started: float) -> dict:
             if name.endswith(".jar"):
                 with ZipFile(io.BytesIO(jar.read(name))) as nested:
                     archive_names(nested, name)
-    return {"path": path.relative_to(ROOT).as_posix(), "sha256": sha256(path), "entries": len(names)}
+    return {"path": path.relative_to(ROOT).as_posix(), "sha256": sha256(path), "entries": len(names),
+            "version": version, "minecraft": minecraft}
 
 
 def relative_screenshot(value: object) -> Path:
@@ -476,6 +514,7 @@ def verify(release: bool) -> dict:
     started = start.get("started")
     require(type(started) in (int, float) and math.isfinite(started) and 0 < started <= time.time(), "Invalid verification start time")
     require(inputs() == start.get("inputs"), "Source/build inputs changed after verification began; rerun the checks")
+    version, minecraft = release_coordinates()
     reports = sorted((ROOT / "build/test-results/test").glob("TEST-*.xml"))
     require(bool(reports), "No JUnit reports")
     unit_cases = [case for report in reports for case in test_cases(report, started)]
@@ -495,9 +534,9 @@ def verify(release: bool) -> dict:
               "unit_tests": len(unit_cases), "unit_test_classes": len(actual_unit), "server_tests": len(server),
               "unit_test_methods": unit_execution["methods"], "unit_execution": unit_execution,
               "mod_server_tests": len(actual), "scope": "release" if release else "unit-and-server", "inputs": start["inputs"]}
-    jars = list((ROOT / "build/libs").glob("fabricated-backpacks-0.5.0-alpha.jar"))
-    require(len(jars) == 1, "Expected exactly one main release JAR")
-    result["artifact"] = audit_jar(jars[0], started)
+    jar = ROOT / "build/libs" / f"fabricated-backpacks-{version}.jar"
+    require(jar.is_file(), f"Expected current main release JAR: {jar.name}")
+    result["artifact"] = audit_jar(jar, started, version, minecraft)
     if release:
         result["client"] = verify_clients(started, result["artifact"])
     return result

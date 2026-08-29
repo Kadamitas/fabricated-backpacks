@@ -19,6 +19,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
@@ -31,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Resource and geometry audits. A passing audit is not an in-game visual pass. */
 class BackpackAssetAuditTest {
+    private static final double GEOMETRY_EPSILON = 1e-6;
     private static final String NAMESPACE = "fabricated_backpacks";
     private static final Path ROOT = Path.of(System.getProperty("user.dir"));
     private static final Path RESOURCES = ROOT.resolve("src/main/resources");
@@ -55,7 +57,7 @@ class BackpackAssetAuditTest {
             }
         }
         Set<String> expected = registeredItems();
-        assertEquals(71, expected.size());
+        assertEquals(76, expected.size());
         try (Stream<Path> files = Files.list(ASSETS.resolve("items"))) {
             Set<String> actual = new HashSet<>();
             files.forEach(path -> actual.add(path.getFileName().toString().replace(".json", "")));
@@ -68,7 +70,7 @@ class BackpackAssetAuditTest {
     void generatedFilesAndTheirInputsMatchManifestHashes() throws Exception {
         JsonObject manifest = json(ASSETS.resolve("asset_manifest.json"));
         assertEquals("MIT", manifest.get("license").getAsString());
-        assertEquals(71, manifest.get("registered_item_count").getAsInt());
+        assertEquals(76, manifest.get("registered_item_count").getAsInt());
         for (Map.Entry<String, JsonElement> entry : manifest.getAsJsonObject("files").entrySet()) {
             Path path = RESOURCES.resolve(entry.getKey()).normalize();
             assertTrue(path.startsWith(RESOURCES), "Manifest cannot escape resources: " + entry.getKey());
@@ -248,12 +250,13 @@ class BackpackAssetAuditTest {
                 if (relative.startsWith("textures/item/")) {
                     itemTextures++;
                     assertEquals(0, image.getRGB(0, 0) >>> 24);
-                    assertTrue(occupied > 130 && occupied < 230, relative + " bad icon silhouette");
+                    assertTrue(relative.endsWith("/conduit_wrench.png") ? occupied > 35 && occupied < 100 : occupied > 130 && occupied < 230,
+                            relative + " bad icon silhouette");
                     assertTrue(iconHashes.add(sha256(path)), relative + " duplicates another upgrade icon");
                 }
             }
         }
-        assertEquals(65, itemTextures);
+        assertEquals(66, itemTextures);
     }
 
     @Test
@@ -267,7 +270,7 @@ class BackpackAssetAuditTest {
                 assertText(lang, "tooltip." + NAMESPACE + "." + item);
             }
         }
-        assertTrue(lang.get("tooltip.fabricated_backpacks.advanced_jukebox_upgrade").getAsString().contains("twelve"));
+        assertTrue(lang.get("tooltip.fabricated_backpacks.advanced_jukebox_upgrade").getAsString().contains("twenty-four"));
     }
 
     @Test
@@ -286,7 +289,8 @@ class BackpackAssetAuditTest {
                 assertTrue(result.startsWith(NAMESPACE + ":"));
                 String resultItem = result.substring(NAMESPACE.length() + 1);
                 assertTrue(allItems.contains(resultItem), file.toString());
-                assertEquals(1, recipe.getAsJsonObject("result").get("count").getAsInt());
+                assertEquals(Set.of("item_conduit", "fluid_conduit", "energy_conduit").contains(resultItem) ? 8 : 1,
+                        recipe.getAsJsonObject("result").get("count").getAsInt());
                 craftable.add(resultItem);
                 if (TIERS.contains(resultItem) && !resultItem.equals("backpack")) {
                     assertEquals(NAMESPACE + (resultItem.equals("netherite_backpack") ? ":backpack_smithing" : ":backpack_upgrade"), recipe.get("type").getAsString());
@@ -314,6 +318,11 @@ class BackpackAssetAuditTest {
         expected.remove("infinity_upgrade");
         expected.remove("stack_upgrade_omega_tier");
         assertEquals(expected, craftable);
+        JsonObject netherite = json(DATA.resolve("recipe/netherite_backpack.json"));
+        assertEquals(NAMESPACE + ":backpack_smithing", netherite.get("type").getAsString());
+        assertEquals("minecraft:netherite_upgrade_smithing_template", netherite.get("template").getAsString());
+        assertEquals(NAMESPACE + ":diamond_backpack", netherite.get("base").getAsString());
+        assertEquals("minecraft:netherite_ingot", netherite.get("addition").getAsString());
     }
 
     @Test
@@ -362,24 +371,78 @@ class BackpackAssetAuditTest {
     }
 
     @Test
-    void nativeWornProfileFitsTheTorsoWithoutIntersectingArmor() throws IOException {
+    void nativeWornProfileCoversTheTorsoWithContactAndAttachedPockets() throws IOException {
         JsonObject profile = json(ASSETS.resolve("backpack_profiles.json"));
         JsonObject transform = profile.getAsJsonObject("wear_transform");
         double[] offset = vector(profile.getAsJsonObject("source_to_player_body").getAsJsonArray("offset"));
         double[] translate = vector(transform.getAsJsonArray("translation_pixels"));
         double[] scale = vector(transform.getAsJsonArray("scale"));
         double armorClearance = transform.get("armor_clearance_pixels").getAsDouble();
-        for (JsonElement tier : profile.getAsJsonArray("tiers")) {
-            for (JsonElement part : tier.getAsJsonObject().getAsJsonArray("parts")) {
-                for (String corner : List.of("from", "to")) {
-                    double[] source = vector(part.getAsJsonObject().getAsJsonArray(corner));
-                    double x = translate[0] + (offset[0] - source[0]) * scale[0];
-                    double y = translate[1] + (offset[1] - source[1]) * scale[1];
-                    double z = translate[2] + (offset[2] - source[2]) * scale[2];
-                    assertTrue(x >= -4 && x <= 4 && y >= 0 && y <= 12, "Worn geometry stays within the torso width and height");
-                    assertTrue(z > 2 && z <= 8.5, "The pack clears the torso and keeps a shallow profile");
-                    assertTrue(z + armorClearance > 3, "Chest armor has its own clearance");
-                }
+        assertArrayEquals(new double[]{-1, -1, -1}, vector(profile.getAsJsonObject("source_to_player_body").getAsJsonArray("axis_sign")), GEOMETRY_EPSILON);
+        assertArrayEquals(new double[]{.90, 1.00, .70}, scale, GEOMETRY_EPSILON);
+        assertArrayEquals(new double[]{0, 0, .70}, translate, GEOMETRY_EPSILON);
+        assertEquals(1, armorClearance, GEOMETRY_EPSILON);
+        for (JsonElement tierValue : profile.getAsJsonArray("tiers")) {
+            JsonObject tier = tierValue.getAsJsonObject();
+            String id = tier.get("id").getAsString();
+            Map<String, WornBounds> parts = new HashMap<>();
+            for (JsonElement value : tier.getAsJsonArray("parts")) {
+                JsonObject part = value.getAsJsonObject();
+                parts.put(part.get("name").getAsString(), wornBounds(part, offset, translate, scale));
+            }
+            WornBounds complete = parts.values().stream().reduce(WornBounds::union).orElseThrow();
+            WornBounds floor = part(parts, "body_floor"), flap = part(parts, "flap_top");
+            // The 8-by-12-pixel torso is a coverage reference, not a box that must contain the backpack.
+            assertEquals(9, floor.width(), GEOMETRY_EPSILON, id + ": shell covers the torso with half a pixel beyond each side");
+            assertEquals(9.45, flap.width(), GEOMETRY_EPSILON, id + ": the lid overhangs the shell");
+            assertEquals(11.625, floor.maxY() - flap.minY(), GEOMETRY_EPSILON, id + ": shell and lid cover almost the full torso height");
+            assertEquals(.25, complete.minY(), GEOMETRY_EPSILON, id + ": handle starts just below the shoulder line");
+            assertEquals(13.25, complete.maxY(), GEOMETRY_EPSILON, id + ": the base extends below the torso");
+            assertEquals(-6.525, complete.minX(), GEOMETRY_EPSILON, id + ": side clasp defines the left silhouette");
+            assertEquals(6.525, complete.maxX(), GEOMETRY_EPSILON, id + ": side clasp defines the right silhouette");
+            assertEquals(id.equals("diamond_backpack") ? 10.4125 : 10.325, complete.maxZ(), GEOMETRY_EPSILON,
+                    id + ": the front latch or diamond seal defines the pack depth");
+
+            double bareGap = complete.minZ() - 2;
+            double armoredGap = complete.minZ() + armorClearance - 3;
+            assertEquals(.275, bareGap, GEOMETRY_EPSILON, id + ": straps sit near the bare torso without intersecting it");
+            assertEquals(bareGap, armoredGap, GEOMETRY_EPSILON, id + ": armor translation preserves the same contact gap");
+            WornBounds back = part(parts, "body_back");
+            for (String side : List.of("left", "right")) {
+                assertEquals(complete.minZ(), part(parts, "strap_" + side + "_adjuster").minZ(), GEOMETRY_EPSILON,
+                        id + ": the strap adjuster is the closest surface to the wearer");
+                assertEquals(.2625, back.minZ() - part(parts, "strap_" + side + "_long").maxZ(), GEOMETRY_EPSILON,
+                        id + ": the long strap retains an actual air gap from the shell");
+                assertAttached(part(parts, "strap_" + side + "_upper"), back, id + ": upper strap joins the shell");
+                assertAttached(part(parts, "strap_" + side + "_lower"), back, id + ": lower strap joins the shell");
+            }
+
+            WornBounds front = part(parts, "body_front"), pocket = part(parts, "front_pocket");
+            assertEquals(2.1, pocket.maxZ() - front.maxZ(), GEOMETRY_EPSILON, id + ": front pocket has readable depth beyond the shell");
+            assertAttached(pocket, front, id + ": front pocket is attached rather than floating");
+            assertEquals(pocket.minY(), part(parts, "pocket_flap").maxY(), GEOMETRY_EPSILON, id + ": pocket flap meets its opening");
+
+            Set<String> moving = new HashSet<>();
+            tier.getAsJsonArray("flap_parts").forEach(value -> moving.add(value.getAsString()));
+            double lidBottom = moving.stream().map(name -> part(parts, name)).mapToDouble(WornBounds::maxY).max().orElseThrow();
+            for (String piece : List.of("body", "cap", "strap", "clasp", "welt")) {
+                String leftName = "side_pocket_left_" + piece, rightName = "side_pocket_right_" + piece;
+                WornBounds left = part(parts, leftName), right = part(parts, rightName);
+                assertFalse(moving.contains(leftName) || moving.contains(rightName), id + ": side pockets belong to the fixed shell");
+                assertArrayEquals(new double[]{-left.maxX(), left.minY(), left.minZ(), -left.minX(), left.maxY(), left.maxZ()},
+                        new double[]{right.minX(), right.minY(), right.minZ(), right.maxX(), right.maxY(), right.maxZ()}, GEOMETRY_EPSILON,
+                        id + ": mirrored side-pocket " + piece);
+            }
+            for (String side : List.of("left", "right")) {
+                WornBounds sideBody = part(parts, "side_pocket_" + side + "_body");
+                WornBounds sideCap = part(parts, "side_pocket_" + side + "_cap");
+                WornBounds sideStrap = part(parts, "side_pocket_" + side + "_strap");
+                assertAttached(sideBody, part(parts, "body_" + side), id + ": side pocket joins the main wall");
+                assertEquals(sideBody.minY(), sideCap.maxY(), GEOMETRY_EPSILON, id + ": side cap closes the pouch opening");
+                assertEquals(1, sideCap.minY() - lidBottom, GEOMETRY_EPSILON, id + ": side cap clears the closed lid and tabs");
+                assertAttached(sideStrap, sideBody, id + ": side strap contacts the pouch");
+                assertAttached(part(parts, "side_pocket_" + side + "_clasp"), sideStrap, id + ": clasp is anchored to its strap");
+                assertAttached(part(parts, "side_pocket_" + side + "_welt"), sideBody, id + ": lower welt follows the pouch base");
             }
         }
     }
@@ -427,8 +490,64 @@ class BackpackAssetAuditTest {
         }
     }
 
+    private record WornBounds(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+        double width() { return maxX - minX; }
+        WornBounds union(WornBounds other) {
+            return new WornBounds(Math.min(minX, other.minX), Math.min(minY, other.minY), Math.min(minZ, other.minZ),
+                    Math.max(maxX, other.maxX), Math.max(maxY, other.maxY), Math.max(maxZ, other.maxZ));
+        }
+    }
+
+    private static WornBounds part(Map<String, WornBounds> parts, String name) {
+        WornBounds result = parts.get(name);
+        assertNotNull(result, "Missing worn geometry part: " + name);
+        return result;
+    }
+
+    private static void assertAttached(WornBounds first, WornBounds second, String message) {
+        assertTrue(Math.min(first.maxX(), second.maxX()) - Math.max(first.minX(), second.minX()) > GEOMETRY_EPSILON
+                        && Math.min(first.maxY(), second.maxY()) - Math.max(first.minY(), second.minY()) > GEOMETRY_EPSILON
+                        && Math.min(first.maxZ(), second.maxZ()) - Math.max(first.minZ(), second.minZ()) > GEOMETRY_EPSILON,
+                message);
+    }
+
+    /** Apply the native part rotation before the player-body offset, scale and wear translation. */
+    private static WornBounds wornBounds(JsonObject part, double[] offset, double[] translate, double[] scale) {
+        double[] from = vector(part.getAsJsonArray("from")), to = vector(part.getAsJsonArray("to"));
+        JsonObject rotation = part.has("rotation") ? part.getAsJsonObject("rotation") : null;
+        double[] pivot = rotation == null ? null : vector(rotation.getAsJsonArray("origin"));
+        int axis = rotation == null ? 0 : switch (rotation.get("axis").getAsString()) {
+            case "x" -> 0;
+            case "y" -> 1;
+            case "z" -> 2;
+            default -> throw new IllegalArgumentException("Unknown worn part rotation axis");
+        };
+        double angle = rotation == null ? 0 : Math.toRadians(rotation.get("angle").getAsDouble());
+        if (rotation != null && rotation.has("rescale")) assertFalse(rotation.get("rescale").getAsBoolean());
+        double[] min = {Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY};
+        double[] max = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
+        for (int corner = 0; corner < 8; corner++) {
+            double[] point = new double[3];
+            for (int coordinate = 0; coordinate < 3; coordinate++)
+                point[coordinate] = (corner & (1 << coordinate)) == 0 ? from[coordinate] : to[coordinate];
+            if (rotation != null) {
+                int first = (axis + 1) % 3, second = (axis + 2) % 3;
+                double a = point[first] - pivot[first], b = point[second] - pivot[second];
+                point[first] = pivot[first] + a * Math.cos(angle) - b * Math.sin(angle);
+                point[second] = pivot[second] + a * Math.sin(angle) + b * Math.cos(angle);
+            }
+            for (int coordinate = 0; coordinate < 3; coordinate++) {
+                double value = translate[coordinate] + (offset[coordinate] - point[coordinate]) * scale[coordinate];
+                min[coordinate] = Math.min(min[coordinate], value);
+                max[coordinate] = Math.max(max[coordinate], value);
+            }
+        }
+        return new WornBounds(min[0], min[1], min[2], max[0], max[1], max[2]);
+    }
+
     private static Set<String> registeredItems() {
         Set<String> items = new LinkedHashSet<>(TIERS);
+        items.addAll(List.of("item_conduit", "fluid_conduit", "energy_conduit", "steam_engine", "conduit_wrench"));
         items.add("upgrade_base");
         Arrays.stream(UpgradeKind.values()).map(UpgradeKind::id).forEach(items::add);
         for (int from = 0; from < 4; from++) {
@@ -449,7 +568,7 @@ class BackpackAssetAuditTest {
 
     private static JsonObject resolveModel(String reference, Set<String> visited) throws IOException {
         if (!visited.add(reference)) throw new IllegalArgumentException("Model parent cycle: " + reference);
-        if (reference.equals("minecraft:item/generated")) return new JsonObject();
+        if (reference.equals("minecraft:item/generated") || reference.equals("minecraft:item/handheld")) return new JsonObject();
         if (!reference.startsWith(NAMESPACE + ":")) throw new IllegalArgumentException("Unsupported model namespace: " + reference);
         JsonObject model = json(ASSETS.resolve("models/" + reference.substring(NAMESPACE.length() + 1) + ".json"));
         if (!model.has("parent")) return model;

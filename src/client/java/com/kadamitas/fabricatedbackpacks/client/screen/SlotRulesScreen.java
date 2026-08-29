@@ -7,7 +7,6 @@ import com.kadamitas.fabricatedbackpacks.upgrade.AlchemyRuntime;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -23,6 +22,7 @@ public final class SlotRulesScreen extends Screen {
     private final com.kadamitas.fabricatedbackpacks.domain.UpgradeKind upgradeKind;
     private final boolean alchemy;
     private final List<Row> rows = new ArrayList<>();
+    private final ShiftTooltips tooltips = new ShiftTooltips();
     private int left, top, page;
     private record Row(int slot, Button condition, Button lower, Button higher) {}
 
@@ -39,6 +39,7 @@ public final class SlotRulesScreen extends Screen {
         left = (width - 312) / 2;
         top = Math.max(2, (height - 228) / 2);
         rows.clear();
+        tooltips.clear();
         var upgrade = menu.selected().orElse(null);
         if (upgrade == null) return;
         int count = menu.bag().filterSlots(upgrade);
@@ -47,16 +48,22 @@ public final class SlotRulesScreen extends Screen {
         for (int slot = page * PAGE_SIZE; slot < Math.min(count, (page + 1) * PAGE_SIZE); slot++) {
             final int selected = slot;
             int y = 36 + (slot % PAGE_SIZE) * 24;
-            Button condition = button("", 52, y, alchemy ? 136 : 248,
-                    () -> send((alchemy ? "alchemy_condition:" : "refill_target:") + selected));
-            Button lower = alchemy ? button("−", 246, y, 24, () -> send("alchemy_health:" + selected + ":-5")) : null;
-            Button higher = alchemy ? button("+", 276, y, 24, () -> send("alchemy_health:" + selected + ":5")) : null;
+            Button condition = tooltips.add(button("", 52, y, alchemy ? 136 : 248,
+                            () -> send((alchemy ? "alchemy_condition:" : "refill_target:") + selected)),
+                    alchemy
+                            ? "Cycle when the potion in filter slot " + (selected + 1) + " may be used. Set a ghost-filter item first."
+                            : "Cycle the player slot refilled by the item in filter slot " + (selected + 1) + ". Set a ghost-filter item first.");
+            Button lower = alchemy ? tooltips.add(button("−", 246, y, 24, () -> send("alchemy_health:" + selected + ":-5")),
+                    "For the Hurt condition, lower the health threshold by 5 percentage points. Range 0% to 100%.") : null;
+            Button higher = alchemy ? tooltips.add(button("+", 276, y, 24, () -> send("alchemy_health:" + selected + ":5")),
+                    "For the Hurt condition, raise the health threshold by 5 percentage points. Range 0% to 100%.") : null;
             rows.add(new Row(slot, condition, lower, higher));
         }
-        button("<", 12, 188, 34, () -> { page = Math.floorMod(page - 1, pages); rebuildWidgets(); });
-        button(">", 266, 188, 34, () -> { page = (page + 1) % pages; rebuildWidgets(); });
-        button("Back", 52, 188, 204, this::onClose);
+        tooltips.add(button("<", 12, 188, 34, () -> { page = Math.floorMod(page - 1, pages); rebuildWidgets(); }), "Show the previous page of filter-slot rules.");
+        tooltips.add(button(">", 266, 188, 34, () -> { page = (page + 1) % pages; rebuildWidgets(); }), "Show the next page of filter-slot rules.");
+        tooltips.add(button("Back", 52, 188, 204, this::onClose), "Return to the selected upgrade tab. Rule changes apply immediately.");
         refresh(upgrade);
+        tooltips.refresh(minecraft);
     }
 
     private Button button(String text, int x, int y, int width, Runnable action) {
@@ -76,15 +83,12 @@ public final class SlotRulesScreen extends Screen {
             String selected = condition(upgrade, row.slot());
             String label = (row.slot() + 1) + ": " + selected.toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
             row.condition().setMessage(Component.literal(font.plainSubstrByWidth(label, row.condition().getWidth() - 8)));
-            row.condition().setTooltip(Tooltip.create(Component.literal(label)));
             row.condition().active = !menu.bag().ghost(upgrade, row.slot()).isEmpty();
             if (alchemy) {
                 boolean hurt = row.condition().active && selected.equals("HURT");
                 int health = menu.bag().settings(upgrade).getIntOr("alchemy_health_" + row.slot(), 75);
                 row.lower().active = hurt && health > 0;
                 row.higher().active = hurt && health < 100;
-                row.lower().setTooltip(Tooltip.create(Component.literal("Use below " + health + "% health; lower by 5 percentage points")));
-                row.higher().setTooltip(Tooltip.create(Component.literal("Use below " + health + "% health; raise by 5 percentage points")));
             }
         }
     }
@@ -92,7 +96,10 @@ public final class SlotRulesScreen extends Screen {
     @Override public void tick() {
         var upgrade = menu.selected().orElse(null);
         if (!sessionCurrent()) minecraft.gui.setScreen(null);
-        else refresh(upgrade);
+        else {
+            refresh(upgrade);
+            tooltips.refresh(minecraft);
+        }
     }
 
     private boolean sessionCurrent() {

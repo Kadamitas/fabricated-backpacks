@@ -4,10 +4,15 @@
 
 Modular backpacks for **Minecraft Java Edition 26.2 on Fabric**.
 
-**0.5.0-alpha is a development build.** Back up worlds before testing it.
+**0.5.2-alpha is a development build.** Back up worlds before testing it.
 The feature list describes the current implementation, not a claim that every
 interaction or multiplayer scenario has passed acceptance testing. Release
-evidence belongs in [Verification](docs/VERIFICATION.md).
+evidence belongs in the [0.5.2 verification record](docs/VERIFICATION_0.5.2.md).
+
+This alpha also contains the interface, worn-model and automation revision.
+See the [UI revision record](docs/UI_REVISION.md) and
+[automation verification record](docs/AUTOMATION_VERIFICATION.md) for their separate
+test scope.
 
 ## What is included
 
@@ -18,6 +23,12 @@ evidence belongs in [Verification](docs/VERIFICATION.md).
 - A native backpack equipment slot that leaves the chest armor slot available.
 - Modular collection, filtering, processing, transfer, resource, music,
   protection and mob-capture upgrades.
+- Fabric item and fluid transfer interfaces, with Team Reborn Energy battery
+  access and placed-backpack output for compatible machines and cables.
+- Native item, fluid and energy conduits that share one block space, plus a
+  fuel-and-water steam engine with a moving flywheel and piston (working branch).
+- Per-interface item/fluid allow/block filters, searchable ghost pickers and
+  optional JEI drag-and-drop integration (working branch).
 - An item and recipe browser with recipes, uses, search, bookmarks, history,
   ingredient displays and server-checked workstation transfer.
 - Shift contents previews, per-backpack preferences and private settings
@@ -41,6 +52,9 @@ The native equipment slot and recipe browser do not require separate equipment
 or recipe-viewer mods. Only the target listed above is supported by this build;
 other Minecraft versions and loaders need separate ports.
 
+The working branch optionally integrates with JEI for Fabric 26.2. Its built-in
+filter search remains available without JEI; the mod does not bundle JEI.
+
 When a verified release is available, place its main JAR in the instance's
 `mods` directory. Do not install the sources JAR or the separate development
 test mod. Build instructions are in [Building and testing](docs/BUILDING.md).
@@ -50,6 +64,8 @@ test mod. Build instructions are in [Building and testing](docs/BUILDING.md).
 The leather backpack uses four leather, four string and a chest. The recipe
 browser shows the arrangement and subsequent tier recipes. Tier upgrades retain
 the source backpack's components rather than crafting an empty replacement.
+For the final tier, smith a Diamond Backpack directly with the vanilla Netherite
+Upgrade Smithing Template and a Netherite Ingot.
 
 Use a held backpack to open it. Sneak-use it on a block to place it, unless an
 installed deposit/restock upgrade handles that container interaction. Use a
@@ -83,8 +99,8 @@ does not cascade through unrelated carried bags; separate optional bindings
 can force a particular transfer direction.
 
 The backpack's **Items** button opens the browser. Native workstation screens
-also provide a **Recipe browser** button and accept its configured opening key
-when a text field is not focused. Put down the cursor item before opening it.
+also provide an explicit **Recipe browser** button. Configured gameplay bindings
+stay inactive while any menu is open. Put down the cursor item before opening it.
 
 Within the browser, click or R shows recipes; right click or U shows uses.
 Shift-click, middle click or B toggles an item bookmark. Ctrl+F focuses search,
@@ -102,6 +118,8 @@ or grant missing ingredients. Other recipe categories remain viewable.
 
 - [Features and current limits](docs/FEATURES.md)
 - [Server configuration and data packs](docs/CONFIGURATION.md)
+- [Item, fluid and energy integration](docs/INTEGRATION.md)
+- [Native conduits and steam engine](docs/AUTOMATION.md)
 - [Building and testing](docs/BUILDING.md)
 - [Verification](docs/VERIFICATION.md)
 - [Changelog](CHANGELOG.md)

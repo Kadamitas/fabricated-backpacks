@@ -332,12 +332,12 @@ public final class UpgradeEngine {
             return true;
         }
         switch (action) {
+            case "external_output" -> { if (!upgrade.kind().family().equals("battery")) return false; toggle(bag, upgrade, action, true); }
             case "result_destination" -> { if (!Set.of("crafting", "stonecutter", "anvil", "smithing").contains(upgrade.kind().family())) return false; cycle(bag, upgrade, action, "STORAGE", "STORAGE", "PLAYER"); }
             case "grid_refill" -> { if (!Set.of("crafting", "stonecutter").contains(upgrade.kind().family())) return false; toggle(bag, upgrade, action, false); }
             case "filter_direction" -> { if (!upgrade.kind().family().equals("filter")) return false; cycle(bag, upgrade, action, "BOTH", "BOTH", "INPUT", "OUTPUT"); }
             case "void_mode" -> { if (!upgrade.kind().family().equals("void")) return false; cycle(bag, upgrade, action, "STORAGE_OVERFLOW", alwaysVoidAllowed ? new String[] {"STORAGE_OVERFLOW", "SLOT_OVERFLOW", "ALWAYS"} : new String[] {"STORAGE_OVERFLOW", "SLOT_OVERFLOW"}); }
             case "work_in_gui" -> { if (!Set.of("void", "compacting").contains(upgrade.kind().family())) return false; toggle(bag, upgrade, action, false); }
-            case "compact_anything" -> { if (!upgrade.kind().family().equals("compacting")) return false; toggle(bag, upgrade, action, false); }
             case "hunger_mode" -> { if (!upgrade.kind().advanced() || !upgrade.kind().family().equals("feeding")) return false; cycle(bag, upgrade, action, "HALF", "HALF", "FULL", "ANY"); }
             case "feed_when_hurt" -> { if (!upgrade.kind().family().equals("feeding")) return false; toggle(bag, upgrade, action, true); }
             case "magnet_items", "magnet_xp" -> { if (!upgrade.kind().family().equals("magnet")) return false; toggle(bag, upgrade, action, true); }

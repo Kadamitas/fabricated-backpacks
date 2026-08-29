@@ -5,6 +5,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -21,6 +23,27 @@ class BrowserQueryTest {
     })
     void literalTermsNamespacesTooltipsAndExclusions(String query, boolean expected) {
         assertEquals(expected, BrowserQuery.parse(query).matches(SAMPLE));
+    }
+
+    @Test void registryPickerQueriesSeparateItemTypesAndBucketlessFluidNames() {
+        var catalog = Map.of(
+                "minecraft:cobblestone", new BrowserQuery.SearchText("Cobblestone minecraft:cobblestone", "minecraft", "Building block"),
+                "minecraft:iron_ingot", new BrowserQuery.SearchText("Iron Ingot minecraft:iron_ingot", "minecraft", "Metal"),
+                "minecraft:water", new BrowserQuery.SearchText("Water minecraft:water", "minecraft", "Fluid"),
+                "minecraft:lava", new BrowserQuery.SearchText("Lava minecraft:lava", "minecraft", "Fluid"),
+                "example:steam", new BrowserQuery.SearchText("Pressurized Steam example:steam", "example", "Fluid without a bucket"),
+                "example:resin", new BrowserQuery.SearchText("Liquid Resin example:resin", "example", "Fluid without a bucket"));
+        Function<String, List<String>> matches = query -> {
+            BrowserQuery parsed = BrowserQuery.parse(query);
+            return catalog.entrySet().stream().filter(entry -> parsed.matches(entry.getValue()))
+                    .map(Map.Entry::getKey).sorted().toList();
+        };
+        assertEquals(List.of("minecraft:cobblestone"), matches.apply("cobble -iron"));
+        assertEquals(List.of("minecraft:water"), matches.apply("minecraft:water"));
+        assertEquals(List.of("minecraft:water"), matches.apply("@minecraft #fluid -lava"));
+        assertEquals(List.of("example:resin"), matches.apply("@example #fluid -steam"));
+        assertEquals(List.of("example:steam"), matches.apply("\"pressurized steam\""));
+        assertTrue(matches.apply("water #metal").isEmpty());
     }
 
     @Test void blankAndWhitespaceQueriesMatchEverything() {

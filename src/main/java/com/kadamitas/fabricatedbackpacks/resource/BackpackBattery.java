@@ -10,7 +10,7 @@ import team.reborn.energy.api.EnergyStorage;
 import java.util.Objects;
 
 /** Team Reborn Energy storage with rollback-safe item-component persistence. */
-public final class BackpackBattery extends SnapshotParticipant<Long> implements EnergyStorage {
+public final class BackpackBattery extends SnapshotParticipant<ResourceSettingsSnapshot> implements EnergyStorage {
     private final BagInventory bag;
     private final InstalledUpgrade upgrade;
     private final Runnable committed;
@@ -66,7 +66,11 @@ public final class BackpackBattery extends SnapshotParticipant<Long> implements 
     }
 
     private void write(long amount) { bag.updateSettings(upgrade, tag -> tag.putLong("amount", amount)); }
-    @Override protected Long createSnapshot() { return getAmount(); }
-    @Override protected void readSnapshot(Long amount) { write(amount); }
+    @Override protected ResourceSettingsSnapshot createSnapshot() { return ResourceSettingsSnapshot.capture(upgrade.stack(), "amount"); }
+    @Override protected void readSnapshot(ResourceSettingsSnapshot snapshot) {
+        bag.upgrades();
+        snapshot.restore(upgrade.stack());
+        bag.upgrades().setChanged();
+    }
     @Override protected void onFinalCommit() { committed.run(); }
 }

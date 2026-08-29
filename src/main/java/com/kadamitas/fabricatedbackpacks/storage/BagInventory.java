@@ -97,7 +97,11 @@ public final class BagInventory extends ComponentInventory {
     public static synchronized BagInventory of(ItemStack stack) {
         WeakReference<BagInventory> reference = HANDLES.get(stack);
         BagInventory existing = reference == null ? null : reference.get();
-        if (existing != null) return existing;
+        if (existing != null) {
+            existing.refreshFromOwner();
+            existing.refreshUpgrades();
+            return existing;
+        }
         BagInventory created = new BagInventory(stack, false);
         HANDLES.put(stack, new WeakReference<>(created));
         return created;
@@ -107,13 +111,19 @@ public final class BagInventory extends ComponentInventory {
     public void onChange(Runnable listener) { changeListener = listener; }
     /** Client menu copies must accept authoritative server corrections, including rejected seed predictions. */
     public void markClientMirror() { clientMirror = true; }
-    @Override public void setChanged() { super.setChanged(); if (changeListener != null) changeListener.run(); }
+    @Override public void setChanged() {
+        if (synchronizing()) return;
+        refreshUpgrades();
+        super.setChanged();
+        if (changeListener != null) changeListener.run();
+    }
+    private void refreshUpgrades() { if (upgrades != null) upgrades.refreshFromOwner(); }
     public ItemStack stack() { return owner; }
     public BackpackTier tier() { return tier; }
     public int columns() { return getContainerSize() <= 81 ? 9 : 12; }
     public int rows() { return Math.ceilDiv(getContainerSize(), columns()); }
     public String identity() { return owner.getOrDefault(BagComponents.IDENTITY, ""); }
-    public Container upgrades() { return upgrades; }
+    public Container upgrades() { refreshUpgrades(); return upgrades; }
     public boolean has(UpgradeKind kind) { return installedUpgrades().stream().anyMatch(u -> u.kind() == kind); }
 
     public UpgradeKind infinityKind() {
@@ -160,6 +170,7 @@ public final class BagInventory extends ComponentInventory {
 
     public List<InstalledUpgrade> installedUpgrades() {
         if (upgrades == null) return List.of();
+        refreshUpgrades();
         List<InstalledUpgrade> result = new ArrayList<>();
         for (int slot = 0; slot < upgrades.getContainerSize(); slot++) {
             ItemStack item = upgrades.getItem(slot);
@@ -175,6 +186,7 @@ public final class BagInventory extends ComponentInventory {
         if (existing != null && existing.owner == upgrade.stack() && existing.getContainerSize() == size) return existing;
         var inventory = new ComponentInventory(upgrade.stack(), BagComponents.CONTENTS,
                 size, upgrades::setChanged) {
+            @Override protected void beforeRefresh() { refreshUpgrades(); }
             @Override public boolean canPlaceItem(int slot, ItemStack item) { return !BackpackRegistry.isBackpack(item); }
             @Override public int getMaxStackSize(ItemStack item) { return upgrade.kind() == UpgradeKind.BATTERY ? 1 : item.getMaxStackSize(); }
         };
@@ -184,6 +196,7 @@ public final class BagInventory extends ComponentInventory {
 
     /** A smaller server default never discards physical records or persisted workstation inputs. */
     public int inventorySlots(InstalledUpgrade upgrade) {
+        refreshUpgrades();
         return Math.max(BackpackConfig.get().upgrades().inventorySlots(upgrade.kind()),
                 upgrade.stack().getOrDefault(BagComponents.CONTENTS, InventorySnapshot.EMPTY).size());
     }
@@ -192,6 +205,7 @@ public final class BagInventory extends ComponentInventory {
     }
     public int filterColumns(InstalledUpgrade upgrade) { return BackpackConfig.get().upgrades().filterColumns(upgrade.kind()); }
     public int filterSlots(InstalledUpgrade upgrade) {
+        refreshUpgrades();
         if (automaticCooking(upgrade)) return cookingInputFilters(upgrade) + cookingFuelFilters(upgrade);
         return Math.min(com.kadamitas.fabricatedbackpacks.config.UpgradeConfig.MAX_FILTERS,
                 Math.max(BackpackConfig.get().upgrades().filterSlots(upgrade.kind()),
@@ -201,12 +215,14 @@ public final class BagInventory extends ComponentInventory {
         return upgrade.kind().family().equals("cooking") && upgrade.kind().filterSlots() > 0;
     }
     private int savedCookingInputFilters(InstalledUpgrade upgrade) {
+        refreshUpgrades();
         if (upgrade.stack().getOrDefault(BagComponents.FILTERS, InventorySnapshot.EMPTY).size() == 0) {
             return BackpackConfig.get().upgrades().cooking().inputFilters();
         }
         return Math.clamp(settings(upgrade).getIntOr("cooking_input_filter_slots", 8), 1, 32);
     }
     private int savedCookingFuelFilters(InstalledUpgrade upgrade) {
+        refreshUpgrades();
         if (upgrade.stack().getOrDefault(BagComponents.FILTERS, InventorySnapshot.EMPTY).size() == 0) {
             return BackpackConfig.get().upgrades().cooking().fuelFilters();
         }
@@ -220,7 +236,7 @@ public final class BagInventory extends ComponentInventory {
     }
 
     public CompoundTag settings() { return settingsOf(owner); }
-    public CompoundTag settings(InstalledUpgrade upgrade) { return settingsOf(upgrade.stack()); }
+    public CompoundTag settings(InstalledUpgrade upgrade) { refreshUpgrades(); return settingsOf(upgrade.stack()); }
     private static CompoundTag settingsOf(ItemStack stack) {
         return stack.getOrDefault(BagComponents.SETTINGS, CustomData.EMPTY).copyTag();
     }
@@ -229,10 +245,12 @@ public final class BagInventory extends ComponentInventory {
         setChanged();
     }
     public void updateSettings(InstalledUpgrade upgrade, Consumer<CompoundTag> change) {
+        refreshUpgrades();
         CustomData.update(BagComponents.SETTINGS, upgrade.stack(), change);
         upgrades.setChanged();
     }
     public List<ItemStack> filterItems(InstalledUpgrade upgrade) {
+        refreshUpgrades();
         return upgrade.stack().getOrDefault(BagComponents.FILTERS, InventorySnapshot.EMPTY).items();
     }
     public List<ItemStack> memoryItems() {
