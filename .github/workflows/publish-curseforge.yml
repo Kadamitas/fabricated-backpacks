@@ -110,7 +110,7 @@ jobs:
           jq --arg display "Fabricated Backpacks ${MOD_VERSION%%+*} for $loader_name — Minecraft $minecraft" \
             --arg game "$minecraft" --arg loader "$loader_name" --argjson dependencies "$dependencies" \
             '{displayName:$display,changelog:.body,changelogType:"markdown",releaseType:"release",
-              gameVersionNames:[$game,$loader],relations:{projects:$dependencies}}' release.json > metadata.json
+              gameVersionNames:[$game,$loader,"Client","Server"],relations:{projects:$dependencies}}' release.json > metadata.json
           curl --silent --show-error --fail-with-body --proto '=https' \
             --header "X-Api-Token: $CURSEFORGE_API_TOKEN" \
             --form "metadata=<metadata.json" --form "file=@artifacts/$ARTIFACT" \
