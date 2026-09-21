@@ -3,10 +3,10 @@
 Target: **Minecraft 26.3, Quilt Loader 0.30.1, Java 25**. The checked-in Gradle wrapper and
 `gradle.properties` define the toolchain and dependency versions.
 
-This guide describes the planned 1.0.0 release source. Its coordinate comes
-from `gradle.properties` and remains distinct from the immutable published
+The current source targets the 1.0.0 release. Its coordinate comes from
+`gradle.properties` and remains distinct from the immutable historical
 `v0.5.0-alpha` download. Identify a tested build by its exact source and artifact
-hashes.
+hashes; a version change is not a claim that verification has finished.
 
 ## Local build
 
@@ -138,6 +138,18 @@ client, restart or multiplayer checks. For a normal installed client, install
 the compatible JEI mod separately only if wanted.
 
 ### Multiplayer and evidence scope
+
+On macOS/Linux, use Python 3.11 or newer with the configured Java 25 JDK:
+
+```sh
+python3 tools/run_multiplayer.py
+```
+
+This runs the same full two-client scenario, using the same prepared launch
+manifest, argument-file and runtime hashes, actual process IDs, TCP readiness
+and peer reports. `--prepare-only` validates commands without running Minecraft;
+it cannot create passing evidence. The existing PowerShell launcher additionally
+supports the focused automation scenario.
 
 The PowerShell multiplayer launcher prepares both launch commands in one
 Gradle invocation, then starts two separate Minecraft JVMs with different

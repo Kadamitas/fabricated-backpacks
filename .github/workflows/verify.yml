@@ -36,6 +36,7 @@ jobs:
         run: |
           python tools/generate_assets.py --check
           python tools/test_verify_evidence.py
+          python tools/test_run_multiplayer.py
       - name: Start a fresh verification record
         run: python tools/verify_evidence.py begin
       - name: Execute unit and real server tests and build the production JAR
