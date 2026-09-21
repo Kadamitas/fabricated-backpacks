@@ -95,6 +95,9 @@ tasks.named('runGameTest') {
 }
 
 tasks.named('runClientGameTest') {
+    // CI owns a 24-bit Xvfb display. Loom's additional default-depth display
+    // would hide it and can lack the GLX visual required by Minecraft 26.3.
+    useXvfb = false
     systemProperty 'fabricated.backpacks.clientScenario', providers.gradleProperty('clientScenario').getOrElse('full')
     systemProperty 'fabricated.backpacks.evidenceRoot', layout.projectDirectory.dir('.codex-local/client-evidence').asFile.absolutePath
 }

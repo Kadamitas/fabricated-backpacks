@@ -96,9 +96,9 @@ jobs:
       - name: Install virtual display and software rendering
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libopengl0 libopenal1
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libopengl0 libopenal1 mesa-utils mesa-vulkan-drivers
       - name: Run existing full rendered-client tests
-        run: xvfb-run -a -s '-screen 0 1280x800x24' ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest
+        run: xvfb-run -a -s '-screen 0 1280x800x24' bash -c 'glxinfo -B && exec ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest'
       - name: Reopen the saved world in a separate client JVM
         run: xvfb-run -a -s '-screen 0 1280x800x24' ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest -PclientScenario=restart
       - name: Upload client diagnostics
