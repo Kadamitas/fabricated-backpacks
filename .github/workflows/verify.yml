@@ -73,6 +73,50 @@ jobs:
             build/verification/start.json
             build/verification/automated.json
 
-# This workflow does not produce a manual or release receipt. Full rendered-client,
-# separate-JVM restart, real two-client audio and installed-JAR manual checks remain
-# mandatory inputs to `verify_evidence.py check --release` before releaseBundle.
+  rendered-client:
+    name: Rendered client and separate-JVM restart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+      # Software audio still exercises decoding and SoundManager behavior; it
+      # is not evidence of audible output or the separate two-client audio gate.
+      ALSOFT_DRIVERS: 'null'
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Java 25
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Install virtual display and software rendering
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libopengl0 libopenal1
+      - name: Run existing full rendered-client tests
+        run: xvfb-run -a -s '-screen 0 1280x800x24' ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest
+      - name: Reopen the saved world in a separate client JVM
+        run: xvfb-run -a -s '-screen 0 1280x800x24' ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest -PclientScenario=restart
+      - name: Upload client diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: client-verification-${{ github.run_id }}
+          retention-days: 14
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: |
+            build/run/clientGameTest/logs/
+            build/run/clientGameTest/screenshots/
+            build/run/clientGameTest/crash-reports/
+            .codex-local/client-evidence/full-pass.json
+            .codex-local/client-evidence/restart-pass.json
+            .codex-local/client-evidence/full-screenshots/
+
+# This workflow does not produce a manual or release receipt. Real two-client
+# audio and installed-JAR manual checks remain mandatory inputs to
+# `verify_evidence.py check --release` before releaseBundle.

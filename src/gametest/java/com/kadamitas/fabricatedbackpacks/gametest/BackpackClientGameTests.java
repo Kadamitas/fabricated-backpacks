@@ -894,6 +894,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
     }
 
     static void searchBrowser(ClientGameTestContext context, String query) {
+        waitForScreenLayout(context);
         if (context.computeOnClient(client -> client.gui.screen() instanceof BackpackScreen
                 && client.gui.screen().children().stream().filter(EditBox.class::isInstance)
                 .map(EditBox.class::cast).noneMatch(box -> box.visible && box.active))) {
@@ -911,12 +912,15 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         context.getInput().holdKey(selectAllModifier);
         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_A);
         context.getInput().releaseKey(selectAllModifier);
+        String selection = context.computeOnClient(client -> client.gui.screen().children().stream().filter(EditBox.class::isInstance)
+                .map(EditBox.class::cast).filter(box -> box.visible && box.active).findFirst()
+                .map(box -> "value=" + box.getValue() + ", selected=" + box.getHighlighted() + ", focused=" + box.isFocused()).orElse("no edit box"));
         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_BACKSPACE);
         context.getInput().typeChars(query);
         context.waitTicks(4);
         check(context.computeOnClient(client -> client.gui.screen().children().stream().filter(EditBox.class::isInstance)
                 .map(EditBox.class::cast).findFirst().orElseThrow().getValue()).equals(query),
-                "Actual Ctrl+A / replacement input must leave the exact requested text: " + query);
+                "Actual select-all / replacement input must leave the exact requested text: " + query + "; before replacement: " + selection);
     }
 
     static void selectUpgrade(ClientGameTestContext context, int upgradeSlot) {
@@ -956,6 +960,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
 
     private static void clickBackpackRegion(ClientGameTestContext context,
             java.util.function.Function<BackpackScreen, net.minecraft.client.gui.navigation.ScreenRectangle> region) {
+        waitForScreenLayout(context);
         double[] position = context.computeOnClient(client -> {
             var screen = (BackpackScreen) client.gui.screen();
             var bounds = region.apply(screen);
@@ -966,7 +971,17 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
     }
 
+    private static void waitForScreenLayout(ClientGameTestContext context) {
+        // Opening a backpack negotiates its viewport rows with the server. The
+        // initial widgets exist before that reply, but move when it arrives.
+        context.waitFor(client -> !(client.gui.screen() instanceof BackpackScreen screen)
+                || screen.getMenu().visibleRows() == com.kadamitas.fabricatedbackpacks.domain.BackpackLayout.rowsForViewport(
+                        screen.getMenu().bag().rows(), screen.height, screen.getMenu().bag().upgrades().getContainerSize()));
+        context.waitTicks(2);
+    }
+
     static void clickButton(ClientGameTestContext context, String label) {
+        waitForScreenLayout(context);
         try {
             context.waitFor(client -> client.gui.screen() != null && client.gui.screen().children().stream()
                     .anyMatch(widget -> widget instanceof net.minecraft.client.gui.components.AbstractWidget button
@@ -1010,6 +1025,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         clickSlot(context, slot);
     }
     static void clickSlot(ClientGameTestContext context, int slotIndex) {
+        waitForScreenLayout(context);
         double[] position = context.computeOnClient(client -> {
             var screen = (AbstractContainerScreen<?>) client.gui.screen();
             var menu = client.player.containerMenu;

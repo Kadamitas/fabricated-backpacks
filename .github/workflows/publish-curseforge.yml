@@ -1,0 +1,93 @@
+name: Publish verified release to CurseForge
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published GitHub release tag (for example v1.0.0+mc26.3)
+        required: true
+      loader:
+        description: Loader artifact to publish
+        required: true
+        type: choice
+        options: [fabric, quilt, forge, neoforge]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: curseforge-${{ inputs.tag }}-${{ inputs.loader }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      LOADER: ${{ inputs.loader }}
+    steps:
+      # No checkout, build script, third-party action, or downloaded executable
+      # runs in the publishing job. The token is exposed only to the upload step.
+      - name: Download and verify the release bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\+mc(26\.3|1\.21\.1)$ ]] || { echo "A stable, Minecraft-qualified release tag is required"; exit 1; }
+          case "$LOADER" in fabric|quilt|forge|neoforge) ;; *) exit 1;; esac
+          version="${RELEASE_TAG#v}"
+          prefix="fabricated-backpacks"
+          if [[ "$LOADER" != fabric ]]; then prefix="$prefix-$LOADER"; fi
+          artifact="$prefix-$version.jar"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,body > release.json
+          jq -e '.isDraft == false and .isPrerelease == false' release.json > /dev/null
+          mkdir artifacts
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir artifacts \
+            --pattern "$artifact" --pattern "$artifact.sha256" --pattern "$artifact.release.json"
+          cd artifacts
+          # Validate the named file directly; never interpret filenames supplied
+          # by a downloaded checksum file as paths or command-line options.
+          digest="$(sha256sum "$artifact" | cut -d ' ' -f 1)"
+          [[ "$(cat "$artifact.sha256")" == "$digest  $artifact" ]]
+          jq -e --arg digest "$digest" --arg version "$version" --arg minecraft "${version##*+mc}" \
+            '.schema == 1 and .passed == true and .scope == "release" and .client != null
+             and .artifact.sha256 == $digest and .artifact.version == $version and .artifact.minecraft == $minecraft' \
+            "$artifact.release.json" > /dev/null
+          echo "ARTIFACT=$artifact" >> "$GITHUB_ENV"
+          echo "MOD_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Authenticate and upload the verified artifact
+        env:
+          CURSEFORGE_API_TOKEN: ${{ secrets.CURSEFORGE_API_TOKEN }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CURSEFORGE_API_TOKEN" || { echo "Missing CurseForge upload token"; exit 1; }
+          [[ "$CURSEFORGE_PROJECT_ID" == 1672591 ]] || { echo "Unexpected CurseForge project ID"; exit 1; }
+          # The endpoint returns 401 without valid credentials. No response body
+          # or token is printed; a failed authentication stops before any upload.
+          curl --silent --show-error --fail --proto '=https' \
+            --header "X-Api-Token: $CURSEFORGE_API_TOKEN" \
+            --output versions.json https://minecraft.curseforge.com/api/game/versions
+          minecraft="${MOD_VERSION##*+mc}"
+          case "$LOADER" in fabric) loader_name=Fabric;; quilt) loader_name=Quilt;; forge) loader_name=Forge;; neoforge) loader_name=NeoForge;; esac
+          jq -e --arg game "$minecraft" --arg loader "$loader_name" \
+            'any(.[]; .name == $game) and any(.[]; .name == $loader)' versions.json > /dev/null
+          dependencies='[]'
+          if [[ "$LOADER" == fabric || "$LOADER" == quilt ]]; then
+            dependencies='[{"slug":"fabric-api","projectID":306612,"type":"requiredDependency"}]'
+          fi
+          jq --arg display "Fabricated Backpacks ${MOD_VERSION%%+*} for $loader_name — Minecraft $minecraft" \
+            --arg game "$minecraft" --arg loader "$loader_name" --argjson dependencies "$dependencies" \
+            '{displayName:$display,changelog:.body,changelogType:"markdown",releaseType:"release",
+              gameVersionNames:[$game,$loader],relations:{projects:$dependencies}}' release.json > metadata.json
+          curl --silent --show-error --fail --proto '=https' \
+            --header "X-Api-Token: $CURSEFORGE_API_TOKEN" \
+            --form "metadata=<metadata.json" --form "file=@artifacts/$ARTIFACT" \
+            --output response.json \
+            "https://minecraft.curseforge.com/api/projects/${CURSEFORGE_PROJECT_ID}/upload-file"
+          file_id="$(jq -er '.id | select(type == "number" and . > 0)' response.json)"
+          echo "Uploaded CurseForge file $file_id ($LOADER). CurseForge moderation may still be pending." >> "$GITHUB_STEP_SUMMARY"

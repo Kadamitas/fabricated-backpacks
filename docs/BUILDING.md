@@ -24,7 +24,7 @@ Gradle may download the configured toolchain and dependencies on the first run.
 Do not point development runs at an existing personal world.
 
 The main artifact for the current coordinate is
-`build/libs/fabricated-backpacks-0.5.3-alpha+mc26.3.jar`. The adjacent sources JAR is
+`build/libs/fabricated-backpacks-1.0.0+mc26.3.jar`. The adjacent sources JAR is
 for development and is not installed in Minecraft. The runtime JAR includes
 the configured Team Reborn Energy dependency; Fabric Loader and Fabric API
 remain instance dependencies.
@@ -224,11 +224,21 @@ Collect the release artifacts after the recorded checks pass:
 ```
 
 This task writes main/sources JARs and SHA-256 files under
-`release/0.5.3-alpha+mc26.3`. It runs `verifyReleaseEvidence`, which requires fresh,
+`release/1.0.0+mc26.3`. It runs `verifyReleaseEvidence`, which requires fresh,
 nonempty passing unit/server reports, unchanged source inputs, separate-JVM
 restart evidence, both multiplayer process results and the installed-JAR
 observations. It does not run those client checks for you. Failed, skipped,
 missing or stale evidence blocks the bundle.
+
+The bundle also includes `<main-jar-name>.release.json`, the full passing release
+receipt bound to that JAR's SHA-256. Upload the JAR, checksum, and receipt to the
+corresponding stable GitHub release before manually running **Publish verified
+release to CurseForge**. That workflow checks the receipt and digest before it
+uses the repository's `CURSEFORGE_API_TOKEN` secret and `CURSEFORGE_PROJECT_ID`
+variable. It publishes only the selected loader; it never builds untrusted code
+with the upload token available. Creating a branch or pushing commits does not
+upload a mod. Do not rerun a successful upload: check the reported CurseForge
+file ID first to avoid duplicate files.
 
 Inspect the final JAR contents, metadata and hash. Only production code,
 production resources and declared bundled dependencies belong in it. Test

@@ -143,5 +143,8 @@ tasks.register('releaseBundle') {
             def checksum = java.util.HexFormat.of().formatHex(digest)
             java.nio.file.Files.writeString(destination.resolve("${artifact.fileName}.sha256"), "${checksum}  ${artifact.fileName}\n")
         }
+        def mainName = tasks.named('jar').get().archiveFile.get().asFile.name
+        java.nio.file.Files.copy(layout.projectDirectory.file('build/verification/release.json').asFile.toPath(),
+                destination.resolve("${mainName}.release.json"), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
     }
 }
