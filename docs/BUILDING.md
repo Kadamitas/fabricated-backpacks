@@ -118,7 +118,7 @@ claim the full backpack scenario ran. See the
 
 ### Optional JEI development and tests
 
-The adapter compiles against JEI's public Fabric API pinned to **30.28.0.191**
+The adapter compiles against JEI's public Fabric API pinned to **31.3.0.17**
 for Minecraft **26.3**. JEI is not embedded in the main JAR and is absent from
 default development/test runtimes. The built-in item/fluid picker works without
 it. Opt in to the actual JEI runtime for a development session or its focused
