@@ -68,6 +68,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libopengl0 libopenal1 mesa-utils mesa-vulkan-drivers
+      # Exercise the native multiplayer bootstrap first for fast diagnostics;
+      # full rendered/restart acceptance remains mandatory before bundling.
+      - name: Run actual two-JVM multiplayer acceptance
+        run: timeout --signal=INT --kill-after=60 25m xvfb-run -a -s '-screen 0 1280x800x24' python tools/run_multiplayer.py
       - name: Run full native client and separate-JVM restart acceptance
         run: |
           # A loading-error screen or a stalled harness must fail the step, not idle until the job limit.
@@ -75,8 +79,6 @@ jobs:
           timeout --signal=INT --kill-after=60 15m xvfb-run -a -s '-screen 0 1280x800x24' ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest -PclientScenario=restart
           mkdir -p .codex-local/client-evidence/restart-screenshots
           cp -p build/run/clientGameTest/screenshots/*.png .codex-local/client-evidence/restart-screenshots/
-      - name: Run actual two-JVM multiplayer acceptance
-        run: timeout --signal=INT --kill-after=60 25m xvfb-run -a -s '-screen 0 1280x800x24' python tools/run_multiplayer.py
       - name: Bundle stable release with explicitly automated-only verification
         run: ./gradlew --no-daemon --max-workers=2 --console=plain releaseBundle
       - name: Upload verified release bundle

@@ -78,7 +78,8 @@ public final class DedicatedServerImplUtil {
 		new Thread(() -> {
 			try {
 				Main.main(new String[]{});
-				if (!starting.isDone()) starting.completeExceptionally(new IllegalStateException("Dedicated server bootstrap returned without creating a server; inspect the native server log"));
+				// Main returns once it starts the server thread, not when initServer is
+				// ready. The existing dedicated-server lifecycle hook completes starting.
 			} catch (Throwable failure) {
 				starting.completeExceptionally(failure);
 			}
