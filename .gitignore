@@ -9,6 +9,7 @@ run-*/
 .settings/
 release/
 .codex-local/
+.ci-ledger/
 AGENTS.md
 MINECRAFT_MOD_DESIGN_AND_PORTING.md
 *.log
