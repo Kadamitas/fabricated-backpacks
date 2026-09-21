@@ -905,9 +905,12 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                 .map(EditBox.class::cast).filter(box -> box.visible && box.active)
                 .map(box -> new double[]{box.getX() + 8, box.getY() + 8}).findFirst().orElseThrow());
         clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
-        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL);
+        int selectAllModifier = (net.minecraft.client.input.InputQuirks.EDIT_SHORTCUT_KEY_MODIFIER
+                & com.mojang.blaze3d.platform.InputConstants.MOD_SUPER) != 0
+                ? com.mojang.blaze3d.platform.InputConstants.KEY_LGUI : com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL;
+        context.getInput().holdKey(selectAllModifier);
         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_A);
-        context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL);
+        context.getInput().releaseKey(selectAllModifier);
         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_BACKSPACE);
         context.getInput().typeChars(query);
         context.waitTicks(4);
