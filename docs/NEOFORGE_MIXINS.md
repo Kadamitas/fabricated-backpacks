@@ -34,4 +34,6 @@ The existing test-only `MainMixin` also prevents a second NeoForge mod-construct
 
 The native test harness uses an ordinary configuration-task event to isolate that embedded server's static tag bindings from its host client's frozen-registry remap. It snapshots the actual loaded server tags and sends the restored bindings through the normal tag packet after the native handshake. This applies only to the embedded host profile; the separate guest receives the unchanged native protocol. No production registry behavior or handshake acknowledgment is bypassed.
 
+The same embedded-host boundary restores file-backed native server configs through `ConfigTracker.loadConfigs` after the host has received them normally. Native client config synchronization otherwise replaces the shared server config object with a pathless client copy, breaking the next real guest's file sync. The harness captures the original files and loaded values and asserts both remain identical after restoration. It does not alter config values, skip a payload, or modify the independent guest.
+
 Release verification still requires the real unit, server, rendered-client, separate-JVM restart, and two-client multiplayer checks. A compile-only result is not a claim that those runtime gates passed.

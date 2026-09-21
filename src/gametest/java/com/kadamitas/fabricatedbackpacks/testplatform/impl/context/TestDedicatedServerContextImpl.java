@@ -40,6 +40,7 @@ public class TestDedicatedServerContextImpl extends TestServerContextImpl implem
 		ThreadingImpl.checkOnGametestThread("connect");
 		var hostProfile = context.computeOnClient(client -> client.getGameProfile().id());
 		runOnServer(value -> com.kadamitas.fabricatedbackpacks.testplatform.impl.util.EmbeddedServerTagIsolation.capture(value, hostProfile));
+		var serverConfigs = computeOnServer(com.kadamitas.fabricatedbackpacks.testplatform.impl.util.EmbeddedServerConfigIsolation::capture);
 
 		context.runOnClient(client -> {
 			final var serverInfo = new ServerData("localhost", getConnectionAddress(), ServerData.Type.OTHER);
@@ -47,6 +48,7 @@ public class TestDedicatedServerContextImpl extends TestServerContextImpl implem
 		});
 
 		ClientGameTestImpl.waitForWorldLoad(context);
+		runOnServer(value -> serverConfigs.restore());
 
 		return new TestDedicatedServerConnectionImpl(context, this);
 	}
