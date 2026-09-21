@@ -27,6 +27,17 @@ if (requestedId == null) {
     def launchRoot = evidenceRoot.resolve("multiplayer-launch-${runId}")
     def evidence = evidenceRoot.resolve("multiplayer-${runId}")
     def roles = ['host': 'BackpackHost', 'guest': 'BackpackGuest']
+    def reserveLaunch = tasks.register('reserveMultiplayerLaunch') {
+        doLast {
+            for (def directory = evidenceRoot; directory != null; directory = directory.parent) {
+                if (Files.isSymbolicLink(directory)) throw new GradleException('Evidence paths must not traverse symbolic links.')
+            }
+            if (Files.exists(launchRoot, LinkOption.NOFOLLOW_LINKS) || Files.exists(evidence, LinkOption.NOFOLLOW_LINKS))
+                throw new GradleException('This multiplayer run ID already exists; choose a fresh UUID.')
+            Files.createDirectories(evidenceRoot)
+            Files.createDirectory(launchRoot)
+        }
+    }
     roles.each { role, username ->
         // The same native client harness configuration as runClientGameTest, per role.
         neoForge.runs.create('multiplayer' + role.capitalize()) {
@@ -45,20 +56,30 @@ if (requestedId == null) {
             programArgument username
         }
     }
+    gradle.taskGraph.whenReady { graph ->
+        if (graph.hasTask(prepareClients.get())) {
+            roles.keySet().each { role ->
+                if (graph.hasTask(tasks.named('runMultiplayer' + role.capitalize()).get()))
+                    throw new GradleException('Multiplayer preparation must not execute a Minecraft run task.')
+            }
+        }
+    }
+    roles.keySet().each { role ->
+        // Native preparation creates its working directory. Reserve the fresh ID first.
+        tasks.named('prepareMultiplayer' + role.capitalize() + 'Run').configure { dependsOn reserveLaunch }
+    }
     prepareClients.configure {
         dependsOn tasks.named('gametestClasses')
         roles.keySet().each { role ->
             // Everything the real run task needs (argument files, Minecraft assets), without launching it.
-            dependsOn tasks.named('runMultiplayer' + role.capitalize()).map { it.taskDependencies.getDependencies(it) }
+            // A mapped TaskProvider still carries the run task as an implicit dependency.
+            // Resolve only its prerequisites in a plain lazy closure, never the game task itself.
+            dependsOn {
+                def runTask = tasks.named('runMultiplayer' + role.capitalize()).get()
+                runTask.taskDependencies.getDependencies(runTask)
+            }
         }
         doLast {
-            for (def directory = evidenceRoot; directory != null; directory = directory.parent) {
-                if (Files.isSymbolicLink(directory)) throw new GradleException('Evidence paths must not traverse symbolic links.')
-            }
-            if (Files.exists(launchRoot, LinkOption.NOFOLLOW_LINKS) || Files.exists(evidence, LinkOption.NOFOLLOW_LINKS))
-                throw new GradleException('This multiplayer run ID already exists; choose a fresh UUID.')
-            Files.createDirectories(evidenceRoot)
-            Files.createDirectory(launchRoot)
             def writeNew = { path, String value -> Files.writeString(path, value, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW) }
             def json = { value -> JsonOutput.prettyPrint(JsonOutput.toJson(value)) + '\n' }
             def digest = { path ->
@@ -136,7 +157,7 @@ if (requestedId == null) {
                 writeNew(argsFile, arguments.collect(quoteArgument).join('\n') + '\n')
                 writeNew(probeFile, (jvm + ['-version']).collect(quoteArgument).join('\n') + '\n')
                 def directory = launchRoot.resolve(role)
-                Files.createDirectory(directory)
+                Files.createDirectories(directory)
                 // The same explicit project test-EULA acceptance as runClientGameTest.
                 writeNew(directory.resolve('eula.txt'), '# Synthetic acceptance server; the project test setup accepts the EULA.\neula=true\n')
                 Map<String, String> environment = new LinkedHashMap<>()
