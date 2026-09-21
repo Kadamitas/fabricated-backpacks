@@ -138,8 +138,10 @@ public final class BackpackNetworking {
                 menu.bag().stack().getOrDefault(BagComponents.MEMORY, InventorySnapshot.EMPTY)));
     }
     private static void transferLookedAt(ServerPlayer player, String action) {
-        if (!(player.pick(player.blockInteractionRange(), 1F, false) instanceof BlockHitResult hit)
-                || !(player.level().getBlockEntity(hit.getBlockPos()) instanceof Container target)) return;
+        if (!(player.pick(player.blockInteractionRange(), 1F, false) instanceof BlockHitResult hit)) return;
+        Container target = com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity.interactionTarget(
+                player.level().getBlockEntity(hit.getBlockPos()), player);
+        if (target == null) return;
         if (!target.stillValid(player) || !player.level().mayInteract(player, hit.getBlockPos())) return;
         if (com.kadamitas.fabricatedbackpacks.config.RuleMatchers.block(player.level().getBlockState(hit.getBlockPos()),
                 com.kadamitas.fabricatedbackpacks.config.BackpackConfig.get().storage().blockedInteractions())) return;

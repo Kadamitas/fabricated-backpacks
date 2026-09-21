@@ -63,6 +63,10 @@ final class BackpackTestSupport {
         return player;
     }
 
+    static int count(com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity backpack, Item item) {
+        return count(backpack.inventory(), item);
+    }
+
     static int count(Container inventory, Item item) {
         int total = 0;
         for (int slot = 0; slot < inventory.getContainerSize(); slot++) if (inventory.getItem(slot).is(item)) total += inventory.getItem(slot).getCount();

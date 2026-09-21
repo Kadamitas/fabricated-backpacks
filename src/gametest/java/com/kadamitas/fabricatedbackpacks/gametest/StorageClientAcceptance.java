@@ -1,6 +1,5 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
-import com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackScreen;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackSettingsScreen;
 import com.kadamitas.fabricatedbackpacks.client.screen.StorageToolsScreen;
@@ -156,8 +155,7 @@ final class StorageClientAcceptance {
                     "Every settings control is included in contextual-help coverage: " + actualLabels);
             for (AbstractWidget widget : widgets) {
                 String label = canonicalSettingLabel(widget);
-                var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) widget)
-                        .fabricatedBackpacksTests$tooltip().get();
+                var tooltip = UiInspection.tooltip(widget);
                 if (!expected) {
                     check(tooltip == null, "Settings context help stays hidden without Shift: " + label);
                     continue;
@@ -264,8 +262,8 @@ final class StorageClientAcceptance {
                 world.getServer().waitFor(server -> player(world).containerMenu instanceof BackpackMenu menu && menu.visibleRows() == newRows);
                 double[] release = releaseOutside ? new double[]{1, 1} : storageSlotPosition(context, 0);
                 if (releaseOutside) context.runOnClient(client -> {
-                    var origin = (ContainerScreenAccess) (Object) client.gui.screen();
-                    check(origin.fabricatedBackpacks$left() > 1 && origin.fabricatedBackpacks$top() > 1,
+                    var origin = UiInspection.container(client.gui.screen());
+                    check(origin.left() > 1 && origin.top() > 1,
                             "The second release is genuinely outside the resized container");
                 });
                 context.getInput().setCursorPos(release[0], release[1]);
@@ -314,10 +312,10 @@ final class StorageClientAcceptance {
         return context.computeOnClient(client -> {
             var screen = (BackpackScreen) client.gui.screen();
             var slot = screen.getMenu().getSlot(index);
-            var origin = (ContainerScreenAccess) (Object) screen;
+            var origin = UiInspection.container(screen);
             check(slot.isActive() && slot.container == screen.getMenu().bag(), "The drag uses an active physical storage cell: " + index);
-            return new double[]{(origin.fabricatedBackpacks$left() + slot.x + 8.0) * client.getWindow().getScreenWidth() / client.getWindow().getGuiScaledWidth(),
-                    (origin.fabricatedBackpacks$top() + slot.y + 8.0) * client.getWindow().getScreenHeight() / client.getWindow().getGuiScaledHeight()};
+            return new double[]{(origin.left() + slot.x + 8.0) * client.getWindow().getScreenWidth() / client.getWindow().getGuiScaledWidth(),
+                    (origin.top() + slot.y + 8.0) * client.getWindow().getScreenHeight() / client.getWindow().getGuiScaledHeight()};
         });
     }
 
@@ -328,15 +326,15 @@ final class StorageClientAcceptance {
             check(client.getWindow().getGuiScale() == 2, "The real drag runs at GUI scale 2");
             check(menu.bag().getContainerSize() == 144 && menu.bag().columns() == 12 && menu.visibleRows() == 12
                     && menu.pages() == 1 && menu.page() == 0, "All 144 storage cells are visible without paging");
-            var origin = (ContainerScreenAccess) (Object) screen;
+            var origin = UiInspection.container(screen);
             var distinct = new java.util.HashSet<String>();
             double[][] points = new double[144][2];
             for (int index = 0; index < points.length; index++) {
                 var slot = menu.getSlot(index);
                 check(slot.isActive() && slot.container == menu.bag() && slot.getContainerSlot() == index,
                         "The drag target is the actual active physical storage cell " + index);
-                int x = origin.fabricatedBackpacks$left() + slot.x;
-                int y = origin.fabricatedBackpacks$top() + slot.y;
+                int x = origin.left() + slot.x;
+                int y = origin.top() + slot.y;
                 check(x >= 0 && y >= 0 && x + 16 <= screen.width && y + 16 <= screen.height,
                         "Every drag target fits the rendered viewport: " + index);
                 check(distinct.add(x + "," + y), "Distinct physical storage cells have distinct mouse targets");

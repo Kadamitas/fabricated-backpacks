@@ -443,13 +443,15 @@ public final class InceptionGameTests {
         helper.setBlock(position, BackpackRegistry.block(BackpackTier.LEATHER).defaultBlockState());
         BackpackBlockEntity entity = (BackpackBlockEntity) helper.getLevel().getBlockEntity(helper.absolutePos(position));
         HopperBlockEntity hopper = freshHopper(helper, position.above(), Direction.DOWN, new ItemStack(Items.STONE));
+        helper.assertFalse((Object) entity instanceof net.minecraft.world.Container,
+                "Hoppers reach the transactional storage directly, without a raw Container route or routing mixin");
         var previous = BackpackConfig.get();
         try {
             BackpackConfig.configure(ConfigFile.decode("{\"storage\":{\"disableConnections\":true}}"));
             push(helper, hopper);
             helper.assertValueEqual(count(hopper, Items.STONE), 1, "Disabled connections retain the real hopper's source item");
             helper.assertTrue(entity.inventory().isEmpty(), "Vanilla container routing cannot bypass disabled connections");
-            helper.assertValueEqual(entity.getSlotsForFace(Direction.UP).length, 0, "The block also denies raw WorldlyContainer access");
+            helper.assertValueEqual(entity.getSlotsForFace(Direction.UP).length, 0, "The block's explicit sided access also denies disabled connections");
             BackpackConfig.configure(ConfigFile.decode("{\"storage\":{\"blockedConnections\":[\"minecraft:hopper\"]}}"));
             hopper = freshHopper(helper, position.above(), Direction.DOWN, new ItemStack(Items.STONE));
             push(helper, hopper);
@@ -462,6 +464,24 @@ public final class InceptionGameTests {
             helper.assertTrue(hopper.isEmpty(), "A nonmatching connection restriction does not disable the hopper");
             helper.assertValueEqual(count(entity.inventory(), Items.STONE), 1, "Allowed insertion stores exactly one real item");
         } finally { BackpackConfig.configure(previous); }
+        var player = player(helper);
+        var absolute = helper.absolutePos(position);
+        player.setPos(net.minecraft.world.phys.Vec3.atCenterOf(absolute).add(0, 0, 1));
+        player.setShiftKeyDown(true);
+        var carried = bag(BackpackTier.LEATHER, UpgradeKind.DEPOSIT);
+        carried.setItem(0, new ItemStack(Items.DIAMOND, 7));
+        player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, carried.stack());
+        var hit = new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(absolute),
+                Direction.SOUTH, absolute, false);
+        player.getMainHandItem().useOn(new net.minecraft.world.item.context.UseOnContext(
+                player, net.minecraft.world.InteractionHand.MAIN_HAND, hit));
+        helper.assertValueEqual(count(entity.inventory(), Items.DIAMOND), 7,
+                "Real sneaking item use still deposits into an owned placed backpack without Container inheritance");
+        helper.assertValueEqual(count(BagInventory.of(player.getMainHandItem()), Items.DIAMOND), 0,
+                "The manual deposit preserves exact item conservation");
+        player.setPos(net.minecraft.world.phys.Vec3.atCenterOf(absolute).add(20, 0, 0));
+        helper.assertTrue(BackpackBlockEntity.interactionTarget(entity, player) == null,
+                "Manual storage adaptation retains the placed backpack distance restriction");
         helper.succeed();
     }
 }
