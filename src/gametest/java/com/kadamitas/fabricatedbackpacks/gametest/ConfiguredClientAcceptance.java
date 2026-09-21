@@ -113,7 +113,11 @@ final class ConfiguredClientAcceptance {
                         "The narrow viewport keeps every visible control reachable");
             checkHeadingRenderOutput(screen);
         });
-        clickButton(context, "Slots 1/2");
+        String nextSlots = context.computeOnClient(client -> client.gui.screen().children().stream()
+                .filter(AbstractWidget.class::isInstance).map(AbstractWidget.class::cast)
+                .map(widget -> widget.getMessage().getString()).filter(label -> label.startsWith("Next slots 1/"))
+                .findFirst().orElseThrow());
+        clickButton(context, nextSlots);
         int finalRecord = context.computeOnClient(client -> ((BackpackScreen) client.gui.screen()).getMenu().auxiliaryStart() + 11);
         String before = auxiliaryClickState(context, world, finalRecord);
         context.takeScreenshot("ui-narrow342-before-record-pickup");
@@ -174,7 +178,7 @@ final class ConfiguredClientAcceptance {
             capacity.addProperty("slots", 144);
             capacity.addProperty("upgrades", 10);
             var upgrades = json.getAsJsonObject("upgrades");
-            upgrades.getAsJsonObject("jukebox").addProperty("size", 16);
+            upgrades.getAsJsonObject("jukebox").addProperty("size", 200);
             upgrades.getAsJsonObject("jukebox").addProperty("rowWidth", 6);
             var filters = upgrades.getAsJsonObject("filters").getAsJsonObject(UpgradeKind.ADVANCED_FILTER.id());
             filters.addProperty("slots", 64);
@@ -186,6 +190,9 @@ final class ConfiguredClientAcceptance {
                 backpack.upgrades().getItem(1).set(DataComponents.CUSTOM_NAME, Component.literal(LONG_FILTER_TITLE));
                 backpack.upgrades().setChanged();
                 backpack.updateSettings(upgrade(backpack, 1), state -> state.putBoolean("enabled", false));
+                var records = backpack.upgradeInventory(upgrade(backpack, 0));
+                for (int slot = 16; slot < 199; slot++) records.setItem(slot, new ItemStack(Items.MUSIC_DISC_13));
+                records.setItem(199, new ItemStack(Items.MUSIC_DISC_WAIT));
                 var player = player(world);
                 player.getInventory().setItem(4, backpack.stack());
                 for (int index = 0; index < 16; index++) player.getInventory().setItem(9 + index, new ItemStack(Items.MUSIC_DISC_13));
@@ -212,9 +219,46 @@ final class ConfiguredClientAcceptance {
             }
             world.getServer().waitFor(server -> {
                 var bag = BagInventory.of(player(world).getInventory().getItem(4));
-                return count(bag.upgradeInventory(upgrade(bag, 0)), Items.MUSIC_DISC_13) == 16;
+                var records = bag.upgradeInventory(upgrade(bag, 0));
+                return records.getContainerSize() == 200 && java.util.stream.IntStream.range(0, 200)
+                        .allMatch(slot -> !records.getItem(slot).isEmpty());
             });
-            context.takeScreenshot("configured-six-column-sixteen-records");
+            var firstPage = context.computeOnClient(client -> activeAuxiliaryIndices((BackpackScreen) client.gui.screen()));
+            check(!firstPage.isEmpty() && firstPage.getFirst() == 0
+                            && java.util.stream.IntStream.range(0, firstPage.size()).allMatch(index -> firstPage.get(index) == index),
+                    "The first 200-disc page exposes one contiguous range beginning at physical slot 0");
+            int pageSize = firstPage.size();
+            clickButton(context, currentPageButton(context, "Previous slots "));
+            var lastPage = context.computeOnClient(client -> activeAuxiliaryIndices((BackpackScreen) client.gui.screen()));
+            check(!lastPage.isEmpty() && lastPage.getLast() == 199
+                            && lastPage.getFirst() == Math.floorDiv(199, pageSize) * pageSize,
+                    "Previous from the first page wraps directly to the final partial page containing physical slot 199");
+            clickButton(context, currentPageButton(context, "Next slots "));
+            check(context.computeOnClient(client -> activeAuxiliaryIndices((BackpackScreen) client.gui.screen())).equals(firstPage),
+                    "Next from the final page wraps directly back to the unchanged first page");
+            int middlePage = Math.floorDiv(99, pageSize);
+            for (int page = 0; page < middlePage; page++) clickButton(context, currentPageButton(context, "Next slots "));
+            check(context.computeOnClient(client -> activeAuxiliaryIndices((BackpackScreen) client.gui.screen())).contains(99),
+                    "Forward paging reaches the middle record at physical slot 99");
+            for (int page = 0; page < middlePage; page++) clickButton(context, currentPageButton(context, "Previous slots "));
+            check(context.computeOnClient(client -> activeAuxiliaryIndices((BackpackScreen) client.gui.screen())).equals(firstPage),
+                    "Reverse paging returns from the middle of a 200-disc library to its first page");
+            clickButton(context, currentPageButton(context, "Previous slots "));
+            int lastAuxiliary = context.computeOnClient(client -> ((BackpackScreen) client.gui.screen()).getMenu().auxiliaryStart() + 199);
+            context.waitFor(client -> client.player.containerMenu.getSlot(lastAuxiliary).isActive()
+                    && client.player.containerMenu.getSlot(lastAuxiliary).getItem().is(Items.MUSIC_DISC_WAIT));
+            check(context.computeOnClient(client -> client.gui.screen().children().stream()
+                            .filter(AbstractWidget.class::isInstance).map(AbstractWidget.class::cast)
+                            .anyMatch(widget -> widget.getMessage().getString().matches("Next slots \\d+/\\d+"))),
+                    "A 200-disc jukebox exposes a labeled last page with next-page navigation");
+            clickSlot(context, lastAuxiliary);
+            world.getServer().waitFor(server -> player(world).containerMenu.getCarried().is(Items.MUSIC_DISC_WAIT)
+                    && player(world).containerMenu.getSlot(lastAuxiliary).getItem().isEmpty());
+            separateSingleClicks(context);
+            clickSlot(context, lastAuxiliary);
+            world.getServer().waitFor(server -> player(world).containerMenu.getCarried().isEmpty()
+                    && player(world).containerMenu.getSlot(lastAuxiliary).getItem().is(Items.MUSIC_DISC_WAIT));
+            context.takeScreenshot("configured-six-column-two-hundred-record-pages");
             selectUpgrade(context, 1);
             context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().selectedSlot() == 1);
             context.waitTicks(3);
@@ -402,17 +446,17 @@ final class ConfiguredClientAcceptance {
             second.setItem(1, new ItemStack(Items.LAVA_BUCKET));
             // Both tanks are empty: empty drain inputs and already-full fill inputs cannot process.
             // That leaves ordinary server resource ticking enabled while these exact snapshots stay stable.
-            var records = new net.minecraft.world.SimpleContainer(64);
+            var records = new net.minecraft.world.SimpleContainer(200);
             records.setItem(0, new ItemStack(Items.MUSIC_DISC_13));
-            records.setItem(31, new ItemStack(Items.MUSIC_DISC_BLOCKS));
+            records.setItem(99, new ItemStack(Items.MUSIC_DISC_BLOCKS));
             var finalDisc = new ItemStack(Items.MUSIC_DISC_CAT);
             finalDisc.set(DataComponents.CUSTOM_NAME, Component.literal("Retained final record"));
-            records.setItem(63, finalDisc);
+            records.setItem(199, finalDisc);
             InventorySnapshot retained = InventorySnapshot.capture(records);
             var loose = new ItemStack(BackpackRegistry.item(UpgradeKind.ADVANCED_JUKEBOX));
             loose.set(BagComponents.CONTENTS, retained);
             var small = new ItemStack(BackpackRegistry.item(UpgradeKind.ADVANCED_JUKEBOX));
-            small.set(BagComponents.CONTENTS, new InventorySnapshot(12, java.util.List.of()));
+            small.set(BagComponents.CONTENTS, new InventorySnapshot(24, java.util.List.of()));
             player.getInventory().setItem(7, bag.stack());
             player.getInventory().setItem(9, loose);
             player.getInventory().setItem(10, small);
@@ -468,74 +512,74 @@ final class ConfiguredClientAcceptance {
             context.takeScreenshot("ui-battery-external-output-restored");
 
             // First install into the empty physical slot of this already-open menu. Then replace
-            // the selected empty12 with retained64 using a real swap, without another tab action.
+            // the selected empty24 with retained200 using a real swap, without another tab action.
             clickPlayerSlot(context, 10);
             clickSlot(context, context.computeOnClient(client -> clientMenu.upgradeSlotStart() + 2));
             world.getServer().waitFor(server -> player(world).containerMenu.getCarried().isEmpty()
                     && BackpackRegistry.kind(((BackpackMenu) player(world).containerMenu).bag().upgrades().getItem(2)).orElse(null) == UpgradeKind.ADVANCED_JUKEBOX);
             selectUpgrade(context, 2);
-            check(context.computeOnClient(client -> clientMenu.bag().inventorySlots(upgrade(clientMenu.bag(), 2)) == 12
+            check(context.computeOnClient(client -> clientMenu.bag().inventorySlots(upgrade(clientMenu.bag(), 2)) == 24
                             && clientMenu.bag().upgradeInventory(upgrade(clientMenu.bag(), 2)).isEmpty()),
-                    "The same-kind swap begins with the selected real empty12 inventory");
+                    "The same-kind swap begins with the selected real empty24 inventory");
             var previousPages = context.computeOnClient(client -> slotPageLabels((BackpackScreen) client.gui.screen()));
-            context.takeScreenshot("ui-selected12-before-retained64-swap");
+            context.takeScreenshot("ui-selected24-before-retained200-swap");
             clickPlayerSlot(context, 9);
             clickSlot(context, context.computeOnClient(client -> clientMenu.upgradeSlotStart() + 2));
             world.getServer().waitFor(server -> {
                 var menu = (BackpackMenu) player(world).containerMenu;
-                return menu.selectedSlot() == 2 && emptyTwelveRecordUpgrade(menu.getCarried())
+                return menu.selectedSlot() == 2 && emptyTwentyFourRecordUpgrade(menu.getCarried())
                         && snapshotMatches(menu.bag().upgradeInventory(upgrade(menu.bag(), 2)), fixture.records());
             });
             clickPlayerSlot(context, 9);
             world.getServer().waitFor(server -> player(world).containerMenu.getCarried().isEmpty()
-                    && emptyTwelveRecordUpgrade(player(world).getInventory().getItem(9)));
+                    && emptyTwentyFourRecordUpgrade(player(world).getInventory().getItem(9)));
             world.getConnection().waitForClientboundPackets();
             context.waitFor(client -> client.gui.screen() instanceof BackpackScreen screen && screen.getMenu() == clientMenu
-                    && clientMenu.selectedSlot() == 2 && clientMenu.bag().inventorySlots(upgrade(clientMenu.bag(), 2)) == 64
+                    && clientMenu.selectedSlot() == 2 && clientMenu.bag().inventorySlots(upgrade(clientMenu.bag(), 2)) == 200
                     && !slotPageLabels(screen).equals(previousPages));
             check(context.computeOnClient(client -> client.player.containerMenu == clientMenu)
                             && world.getServer().computeOnServer(server -> player(world).containerMenu == serverMenu),
                     "The saved larger jukebox swaps into the same selected slot of the same already-open client and server menu");
-            check(context.computeOnClient(client -> emptyTwelveRecordUpgrade(client.player.getInventory().getItem(9))
+            check(context.computeOnClient(client -> emptyTwentyFourRecordUpgrade(client.player.getInventory().getItem(9))
                             && clientMenu.getCarried().isEmpty()),
-                    "The real same-kind swap returns exactly the displaced empty12 upgrade to its vacated source slot");
+                    "The real same-kind swap returns exactly the displaced empty24 upgrade to its vacated source slot");
             check(context.computeOnClient(client -> snapshotMatches(clientMenu.bag().upgradeInventory(upgrade(clientMenu.bag(), 2)), fixture.records())),
-                    "Installing a retained64 inventory delivers every saved record and its exact component data");
+                    "Installing a retained200 inventory delivers every saved record and its exact component data");
             var seenPages = new java.util.HashSet<String>();
-            while (!context.computeOnClient(client -> clientMenu.getSlot(auxiliary + 63).isActive())) {
+            while (!context.computeOnClient(client -> clientMenu.getSlot(auxiliary + 199).isActive())) {
                 String page = context.computeOnClient(client -> client.gui.screen().children().stream().filter(Button.class::isInstance).map(Button.class::cast)
-                        .filter(button -> button.visible && button.active && button.getMessage().getString().startsWith("Slots "))
+                        .filter(button -> button.visible && button.active && button.getMessage().getString().startsWith("Next slots "))
                         .map(button -> button.getMessage().getString()).findFirst().orElseThrow());
-                check(seenPages.add(page) && seenPages.size() <= 64, "Real slot-page controls must reach physical63 without cycling: " + seenPages);
+                check(seenPages.add(page) && seenPages.size() <= 200, "Real slot-page controls must reach physical199 without cycling: " + seenPages);
                 clickButton(context, page);
             }
-            check(!seenPages.isEmpty(), "The retained64 fixture really exercises auxiliary paging");
-            context.takeScreenshot("ui-retained64-jukebox-final-page");
-            ItemStack finalDisc = fixture.records().entries().stream().filter(entry -> entry.slot() == 63).findFirst().orElseThrow().create();
-            String beforePickup = auxiliaryClickState(context, world, auxiliary + 63);
-            clickSlot(context, auxiliary + 63);
+            check(!seenPages.isEmpty(), "The retained200 fixture really exercises auxiliary paging");
+            context.takeScreenshot("ui-retained200-jukebox-final-page");
+            ItemStack finalDisc = fixture.records().entries().stream().filter(entry -> entry.slot() == 199).findFirst().orElseThrow().create();
+            String beforePickup = auxiliaryClickState(context, world, auxiliary + 199);
+            clickSlot(context, auxiliary + 199);
             context.waitTicks(5);
             world.getConnection().waitForServerboundPackets();
             world.getConnection().waitForClientboundPackets();
-            context.takeScreenshot("ui-retained64-after-record-pickup");
-            String afterPickup = auxiliaryClickState(context, world, auxiliary + 63);
+            context.takeScreenshot("ui-retained200-after-record-pickup");
+            String afterPickup = auxiliaryClickState(context, world, auxiliary + 199);
             check(context.computeOnClient(client -> ItemStack.matches(clientMenu.getCarried(), finalDisc)
-                            && snapshotMatches(clientMenu.bag().upgradeInventory(upgrade(clientMenu.bag(), 2)), withoutSlot(fixture.records(), 63)))
+                            && snapshotMatches(clientMenu.bag().upgradeInventory(upgrade(clientMenu.bag(), 2)), withoutSlot(fixture.records(), 199)))
                             && world.getServer().computeOnServer(server -> ItemStack.matches(player(world).containerMenu.getCarried(), finalDisc)
                             && snapshotMatches(((BackpackMenu) player(world).containerMenu).bag()
-                            .upgradeInventory(upgrade(((BackpackMenu) player(world).containerMenu).bag(), 2)), withoutSlot(fixture.records(), 63))),
-                    "A real click picks up physical record63 exactly once, leaving the other retained records unchanged. Before: "
+                            .upgradeInventory(upgrade(((BackpackMenu) player(world).containerMenu).bag(), 2)), withoutSlot(fixture.records(), 199))),
+                    "A real click picks up physical record199 exactly once, leaving the other retained records unchanged. Before: "
                             + beforePickup + "; after: " + afterPickup);
             // These are two separate clicks, not vanilla's same-slot double-click collection.
             // Accelerated test ticks do not establish the native MouseHandler wall-clock threshold.
             separateSingleClicks(context);
-            String beforeReturn = auxiliaryClickState(context, world, auxiliary + 63);
-            clickSlot(context, auxiliary + 63);
+            String beforeReturn = auxiliaryClickState(context, world, auxiliary + 199);
+            clickSlot(context, auxiliary + 199);
             context.waitTicks(5);
             world.getConnection().waitForServerboundPackets();
             world.getConnection().waitForClientboundPackets();
-            context.takeScreenshot("ui-retained64-after-record-return-click");
-            String afterReturn = auxiliaryClickState(context, world, auxiliary + 63);
+            context.takeScreenshot("ui-retained200-after-record-return-click");
+            String afterReturn = auxiliaryClickState(context, world, auxiliary + 199);
             check(context.computeOnClient(client -> clientMenu.getCarried().isEmpty()
                             && snapshotMatches(clientMenu.bag().upgradeInventory(upgrade(clientMenu.bag(), 2)), fixture.records()))
                             && world.getServer().computeOnServer(server -> player(world).containerMenu.getCarried().isEmpty()
@@ -547,8 +591,8 @@ final class ConfiguredClientAcceptance {
             check(context.computeOnClient(client -> snapshotMatches(clientMenu.bag().upgradeInventory(upgrade(clientMenu.bag(), 2)), fixture.records()))
                             && world.getServer().computeOnServer(server -> snapshotMatches(((BackpackMenu) player(world).containerMenu).bag()
                             .upgradeInventory(upgrade(((BackpackMenu) player(world).containerMenu).bag(), 2)), fixture.records())),
-                    "Returning the retained final record preserves all64 physical addresses, counts and names on both sides");
-            context.takeScreenshot("ui-retained64-jukebox-record-returned");
+                    "Returning the retained final record preserves all 200 physical addresses, counts and names on both sides");
+            context.takeScreenshot("ui-retained200-jukebox-record-returned");
             context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
         } finally {
@@ -611,14 +655,27 @@ final class ConfiguredClientAcceptance {
 
     private static java.util.List<String> slotPageLabels(BackpackScreen screen) {
         return screen.children().stream().filter(Button.class::isInstance).map(Button.class::cast)
-                .filter(button -> button.visible && button.active && button.getMessage().getString().startsWith("Slots "))
+                .filter(button -> button.visible && button.active && button.getMessage().getString().startsWith("Next slots "))
                 .map(button -> button.getMessage().getString()).toList();
     }
 
-    private static boolean emptyTwelveRecordUpgrade(ItemStack stack) {
+    private static java.util.List<Integer> activeAuxiliaryIndices(BackpackScreen screen) {
+        var menu = screen.getMenu();
+        return java.util.stream.IntStream.range(0, menu.auxiliaryCount())
+                .filter(index -> menu.getSlot(menu.auxiliaryStart() + index).isActive()).boxed().toList();
+    }
+
+    private static String currentPageButton(ClientGameTestContext context, String prefix) {
+        return context.computeOnClient(client -> client.gui.screen().children().stream()
+                .filter(AbstractWidget.class::isInstance).map(AbstractWidget.class::cast)
+                .filter(widget -> widget.visible && widget.active && widget.getMessage().getString().startsWith(prefix))
+                .map(widget -> widget.getMessage().getString()).findFirst().orElseThrow());
+    }
+
+    private static boolean emptyTwentyFourRecordUpgrade(ItemStack stack) {
         var inventory = stack.get(BagComponents.CONTENTS);
         return stack.getCount() == 1 && BackpackRegistry.kind(stack).orElse(null) == UpgradeKind.ADVANCED_JUKEBOX
-                && inventory != null && inventory.size() == 12 && inventory.entries().isEmpty();
+                && inventory != null && inventory.size() == 24 && inventory.entries().isEmpty();
     }
 
     private record AuxiliaryFixture(ItemStack previousBag, ItemStack previousLoose, ItemStack previousSmall, InventorySnapshot first,
@@ -1304,9 +1361,18 @@ final class ConfiguredClientAcceptance {
         context.waitForScreen(InventoryScreen.class);
         hoverPlayerSlot(context, 4);
         if (keyboard >= 0) context.getInput().pressKey(keyboard); else context.getInput().pressMouse(mouse);
+        context.waitTicks(4);
+        check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
+                "A rebound " + (keyboard >= 0 ? "keyboard" : "mouse") + " shortcut is ignored while a menu is open");
+        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.waitFor(client -> client.gui.screen() == null);
+        context.waitTicks(4);
+        check(context.computeOnClient(client -> client.gui.screen() == null),
+                "A menu-consumed " + (keyboard >= 0 ? "keyboard" : "mouse") + " shortcut is not queued after closing the menu");
+        if (keyboard >= 0) context.getInput().pressKey(keyboard); else context.getInput().pressMouse(mouse);
         context.waitForScreen(BackpackScreen.class);
-        check(context.computeOnClient(client -> ((BackpackScreen) client.gui.screen()).getMenu().source().inventorySlot()) == 4,
-                "A rebound " + (keyboard >= 0 ? "keyboard" : "mouse") + " shortcut opens the hovered backpack");
+        check(context.computeOnClient(client -> client.gui.screen() instanceof BackpackScreen),
+                "The rebound " + (keyboard >= 0 ? "keyboard" : "mouse") + " shortcut still opens a backpack during gameplay");
         context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
     }

@@ -12,10 +12,10 @@ import java.util.random.RandomGenerator;
 public record Playlist(int slotCount, List<Integer> occupiedSlots, int activeSlot,
                        List<Integer> queue, List<Integer> history, boolean shuffle, Repeat repeat) {
     public enum Repeat { OFF, ALL, ONE }
-    public static final int MAX_SLOTS = 16;
+    public static final int MAX_SLOTS = 256;
 
     public Playlist {
-        if (slotCount < 1 || slotCount > MAX_SLOTS) throw new IllegalArgumentException("Disc slot count must be 1..16");
+        if (slotCount < 1 || slotCount > MAX_SLOTS) throw new IllegalArgumentException("Disc slot count must be 1..256");
         occupiedSlots = validatedSlots(occupiedSlots, slotCount);
         queue = List.copyOf(Objects.requireNonNull(queue, "queue"));
         history = List.copyOf(Objects.requireNonNull(history, "history"));
@@ -107,7 +107,7 @@ public record Playlist(int slotCount, List<Integer> occupiedSlots, int activeSlo
     /** Resizing keeps unchanged active audio and valid history; removed/replaced active discs stop. */
     public Playlist updateSlots(int newSlotCount, Collection<Integer> occupied, Set<Integer> changedSlots, RandomGenerator random) {
         Objects.requireNonNull(random, "random");
-        if (newSlotCount < 1 || newSlotCount > MAX_SLOTS) throw new IllegalArgumentException("Disc slot count must be 1..16");
+        if (newSlotCount < 1 || newSlotCount > MAX_SLOTS) throw new IllegalArgumentException("Disc slot count must be 1..256");
         List<Integer> nextOccupied = validatedSlots(occupied, newSlotCount);
         Set<Integer> changed = Set.copyOf(Objects.requireNonNull(changedSlots, "changedSlots"));
         for (int slot : changed) Objects.checkIndex(slot, Math.max(slotCount, newSlotCount));

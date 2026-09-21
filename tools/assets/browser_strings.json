@@ -22,6 +22,7 @@
   "browser.fabricated_backpacks.loading": "Loading recipe displays and building the search index…",
   "browser.fabricated_backpacks.locked": "This recipe must be unlocked before it can be transferred on this server.",
   "browser.fabricated_backpacks.no_recipes": "No matching recipe display. Try Uses, another category, or a different item.",
+  "browser.fabricated_backpacks.netherite_direct_recipe": "Direct smithing: Diamond Backpack + vanilla Netherite Upgrade Smithing Template + Netherite Ingot.",
   "browser.fabricated_backpacks.not_unlocked": "Not in your recipe book. Servers with limited crafting require this recipe to be unlocked.",
   "browser.fabricated_backpacks.open": "Recipe browser",
   "browser.fabricated_backpacks.open_key": "Open the recipe browser (%s). Browsing never consumes an item.",

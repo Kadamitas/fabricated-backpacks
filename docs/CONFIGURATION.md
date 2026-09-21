@@ -9,12 +9,16 @@ world does not reload this file. There is no configuration-reload command.
 and actual saved geometry to clients; a client's local file cannot raise a
 server limit.
 
-Files use format `1`, are limited to 1 MiB and may contain only the fields
+Files use format `2`, are limited to 1 MiB and may contain only the fields
 described below. Partial files inherit defaults. Unknown fields, invalid
 values, nulls and unsupported formats reject the new configuration as a whole.
 The error is logged, the file remains untouched and the previous configuration
 is retained; on initial startup that previous configuration is the defaults.
 Check the log after editing.
+
+Format-1 files remain readable. Their historical advanced-jukebox default of
+`size:12` is interpreted as 24 slots; other configured sizes are preserved.
+Set `format` to `2` before deliberately choosing 12 slots under the new format.
 
 This document describes implemented settings, not completed testing. See
 [Verification](VERIFICATION.md) for executed checks.
@@ -23,7 +27,7 @@ This document describes implemented settings, not completed testing. See
 
 ```json
 {
-  "format": 1,
+  "format": 2,
   "capacities": {
     "backpack": {"slots": 36, "upgrades": 2}
   },
@@ -35,7 +39,7 @@ This document describes implemented settings, not completed testing. See
     "filters": {
       "advanced_pickup_upgrade": {"slots": 64, "columns": 6}
     },
-    "jukebox": {"size": 16, "rowWidth": 6},
+    "jukebox": {"size": 200, "rowWidth": 6},
     "magnet": {"range": 3, "advancedRange": 5, "activeTicks": 10, "idleTicks": 40},
     "allowAlwaysVoid": false
   }
@@ -153,7 +157,7 @@ different bound is shown; 20 ticks is one second at normal server speed.
 | `pump` | `playerRange:3`, `worldRange:4` | Player radius 1–32; world search range 1–16 |
 | `pump` | `handTicks:3`, `handlerTicks:20`, `idleTicks:40`, `handGraceTicks:60` | Grace 0–1200; world work also accounts for distance |
 | `experience` | `range:3`, `interval:5`, `transferPoints:50`, `allowMending:true`, `mendingPoints:5` | Radius 1–32; transfer 1–10000 XP points; mending 1–20. Saved player budgets are capped by these settings |
-| `jukebox` | `size:12`, `rowWidth:4` | Advanced size 1–16, columns 1–6. Basic remains one record |
+| `jukebox` | `size:24`, `rowWidth:4` | Advanced size 1–256, columns 1–6. The paged UI supports 200-disc libraries; basic holds two records |
 | `allowAlwaysVoid` | `true` | If false, a saved ALWAYS setting falls back to storage-overflow behavior |
 
 Tank and battery resource capacity/rate use the resolved backpack row count
@@ -198,8 +202,11 @@ The basic upgrade still cannot use shapes exceeding 2×2.
 `compacting.itemOverrides` maps full item IDs to shape lists, up to 1024 items.
 For example, `{"example:material":[{"width":2,"height":2,"pattern":"1110"}]}`
 selects a three-cell shape for that item. Shapes require actual current recipes;
-they do not define outputs or bypass the default reversible-recipe check.
-The saved “compact anything” control explicitly permits irreversible packing.
+they do not define outputs or bypass the reversible-recipe check. Every selected
+recipe must have an exact one-item unpacking recipe that restores the same item,
+components and quantity. Both directions must be free of crafting remainders.
+Legacy “compact anything” data is ignored, so lossy recipes such as iron ingots
+into iron trapdoors are never used.
 
 ## Capture and monster carriers
 

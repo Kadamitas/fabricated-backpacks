@@ -1,7 +1,7 @@
 # Features and current limits
 
-This is the implementation matrix for **0.5.0-alpha**. A feature being present
-in source is not a test result. Consult [Verification](VERIFICATION.md) for the
+This is the implementation matrix for **0.5.2-alpha+mc26.2**. A feature being present
+in source is not a test result. Consult [0.5.2 verification](VERIFICATION_0.5.2.md) for the
 specific build, executed checks, observations and outstanding failures. The
 alpha does not claim complete coverage of every planned feature or external
 integration.
@@ -39,8 +39,8 @@ are not present in the existing `v0.5.0-alpha` download.
 | Feature | Current implementation |
 | --- | --- |
 | Starter recipe | Four leather, four string and a chest |
-| Tier progression | Copper from leather; iron from leather or copper; gold from iron; diamond from gold; netherite smithing from diamond |
-| Component preservation | Tier crafting and smithing transmute the source backpack, retaining its stored data |
+| Tier progression | Copper from leather; iron from leather or copper; gold from iron; diamond from gold; smith the Diamond Backpack directly with the vanilla Netherite Upgrade Smithing Template and a Netherite Ingot |
+| Component preservation | Tier crafting and direct Netherite smithing transmute the source backpack, retaining its stored data |
 | Dyeing | One backpack plus dyes; dyes left of the backpack color the body, dyes right color the trim, dyes in its column color both |
 | Washing | Use a dyed backpack on a water cauldron to reset both colors, consuming one water level |
 | Default colors | Leather body `#B97843`, dark trim `#503B36` |
@@ -65,10 +65,10 @@ an existing world.
 | Memory | Per-cell ghost reservations, optional component matching, remember-occupied and clear-all controls | Remembering creates no items and clearing memory removes no physical contents |
 | Sort exclusions | Per-cell editing, select-all/clear-all and an RGB overlay color | Exclusions protect cells from sorting and bulk take operations |
 | Bulk transfer | Store/take matching stacks, or hold Shift for all eligible stacks | Acts on the 27 main-inventory cells; hotbar, armor, offhand and the owning backpack stay put |
-| Upgrade panels | Real inventories, ghost filters, tag editing and paged controls; up to 64 filters and 16 records | Effective saved extents remain accessible after configured defaults shrink |
+| Upgrade panels | Real inventories, ghost filters, tag editing and paged controls; up to 64 filters and 256 configured record slots | Effective saved extents remain accessible after configured defaults shrink |
 | Resources | Tank/power columns with values and cursor-container actions | Very large capacities require the numeric value to interpret small amounts |
 | Captured mobs | Reserved rectangular cell areas, a model preview and release action | Capture eligibility and collision checks remain server decisions |
-| Contents preview | Hold Shift over a backpack for its physical storage grid, retaining enhanced counts | Large labels use k/M/B abbreviations; the total is exact, and memory ghosts do not count as physical items |
+| Contents preview | Hold Shift over a backpack for its physical storage grid, retaining enhanced counts | Every stack label and the total use full exact digits; memory ghosts do not count as physical items |
 | Exterior item | Show one selected storage cell on the placed or worn pack, with memory fallback, rotation and depth controls | Empty, unremembered cells show nothing; no additional inventory is created |
 | Settings persistence | Item settings, player preference defaults, up to 32 private templates and settings data-pack loading/export | Templates contain settings and ghost choices, not physical items or resources; export requires operator permission |
 | Automation | Vanilla hoppers, Fabric item/fluid adapters, Energy API, nested routing and input/output filters | Mod-specific protection or automation integrations are not implied |
@@ -129,7 +129,7 @@ capacity reductions that would strand contents are rejected.
 | Filter | `filter_upgrade`, `advanced_filter_upgrade` | Control storage input, output or both with item filters |
 | Magnet | `magnet_upgrade`, `advanced_magnet_upgrade` | Attract nearby eligible items and XP; separate item/XP toggles |
 | Feeding | `feeding_upgrade`, `advanced_feeding_upgrade` | Consume suitable stored food; advanced hunger policy and hurt-state options |
-| Compacting | `compacting_upgrade`, `advanced_compacting_upgrade` | Apply eligible packing recipes with bounded work; optional broader recipes and work-in-menu setting |
+| Compacting | `compacting_upgrade`, `advanced_compacting_upgrade` | Apply exact reversible packing recipes with bounded work; configurable shapes and work-in-menu setting |
 | Void | `void_upgrade`, `advanced_void_upgrade` | Explicitly filtered storage overflow, representation overflow or always-void modes |
 | Restock | `restock_upgrade`, `advanced_restock_upgrade` | Pull matching items from an interacted container or shortcut target |
 | Deposit | `deposit_upgrade`, `advanced_deposit_upgrade` | Send matching backpack contents to an interacted container or shortcut target |
@@ -142,7 +142,7 @@ capacity reductions that would strand contents are rejected.
 | Stonecutting | `stonecutter_upgrade` | Persistent input, result destination/refill, per-player input-specific recent recipes and a searchable 9×5 result picker |
 | Anvil | `anvil_upgrade` | Native naming, repair/enchantment rules and experience costs |
 | Smithing | `smithing_upgrade` | Native template/base/addition slots and smithing result rules |
-| Jukebox | `jukebox_upgrade`, `advanced_jukebox_upgrade` | One/basic or twelve/advanced physical record slots by default; advanced size 1–16, columns 1–6; play/stop, previous/next, shuffle and repeat |
+| Jukebox | `jukebox_upgrade`, `advanced_jukebox_upgrade` | Two/basic or twenty-four/advanced physical record slots by default; advanced size 1–256 with previous/next pages and columns 1–6; play/stop, previous/next, shuffle and repeat |
 | Tank | `tank_upgrade` | A fluid compartment, four container-processing slots and Fabric fluid access; reserves two storage columns |
 | Battery | `battery_upgrade` | Stored energy, two container-processing slots and Team Reborn Energy access; reserves two storage columns |
 | Pump | `pump_upgrade`, `advanced_pump_upgrade` | Input/output direction and neighboring handlers; advanced adds hand containers, optional world transfer and fluid filters |

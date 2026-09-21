@@ -22,12 +22,12 @@
   "loot_policy": "Backpack block code drops its persisted ItemStack; generated block loot pools are empty to prevent duplicate drops.",
   "texture_policy": "16x16 pixel-cluster item and block textures; 64x64 tiled material atlases; 128x128 mod emblem; 512x512 original production-model project icon. No generated file depends on an external image.",
   "inputs": {
-    "tools/generate_assets.py": "5d015b1071a246ccbd203f8483a2f321c4c7d0453f595158922891dbd357f370",
+    "tools/generate_assets.py": "d4555523831e7d27c8c3e47d70a0c757d155c925ab1e204a135ea0bc46edae15",
     "tools/generate_automation_assets.py": "e918e7b89addb9fefeb661df3b874fc0d4b9e15ebd1a7bc4fa93b02e107c61d9",
     "tools/assets/automation_strings.json": "d18d9188f4fdbefa6bd34406c3558f41f62ef708bdbc6bf9fc55c8f7ebe32f2d",
     "tools/assets/ui_strings.json": "581b81b3d0a447a9fd44ebdad0b7e95d1e14920d67111a7cf6afd4845c942af0",
-    "tools/assets/browser_strings.json": "a24bf63c24f6ca41fc33d4016bcd6cf5dce69400de3abcf55ce229d16e91078c",
-    "src/main/java/com/kadamitas/fabricatedbackpacks/domain/UpgradeKind.java": "927fd9c801354ab6e7fee6b4ff8e4e4e06ba64efc9397e10b1fb21bc0afc1241"
+    "tools/assets/browser_strings.json": "34ab908d79dbac5de94cd11b965024e726ebf5621e77f208a02e16e4837d3d0b",
+    "src/main/java/com/kadamitas/fabricatedbackpacks/domain/UpgradeKind.java": "9f97d45b0fe540cb94c3ced0699b62e22add424d57366871c9e5b14a429f87c2"
   },
   "files": {
     "assets/fabricated_backpacks/backpack_profiles.json": "b269c5a766d4683eb8418f7f4ee5118dde5d266811bb1dcc845843ce372c2b3d",
@@ -40,7 +40,7 @@
     "assets/fabricated_backpacks/blockstates/netherite_backpack.json": "366a1b399fbfd1c467e9d237f675104f75d1487cb940bffafc4544b5ba8d8528",
     "assets/fabricated_backpacks/blockstates/steam_engine.json": "07730fca9b3077ab84f0f65b007aad40399e8255c9e18107c049d683e304e05c",
     "assets/fabricated_backpacks/icon.png": "a420c960a3bdc5ca3abb76353ca3995de324fd055ad435f1614c8b50a8a0d436",
-    "assets/fabricated_backpacks/lang/en_us.json": "8b24a28772e8f225901aa2daf74d507782d0b46acfb971b1c38bc39c2c240c6c",
+    "assets/fabricated_backpacks/lang/en_us.json": "12cdde76475435ce543a051263e208f88662612e4b4a890ce709e10971971e49",
     "assets/fabricated_backpacks/models/block/backpack_body.json": "9b27226d9c845f43f6be6a276ad4ab3c23d315c75a8f67449e740880dc67dd33",
     "assets/fabricated_backpacks/models/block/backpack_closed.json": "7c5d81330c397eaa048cc0f505434541cce702f5e31c77a9fa55b23a5a5f1b1a",
     "assets/fabricated_backpacks/models/block/backpack_open.json": "15633329aa11d90eed84040ea780ed030eacba89168e486fcc34724cb5b04e91",

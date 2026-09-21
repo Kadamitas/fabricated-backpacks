@@ -60,6 +60,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
     private Panel panel;
     private final Map<Integer, BackpackIconButton> upgradeTabs = new HashMap<>();
     private final List<OptionButton> optionButtons = new ArrayList<>();
+    private final ShiftTooltips optionTooltips = new ShiftTooltips();
     private final Map<Integer, net.minecraft.world.entity.LivingEntity> capturedPreviews = new HashMap<>();
     private String captureFingerprint = "";
     private boolean customClick;
@@ -70,7 +71,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
     private int searchDebounce;
     private String sentMask = "";
     private com.kadamitas.fabricatedbackpacks.browser.BrowserQuery parsedQuery = com.kadamitas.fabricatedbackpacks.browser.BrowserQuery.parse("");
-    private record OptionButton(String action, Button button) {}
+    private record OptionButton(String action, BackpackIconButton button) {}
     private record FilterGrid(int firstIndex, int slots, int y, int rows, int pageY) {
         int pageSize(int columns) { return columns * Math.max(1, rows); }
         int pages(int columns) { return Math.max(1, Math.ceilDiv(slots, pageSize(columns))); }
@@ -87,6 +88,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         cancelQuickCraft();
         super.init();
         optionButtons.clear();
+        optionTooltips.clear();
         upgradeTabs.clear();
         storagePage = null;
         upgradeHeading = null;
@@ -180,6 +182,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         layoutKey = layoutKey();
         refreshStorageView();
         requestRows();
+        optionTooltips.refresh(minecraft);
     }
 
     private void toggleSearch() {
@@ -246,9 +249,14 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
             return;
         }
         int inventoryPages = Math.max(1, Math.ceilDiv(menu.bag().inventorySlots(upgrade), auxiliaryPageSize(upgrade)));
-        if (inventoryPages > 1) icon("Slots " + (auxiliaryPage + 1) + "/" + inventoryPages,
-                panel.x() + panel.width() - 23, panel.inventoryPageY(), Icon.NEXT,
-                () -> { auxiliaryPage = (auxiliaryPage + 1) % inventoryPages; rebuildWidgets(); });
+        if (inventoryPages > 1) {
+            smallIcon("Previous slots " + (auxiliaryPage + 1) + "/" + inventoryPages,
+                    panel.x() + panel.width() - 27, panel.inventoryPageY(), Icon.PREVIOUS,
+                    () -> { auxiliaryPage = Math.floorMod(auxiliaryPage - 1, inventoryPages); rebuildWidgets(); });
+            smallIcon("Next slots " + (auxiliaryPage + 1) + "/" + inventoryPages,
+                    panel.x() + panel.width() - 14, panel.inventoryPageY(), Icon.NEXT,
+                    () -> { auxiliaryPage = (auxiliaryPage + 1) % inventoryPages; rebuildWidgets(); });
+        }
         int filterPages = panel.filters().pages(filterColumns(upgrade));
         String filterLabel = panel.fuelFilters().slots() > 0 ? "Input filters " : "Filters ";
         if (filterPages > 1) icon(filterLabel + (ghostPage + 1) + "/" + filterPages,
@@ -274,7 +282,9 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
                         else if (action.equals("slot_rules")) minecraft.setScreen(new SlotRulesScreen(this, upgrade));
                         else send(action.startsWith("inception_") ? "setting" : "upgrade", 0, 0, action);
                     });
+            button.setAutomaticTooltip(false);
             button.setSelected(presentation.selected());
+            optionTooltips.add(button, Component.literal(UpgradeControls.help(action, upgrade.kind(), settings)));
             optionButtons.add(new OptionButton(action, button));
         }
         if (pageCount > 1) icon("More " + (controlPage + 1) + "/" + pageCount,
@@ -563,12 +573,6 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
             }
         }
     }
-    private static String shortAmount(long amount) {
-        if (amount >= 1_000_000_000) return String.format(Locale.ROOT, "%.1fG", amount / 1_000_000_000.0);
-        if (amount >= 1_000_000) return String.format(Locale.ROOT, "%.1fM", amount / 1_000_000.0);
-        if (amount >= 10_000) return String.format(Locale.ROOT, "%.0fk", amount / 1000.0);
-        return Long.toString(amount);
-    }
     private void drawCaptures(GuiGraphics graphics, int mouseX, int mouseY) {
         var captures = NbtAccess.getListOrEmpty(menu.bag().settings(), "captured_entities");
         String fingerprint = captures.toString();
@@ -653,10 +657,11 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         if (slot.container == menu.bag() && slot.getItem().getCount() > 999) {
             graphics.renderItem(slot.getItem(), slot.x, slot.y);
             graphics.renderItemDecorations(font, slot.getItem().copyWithCount(1), slot.x, slot.y);
+            String count = Integer.toString(slot.getItem().getCount());
+            float scale = Math.min(0.65f, 15f / Math.max(1, font.width(count)));
             graphics.pose().pushPose();
-            graphics.pose().translate(slot.x + 17, slot.y + 11, 200);
-            graphics.pose().scale(0.65f, 0.65f, 1);
-            String count = shortAmount(slot.getItem().getCount());
+            graphics.pose().translate(slot.x + 17, slot.y + 17 - font.lineHeight * scale, 200);
+            graphics.pose().scale(scale, scale, 1);
             graphics.drawString(font, count, -font.width(count), 0, 0xffffffff, true);
             graphics.pose().popPose();
         } else super.renderSlot(graphics, slot);
@@ -817,10 +822,11 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
                 var optionSettings = option.action().startsWith("inception_") ? menu.preferences() : settings;
                 var presentation = UpgradeControls.presentation(option.action(), upgrade.kind(), optionSettings);
                 option.button().setMessage(Component.literal(presentation.label()));
-                if (option.button() instanceof BackpackIconButton button)
-                    button.setIcon(presentation.icon()).setSelected(presentation.selected());
+                option.button().setIcon(presentation.icon()).setSelected(presentation.selected());
+                optionTooltips.add(option.button(), Component.literal(UpgradeControls.help(option.action(), upgrade.kind(), optionSettings)));
             }
         });
+        optionTooltips.refresh(minecraft);
     }
     private void flushSearch() {
         if (!sentQuery.equals(query) && minecraft.player != null && minecraft.player.containerMenu == menu) {

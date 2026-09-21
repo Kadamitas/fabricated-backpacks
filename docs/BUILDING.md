@@ -16,7 +16,7 @@ java -version
 
 On other systems, use `./gradlew`. Loom remaps the older game's Mojang-named
 source to its production namespace. Install only
-`build/libs/fabricated-backpacks-0.5.0-alpha+mc1.21.1.jar`, not a development or
+`build/libs/fabricated-backpacks-1.0.0+mc1.21.1.jar`, not a development or
 sources JAR. Fabric API is required separately; Energy API 4.1.0 is embedded.
 Do not use a 26.2 world, a personal instance or the 26.2 JAR for these checks.
 

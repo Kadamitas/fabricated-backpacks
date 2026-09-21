@@ -1,9 +1,40 @@
 # Changelog
 
-## 0.5.0-alpha+mc1.21.1 — development port
+## 1.0.0+mc1.21.1 (unreleased)
+
+- Set the planned release version to 1.0.0 without the alpha suffix.
+- Keep the legacy Minecraft 1.21.1 target unchanged. Release verification is still pending.
+
+## 0.5.2-alpha+mc1.21.1
+
+Port of the 0.5.2 patch alpha to Minecraft 1.21.1 and Java 21. Back up worlds before testing it.
+
+- Keep every rebindable gameplay action inactive while a menu is open. This
+  includes keyboard and mouse bindings, the recipe browser and all five upgrade
+  shortcuts; workstation menus retain an explicit Recipe browser button.
+- Render full exact item counts in storage slots and backpack previews instead
+  of abbreviating large values.
+- Add contextual help to every settings control and icon-only upgrade control.
+  Help appears only while Shift is held and includes complete fluid-filter
+  descriptions even when their visible row labels are clipped.
+- Restrict compacting to exact reversible recipes with no crafting remainders.
+  Legacy unsafe settings can no longer turn ingots into lossy outputs such as
+  trapdoors or turn sand into sandstone.
+- Double jukebox libraries to two slots in the basic upgrade and twenty-four in
+  the advanced upgrade. Add paired previous/next pages for saved or configured
+  libraries up to 256 slots, with server scenarios for 200-record playback and persistence.
+- Migrate the historical format-1 advanced-jukebox default from 12 to 24 while
+  preserving custom sizes; format 2 keeps a deliberate 12-slot choice stable.
+- Clarify the direct Netherite progression in backpack help and the recipe
+  browser: Diamond Backpack + vanilla Netherite Upgrade Smithing Template +
+  Netherite Ingot, with the backpack's complete component state preserved.
+- Retain the newer client scenarios as porting references; Fabric 1.21.1 does
+  not run that client GameTest API. Add a selectable server GameTest filter.
+
+## 0.5.0-alpha+mc1.21.1
 
 - Target Minecraft 1.21.1, Fabric and Java 21 on the separate
-  `codex/minecraft-1.21.1-cobblemon` branch for Cobblemon 1.7.3.
+  `main-1.21` branch for Cobblemon 1.7.3.
 - Port storage, upgrades, equipment, menus, rendering, data components, recipes
   and native item/fluid/Energy API connections to the older game APIs.
 - Keep stacked conduits and per-interface searchable item/fluid allow/block

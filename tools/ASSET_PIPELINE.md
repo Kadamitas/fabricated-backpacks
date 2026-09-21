@@ -80,8 +80,9 @@ infinity and omega upgrades have no survival recipe.
 plus a `source` item ID. Their serializer must copy the input backpack's complete
 component state when changing tiers. `fabricated_backpacks:backpack_smithing`
 uses `template`, `base`, `addition` and `result` and must preserve the base stack.
-The generated tables intentionally do not substitute ordinary lossy crafting
-for these transitions.
+The built-in final-tier recipe directly combines a Diamond Backpack, the vanilla
+Netherite Upgrade Smithing Template and a Netherite Ingot. Generated tables never
+substitute ordinary lossy crafting for these transitions.
 
 `fabricated_backpacks:dye_backpack` is a special recipe with no static result.
 The runtime recipe computes body or trim colors from the actual input while

@@ -4,8 +4,8 @@
 
 Modular backpacks for **Minecraft Java Edition 1.21.1 on Fabric**.
 
-**0.5.0-alpha+mc1.21.1 is a development port for Cobblemon 1.7.3.**
-This separate branch is `codex/minecraft-1.21.1-cobblemon`; the 26.2 line is kept separately.
+**1.0.0+mc1.21.1 is the planned release version of the Cobblemon 1.7.3 port; it is not yet release-verified.**
+This separate branch is `main-1.21`; the current Minecraft line is kept separately.
 Use a new or backed-up **1.21.1** world. Never open a 26.2 world in this older game.
 The feature list describes the current implementation, not a claim that every
 interaction or multiplayer scenario has passed acceptance testing. Release
@@ -37,7 +37,7 @@ is not bundled in this mod.
   templates that never copy physical inventory.
 
 See [Features and current limits](docs/FEATURES.md) for the full catalog,
-workstation behavior and remaining alpha work.
+workstation behavior and remaining work.
 
 ## Requirements
 

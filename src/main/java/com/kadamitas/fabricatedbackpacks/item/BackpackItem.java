@@ -1,6 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.item;
 
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
+import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenus;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import net.minecraft.core.BlockPos;
@@ -99,6 +100,9 @@ public final class BackpackItem extends BlockItem {
                     com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot.EMPTY).size());
             lines.add(Component.translatable("tooltip.fabricated_backpacks.capacity", slots));
             lines.add(Component.translatable("tooltip.fabricated_backpacks.upgrade_slots", upgrades));
+            if (tier == BackpackTier.DIAMOND) {
+                lines.add(Component.translatable("tooltip.fabricated_backpacks.netherite_progression"));
+            }
         });
         lines.add(Component.translatable("tooltip.fabricated_backpacks.open"));
         lines.add(Component.translatable("tooltip.fabricated_backpacks.equip"));

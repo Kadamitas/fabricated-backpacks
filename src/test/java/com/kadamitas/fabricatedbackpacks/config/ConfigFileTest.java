@@ -39,20 +39,50 @@ class ConfigFileTest {
         assertEquals(malformed, Files.readString(file));
     }
 
+    @Test void legacyJukeboxDefaultMigratesInMemoryWithoutOverwritingTheSourceFile() throws Exception {
+        Path file = directory.resolve("legacy.json");
+        String legacy = """
+                {"format":1,"upgrades":{"jukebox":{"size":12,"rowWidth":5}}}
+                """;
+        Files.writeString(file, legacy);
+
+        ServerConfig migrated = ConfigFile.loadOrCreate(file);
+        assertEquals(ServerConfig.CURRENT_FORMAT, migrated.format());
+        assertEquals(24, migrated.upgrades().inventorySlots(UpgradeKind.ADVANCED_JUKEBOX));
+        assertEquals(5, migrated.upgrades().jukebox().rowWidth());
+        assertEquals(legacy, Files.readString(file));
+    }
+
+    @Test void configVersionDistinguishesTheHistoricalDefaultFromExplicitAndCustomSizes() {
+        ServerConfig legacyCustom = ConfigFile.decode("""
+                {"format":1,"upgrades":{"jukebox":{"size":13}}}
+                """);
+        ServerConfig currentTwelve = ConfigFile.decode("""
+                {"format":2,"upgrades":{"jukebox":{"size":12}}}
+                """);
+        ServerConfig currentDefaults = ConfigFile.decode("{}");
+
+        assertEquals(ServerConfig.CURRENT_FORMAT, legacyCustom.format());
+        assertEquals(13, legacyCustom.upgrades().inventorySlots(UpgradeKind.ADVANCED_JUKEBOX));
+        assertEquals(12, currentTwelve.upgrades().inventorySlots(UpgradeKind.ADVANCED_JUKEBOX));
+        assertEquals(24, currentDefaults.upgrades().inventorySlots(UpgradeKind.ADVANCED_JUKEBOX));
+        assertEquals(ServerConfig.CURRENT_FORMAT, ConfigFile.decode(ConfigFile.encode(currentTwelve)).format());
+    }
+
     @Test void upgradePartialOverridesRetainOtherFamiliesAndRoundTripCustomShapes() {
         ServerConfig changed = ConfigFile.decode("""
                 {"upgrades":{"filters":{"advanced_pickup_upgrade":{"slots":64,"columns":6}},
                   "groupLimits":{"cooking":2},"itemLimits":{"smelting_upgrade":0},
                   "cooking":{"speed":0.25,"fuelEfficiency":4,"inputFilters":32,"fuelFilters":32},
                   "compacting":{"extraShapes":[],"itemOverrides":{"minecraft:clay_ball":[{"width":2,"height":2,"pattern":"1110"}]}},
-                  "jukebox":{"size":16,"rowWidth":6},"allowAlwaysVoid":false}}
+                  "jukebox":{"size":200,"rowWidth":6},"allowAlwaysVoid":false}}
                 """);
         var rules = changed.upgrades();
         assertEquals(64, rules.filterSlots(UpgradeKind.ADVANCED_PICKUP));
         assertEquals(9, rules.filterSlots(UpgradeKind.PICKUP));
         assertEquals(64, rules.filterSlots(UpgradeKind.AUTO_SMELTING));
-        assertEquals(1, rules.inventorySlots(UpgradeKind.JUKEBOX));
-        assertEquals(16, rules.inventorySlots(UpgradeKind.ADVANCED_JUKEBOX));
+        assertEquals(2, rules.inventorySlots(UpgradeKind.JUKEBOX));
+        assertEquals(200, rules.inventorySlots(UpgradeKind.ADVANCED_JUKEBOX));
         assertEquals(0, rules.itemLimit(UpgradeKind.SMELTING));
         assertEquals(2, rules.groupLimit(UpgradeKind.SMOKING));
         assertEquals("1110", rules.compacting().itemOverrides().get("minecraft:clay_ball").getFirst().pattern());

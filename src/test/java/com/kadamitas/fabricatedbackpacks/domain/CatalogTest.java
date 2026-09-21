@@ -70,7 +70,7 @@ class CatalogTest {
 
     @ParameterizedTest
     @CsvSource({
-            "JUKEBOX,1", "ADVANCED_JUKEBOX,12", "CRAFTING,9", "STONECUTTER,1",
+            "JUKEBOX,2", "ADVANCED_JUKEBOX,24", "CRAFTING,9", "STONECUTTER,1",
             "ANVIL,2", "SMITHING,3", "TANK,4", "BATTERY,2",
             "SMELTING,3", "AUTO_SMELTING,3", "SMOKING,3", "AUTO_SMOKING,3",
             "BLASTING,3", "AUTO_BLASTING,3"

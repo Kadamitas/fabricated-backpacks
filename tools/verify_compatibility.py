@@ -24,7 +24,7 @@ import verify_evidence as evidence
 ROOT = evidence.ROOT
 OUTPUT = ROOT / "build/verification"
 MINECRAFT_VERSION = "1.21.1"
-MOD_VERSION = "0.5.0-alpha+mc1.21.1"
+MOD_VERSION = "1.0.0+mc1.21.1"
 FABRIC_API_VERSION = "0.116.15+1.21.1"
 ENERGY_VERSION = "4.1.0"
 COBBLEMON_VERSION = "1.7.3+1.21.1"

@@ -84,7 +84,7 @@ final class BackpackContentsTooltip implements ClientTooltipComponent {
                 if (stack.isEmpty()) continue;
                 graphics.renderFakeItem(stack, left + 1, top + 1);
                 graphics.renderItemDecorations(font, stack, left + 1, top + 1, "");
-                if (stack.getCount() > 1) drawCount(graphics, font, compactCount(stack.getCount()), left, top);
+                if (stack.getCount() > 1) drawCount(graphics, font, Integer.toString(stack.getCount()), left, top);
             }
         } finally {
             graphics.pose().popPose();
@@ -104,12 +104,4 @@ final class BackpackContentsTooltip implements ClientTooltipComponent {
         }
     }
 
-    private static String compactCount(int count) {
-        if (count < 1_000) return Integer.toString(count);
-        int unit = count < 1_000_000 ? 1_000 : count < 1_000_000_000 ? 1_000_000 : 1_000_000_000;
-        String suffix = unit == 1_000 ? "k" : unit == 1_000_000 ? "M" : "B";
-        int whole = count / unit;
-        int tenth = (int) ((long) count % unit * 10 / unit);
-        return whole + (whole < 10 && tenth != 0 ? "." + tenth : "") + suffix;
-    }
 }
