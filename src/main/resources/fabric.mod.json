@@ -19,7 +19,7 @@
   },
   "mixins": ["fabricated_backpacks.mixins.json", {"config":"fabricated_backpacks.client.mixins.json","environment":"client"}],
   "depends": {
-    "fabricloader": ">=0.19.3",
+    "fabricloader": ">=0.19.5",
     "minecraft": "26.2",
     "java": ">=25",
     "fabric-api": ">=0.158.0+26.2",

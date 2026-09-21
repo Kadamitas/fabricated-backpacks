@@ -43,7 +43,7 @@ workstation behavior and remaining alpha work.
 | --- | --- |
 | Minecraft Java Edition | 26.2 |
 | Java | 25 |
-| Fabric Loader | 0.19.3 or newer |
+| Fabric Loader | 0.19.5 or newer |
 | Fabric API | 0.158.0+26.2 or newer compatible 26.2 build |
 | Team Reborn Energy API | 5.0.0, included in the built mod JAR |
 
