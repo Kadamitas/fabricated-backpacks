@@ -1,10 +1,10 @@
 package com.kadamitas.fabricatedbackpacks.automation.conduit;
 
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.SnapshotJournal;
 
 /** One allowance per physical endpoint, shared by its faces, network components and API callers. */
-final class ConduitBudget extends SnapshotParticipant<ConduitBudget.State> {
+final class ConduitBudget extends SnapshotJournal<ConduitBudget.State> {
     record State(long start, long used, long received) {}
     private long start = Long.MIN_VALUE;
     private long used;
@@ -32,5 +32,5 @@ final class ConduitBudget extends SnapshotParticipant<ConduitBudget.State> {
         return start == Long.MIN_VALUE || now < start || now - start >= interval;
     }
     @Override protected State createSnapshot() { return new State(start, used, received); }
-    @Override protected void readSnapshot(State previous) { start = previous.start; used = previous.used; received = previous.received; }
+    @Override protected void revertToSnapshot(State previous) { start = previous.start; used = previous.used; received = previous.received; }
 }

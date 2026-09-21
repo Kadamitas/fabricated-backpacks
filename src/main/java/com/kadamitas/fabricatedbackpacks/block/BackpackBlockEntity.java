@@ -12,7 +12,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.WorldlyContainer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
@@ -23,9 +22,15 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
-public final class BackpackBlockEntity extends BlockEntity implements WorldlyContainer {
+// External automation uses native sided capabilities, never raw Container slots that bypass
+// nested routing and transfer policy. The public delegates below remain available to our own UI.
+public final class BackpackBlockEntity extends BlockEntity {
+    public record Colors(int body, int trim) {
+        public int get(int index) { return index == 0 ? body : trim; }
+    }
+    public static final net.minecraftforge.client.model.data.ModelProperty<Colors> COLOR_MODEL = new net.minecraftforge.client.model.data.ModelProperty<>();
     private ItemStack stack;
     private BagInventory inventory;
     private int viewers;
@@ -39,15 +44,31 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
         stack = new ItemStack(state.getBlock());
     }
     public ItemStack stack() { return stack; }
+    /** Explicit player interaction preserves range checks without exposing raw slots to automation. */
+    public static Container interactionInventory(BlockEntity entity, Player player) {
+        if (entity instanceof BackpackBlockEntity backpack)
+            return backpack.stillValid(player) ? backpack.inventory() : null;
+        return entity instanceof Container container && container.stillValid(player) ? container : null;
+    }
+    @Override public net.minecraftforge.client.model.data.ModelData getModelData() {
+        return net.minecraftforge.client.model.data.ModelData.builder().with(COLOR_MODEL, new Colors(meshTint(stack, 0), meshTint(stack, 1))).build();
+    }
     public EnergyStorage energyStorage(Direction side) { return energyTransfer.storage(side); }
     public int clientEnergySupport() { return clientEnergySupport; }
     public BagInventory inventory() {
         if (inventory == null) {
             inventory = BagInventory.of(stack);
-            inventory.onChange(this::setChanged);
+            inventory.onChange(this::inventoryChanged);
             if (level instanceof ServerLevel serverLevel) com.kadamitas.fabricatedbackpacks.world.MobLoot.materialize(inventory, serverLevel, worldPosition, null);
         }
         return inventory;
+    }
+    private int exposureSignature = -1;
+    /** Upgrade changes alter which item, fluid and energy handlers this block exposes. */
+    private void inventoryChanged() {
+        setChanged();
+        int signature = inventory == null ? -1 : inventory.installedUpgrades().hashCode();
+        if (signature != exposureSignature) { exposureSignature = signature; if (level != null) com.kadamitas.fabricatedbackpacks.platform.transfer.NativeCapabilities.invalidate(this); }
     }
     public void setStack(ItemStack newStack) {
         if (!BackpackRegistry.isBackpack(newStack)) throw new IllegalArgumentException("Not a backpack");
@@ -55,6 +76,7 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
         inventory = null;
         energyTransfer.contentsReplaced();
         setChanged();
+        if (level != null) com.kadamitas.fabricatedbackpacks.platform.transfer.NativeCapabilities.invalidate(this);
         synchronize();
     }
     public int viewers() { return viewers; }
@@ -65,7 +87,10 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
         if (level != null && !level.isClientSide() && !isRemoved()) level.setBlock(worldPosition, getBlockState().setValue(BackpackBlock.OPEN, viewers > 0), 3);
     }
     public void synchronize() {
-        if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        if (level != null) {
+            if (level.isClientSide()) requestModelDataUpdate();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
     }
     @Override protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
@@ -86,6 +111,7 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
             // BE data updates the live lid immediately, but the tinted body lives in the chunk mesh.
             // An equal block state does not otherwise invalidate that mesh after a dye update.
             BlockState state = getBlockState();
+            requestModelDataUpdate();
             level.sendBlockUpdated(worldPosition, state, state, Block.UPDATE_CLIENTS);
         }
     }
@@ -125,28 +151,28 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
             }
         }
     }
-    @Override public int getContainerSize() { return inventory().getContainerSize(); }
-    @Override public boolean isEmpty() { return inventory().isEmpty(); }
-    @Override public ItemStack getItem(int slot) { return inventory().getItem(slot); }
-    @Override public ItemStack removeItem(int slot, int amount) { ItemStack result = inventory().removeItem(slot, amount); setChanged(); return result; }
-    @Override public ItemStack removeItemNoUpdate(int slot) { return inventory().removeItemNoUpdate(slot); }
-    @Override public void setItem(int slot, ItemStack item) { inventory().setItem(slot, item); setChanged(); }
-    @Override public boolean stillValid(Player player) { return !isRemoved() && player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(worldPosition)) <= 64; }
-    @Override public void clearContent() { inventory().clearContent(); setChanged(); }
-    @Override public int getMaxStackSize() { return Integer.MAX_VALUE; }
-    @Override public int getMaxStackSize(ItemStack item) { return inventory().capacity(item); }
-    @Override public boolean canPlaceItem(int slot, ItemStack item) { return inventory().canPlaceItem(slot, item); }
-    @Override public boolean canTakeItem(Container target, int slot, ItemStack item) { return inventory().canTakeItem(target, slot, item); }
+    public int getContainerSize() { return inventory().getContainerSize(); }
+    public boolean isEmpty() { return inventory().isEmpty(); }
+    public ItemStack getItem(int slot) { return inventory().getItem(slot); }
+    public ItemStack removeItem(int slot, int amount) { ItemStack result = inventory().removeItem(slot, amount); setChanged(); return result; }
+    public ItemStack removeItemNoUpdate(int slot) { return inventory().removeItemNoUpdate(slot); }
+    public void setItem(int slot, ItemStack item) { inventory().setItem(slot, item); setChanged(); }
+    public boolean stillValid(Player player) { return !isRemoved() && player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(worldPosition)) <= 64; }
+    public void clearContent() { inventory().clearContent(); setChanged(); }
+    public int getMaxStackSize() { return Integer.MAX_VALUE; }
+    public int getMaxStackSize(ItemStack item) { return inventory().capacity(item); }
+    public boolean canPlaceItem(int slot, ItemStack item) { return inventory().canPlaceItem(slot, item); }
+    public boolean canTakeItem(Container target, int slot, ItemStack item) { return inventory().canTakeItem(target, slot, item); }
     private boolean connectionAllowed(Direction side) {
         return !isRemoved() && com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime.connectionAllowed(level, worldPosition, side);
     }
-    @Override public int[] getSlotsForFace(Direction side) {
+    public int[] getSlotsForFace(Direction side) {
         return connectionAllowed(side) ? java.util.stream.IntStream.range(0, getContainerSize()).toArray() : new int[0];
     }
-    @Override public boolean canPlaceItemThroughFace(int slot, ItemStack item, Direction side) {
+    public boolean canPlaceItemThroughFace(int slot, ItemStack item, Direction side) {
         return connectionAllowed(side) && inventory().canPlaceItem(slot, item);
     }
-    @Override public boolean canTakeItemThroughFace(int slot, ItemStack item, Direction side) {
+    public boolean canTakeItemThroughFace(int slot, ItemStack item, Direction side) {
         return connectionAllowed(side) && inventory().canTakeItem(null, slot, item);
     }
 }

@@ -4,13 +4,15 @@ import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.SnapshotJournal;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.neoforge.NativeEnergyHandler;
+import com.kadamitas.fabricatedbackpacks.platform.neoforge.EnergyHandler;
 import java.util.Objects;
 
-/** Team Reborn Energy storage with rollback-safe item-component persistence. */
-public final class BackpackBattery extends SnapshotParticipant<ResourceSettingsSnapshot> implements EnergyStorage {
+/** Native NeoForge energy storage with rollback-safe item-component persistence. */
+public final class BackpackBattery extends SnapshotJournal<ResourceSettingsSnapshot> implements EnergyStorage {
     private final BagInventory bag;
     private final InstalledUpgrade upgrade;
     private final Runnable committed;
@@ -23,6 +25,8 @@ public final class BackpackBattery extends SnapshotParticipant<ResourceSettingsS
     }
 
     public BackpackBattery(BagInventory bag, InstalledUpgrade upgrade) { this(bag, upgrade, bag::save); }
+
+    public EnergyHandler nativeHandler() { return new NativeEnergyHandler(this); }
 
     private boolean attached() {
         return upgrade.slot() >= 0 && upgrade.slot() < bag.upgrades().getContainerSize()
@@ -67,10 +71,10 @@ public final class BackpackBattery extends SnapshotParticipant<ResourceSettingsS
 
     private void write(long amount) { bag.updateSettings(upgrade, tag -> tag.putLong("amount", amount)); }
     @Override protected ResourceSettingsSnapshot createSnapshot() { return ResourceSettingsSnapshot.capture(upgrade.stack(), "amount"); }
-    @Override protected void readSnapshot(ResourceSettingsSnapshot snapshot) {
+    @Override protected void revertToSnapshot(ResourceSettingsSnapshot snapshot) {
         bag.upgrades();
         snapshot.restore(upgrade.stack());
         bag.upgrades().setChanged();
     }
-    @Override protected void onFinalCommit() { committed.run(); }
+    @Override protected void onRootCommit(ResourceSettingsSnapshot original) { committed.run(); }
 }

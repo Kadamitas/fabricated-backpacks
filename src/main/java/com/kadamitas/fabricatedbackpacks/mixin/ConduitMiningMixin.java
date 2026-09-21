@@ -14,9 +14,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 abstract class ConduitMiningMixin {
     @Shadow protected ServerPlayer player;
 
-    // Fabric invokes every BEFORE callback at playerWillDestroy, before this distinct later call.
+    // Forge protection, item cancellation and adventure checks have completed here, before tool wear/removal.
     @Inject(method = "destroyBlock", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/server/level/ServerLevel;removeBlock(Lnet/minecraft/core/BlockPos;Z)Z"), cancellable = true)
+            target = "Lnet/minecraft/server/level/ServerPlayer;preventsBlockDrops()Z"), cancellable = true)
     private void fabricatedBackpacks$mineOneConduit(BlockPos position, CallbackInfoReturnable<Boolean> result) {
         ConduitMining.Result mined = ConduitMining.complete(player, position);
         if (mined != ConduitMining.Result.PASS) result.setReturnValue(mined == ConduitMining.Result.REMOVED);

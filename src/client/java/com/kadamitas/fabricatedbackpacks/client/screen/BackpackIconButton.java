@@ -86,6 +86,7 @@ public final class BackpackIconButton extends Button {
     public BackpackIconButton setSelected(boolean value) { selected = value; return this; }
     public BackpackIconButton setEmbedded(boolean value) { embedded = value; return this; }
     public boolean isSelected() { return selected; }
+    public boolean isAutomaticTooltip() { return automaticTooltip; }
     public BackpackIconButton setIcon(Icon value) { icon = Objects.requireNonNull(value); return this; }
     public Icon getIcon() { return icon; }
     /** Keep the accessible message while allowing a screen to own contextual tooltip visibility. */

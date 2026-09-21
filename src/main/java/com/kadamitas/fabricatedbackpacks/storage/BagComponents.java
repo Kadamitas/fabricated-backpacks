@@ -24,7 +24,7 @@ public final class BagComponents {
     }
 
     private static <T> DataComponentType<T> register(String path, Codec<T> codec) {
-        return Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE,
+        return com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(BuiltInRegistries.DATA_COMPONENT_TYPE,
                 Identifier.fromNamespaceAndPath("fabricated_backpacks", path),
                 DataComponentType.<T>builder().persistent(codec)
                         .networkSynchronized(ByteBufCodecs.fromCodecWithRegistries(codec)).cacheEncoding().build());

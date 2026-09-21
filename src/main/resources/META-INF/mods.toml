@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="[66,)"
+license="MIT"
+
+[[mods]]
+modId="fabricated_backpacks"
+version="${version}"
+displayName="Fabricated Backpacks"
+authors="Kadamitas"
+displayURL="https://github.com/Kadamitas/fabricated-backpacks"
+features={java_version="[25,)"}
+description='''Upgradeable backpacks, resource storage, and automation.'''
+
+[[dependencies.fabricated_backpacks]]
+modId="forge"
+mandatory=true
+versionRange="[66.0.2,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.fabricated_backpacks]]
+modId="minecraft"
+mandatory=true
+versionRange="[26.3,26.4)"
+ordering="NONE"
+side="BOTH"

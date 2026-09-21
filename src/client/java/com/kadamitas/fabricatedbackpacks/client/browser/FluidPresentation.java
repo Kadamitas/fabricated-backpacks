@@ -1,8 +1,8 @@
 package com.kadamitas.fabricatedbackpacks.client.browser;
 
-import net.fabricmc.fabric.api.transfer.v1.client.fluid.FluidVariantRendering;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariantAttributes;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariantRendering;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariantAttributes;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -42,8 +42,7 @@ public final class FluidPresentation {
     public static void draw(GuiGraphicsExtractor graphics, Identifier id, int x, int y) {
         var variant = variant(id).orElse(null);
         if (variant == null) return;
-        var sprite = Minecraft.getInstance().getModelManager().getFluidStateModelSet()
-                .get(variant.getFluid().defaultFluidState()).stillMaterial().sprite();
+        var sprite = FluidVariantRendering.getSprite(variant);
         int color = FluidVariantRendering.getColor(variant) | 0xFF000000;
         if (sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
             // Some registry fluids have no world model. A tinted droplet is an explicit fluid icon,

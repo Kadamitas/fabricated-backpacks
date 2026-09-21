@@ -1,14 +1,14 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SlottedStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StoragePreconditions;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageView;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SingleSlotStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;

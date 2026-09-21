@@ -8,16 +8,16 @@ import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
-import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerItemContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StoragePreconditions;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageView;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -130,7 +130,7 @@ final class BackpackItemAccess {
         // The read cache is never the mutation target. This also identifies UUIDs initialized in
         // the detached copy, so retained child paths cannot accidentally adopt a replacement child.
         ItemVariant initialized = ItemVariant.of(bag.stack());
-        try (Transaction nested = transaction.openNested()) {
+        try (Transaction nested = Transaction.open(transaction)) {
             long moved = mutation.apply(bag, nested);
             if (moved == 0) return 0;
             bag.save();

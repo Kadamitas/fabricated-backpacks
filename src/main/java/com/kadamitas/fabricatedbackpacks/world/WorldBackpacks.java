@@ -10,8 +10,9 @@ import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.upgrade.JukeboxRuntime;
-import net.fabricmc.fabric.api.entity.FakePlayer;
-import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import com.kadamitas.fabricatedbackpacks.platform.FakePlayer;
+import com.kadamitas.fabricatedbackpacks.platform.FakePlayerFactory;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerLivingEntityEvents;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -55,22 +56,21 @@ public final class WorldBackpacks {
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
             if (entity instanceof Mob mob) drop(mob, source);
         });
-        ServerLivingEntityEvents.MOB_CONVERSION.register(WorldBackpacks::converted);
     }
 
     public static void onFinalize(Mob mob, DifficultyInstance difficulty, EntitySpawnReason reason) {
         if (mob.level().isClientSide() || mob.getType().getCategory() != MobCategory.MONSTER
                 || reason == EntitySpawnReason.LOAD || reason == EntitySpawnReason.CONVERSION || reason == EntitySpawnReason.DIMENSION_TRAVEL
-                || mob.getAttachedOrElse(WorldComponents.SPAWN_CHECKED, false)) return;
+                || WorldComponents.SPAWN_CHECKED.get(mob)) return;
         // Subclasses add ordinary armor after Mob.finalizeSpawn returns; inspect equipment next tick.
-        mob.setAttached(WorldComponents.PENDING_DIFFICULTY, difficulty.getEffectiveDifficulty());
+        WorldComponents.PENDING_DIFFICULTY.set(mob, difficulty.getEffectiveDifficulty());
     }
 
     public static void tick(Mob mob) {
         if (!(mob.level() instanceof ServerLevel level)) return;
-        Float pending = mob.getAttached(WorldComponents.PENDING_DIFFICULTY);
+        Float pending = WorldComponents.PENDING_DIFFICULTY.getExisting(mob);
         if (pending != null) {
-            mob.removeAttached(WorldComponents.PENDING_DIFFICULTY);
+            WorldComponents.PENDING_DIFFICULTY.remove(mob);
             evaluate(mob, pending, BackpackConfig.get().carriers(), mob.getRandom());
         }
         if (!mob.isAlive() || !isCarrier(mob)) return;
@@ -91,8 +91,8 @@ public final class WorldBackpacks {
     /** Deterministic entry point used by the deferred spawn hook and server tests. Never rerolls a mob. */
     public static boolean evaluate(Mob mob, double difficulty, ServerConfig.Carriers rules, RandomSource random) {
         rules.minimumTier(difficulty); // Validate before changing the persisted evaluation marker.
-        if (!(mob.level() instanceof ServerLevel) || mob.getAttachedOrElse(WorldComponents.SPAWN_CHECKED, false)) return false;
-        mob.setAttached(WorldComponents.SPAWN_CHECKED, true);
+        if (!(mob.level() instanceof ServerLevel) || WorldComponents.SPAWN_CHECKED.get(mob)) return false;
+        WorldComponents.SPAWN_CHECKED.set(mob, true);
         if (!mob.isAlive() || mob.getType().getCategory() != MobCategory.MONSTER || !mob.getItemBySlot(EquipmentSlot.CHEST).isEmpty()
                 || mob instanceof Raider raider && raider.hasRaid() || random.nextDouble() >= rules.spawnChance()) return false;
         BackpackTier tier = CarrierSelection.choose(rules, difficulty, random::nextInt).orElse(null);
@@ -233,7 +233,7 @@ public final class WorldBackpacks {
         bag.save();
     }
 
-    private static void converted(Mob previous, Mob converted, ConversionParams context) {
+    public static void converted(Mob previous, Mob converted, ConversionParams context) {
         if (!context.type().shouldDiscardAfterConversion()) return; // A split must not multiply equipment.
         boolean oldCarrier = isCarrier(previous);
         boolean newCarrier = isCarrier(converted);
@@ -252,8 +252,8 @@ public final class WorldBackpacks {
         float fraction = previous.getMaxHealth() <= 0 ? 1 : previous.getHealth() / previous.getMaxHealth();
         applyHealth(converted, bag.settings().getDoubleOr("spawn_health", 0), fraction);
         converted.setDropChance(EquipmentSlot.CHEST, 0);
-        converted.setAttached(WorldComponents.SPAWN_CHECKED, true);
-        converted.removeAttached(WorldComponents.PENDING_DIFFICULTY);
+        WorldComponents.SPAWN_CHECKED.set(converted, true);
+        WorldComponents.PENDING_DIFFICULTY.remove(converted);
     }
 
     /** Do not turn a carrier's permanent combat buffs into a collectible beneficial creeper cloud. */

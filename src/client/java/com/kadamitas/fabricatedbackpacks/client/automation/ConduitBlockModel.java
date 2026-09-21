@@ -5,71 +5,81 @@ import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitGeometry;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitKind;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitVisualState;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
-import net.fabricmc.fabric.api.client.model.loading.v1.wrapper.WrapperBlockStateModel;
-import net.fabricmc.fabric.api.client.renderer.v1.Renderer;
-import net.fabricmc.fabric.api.client.renderer.v1.mesh.Mesh;
-import net.fabricmc.fabric.api.client.renderer.v1.mesh.MutableQuadView;
-import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
-import net.fabricmc.fabric.api.util.TriState;
-import net.minecraft.client.renderer.block.BlockAndTintGetter;
-import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
-import net.minecraft.client.resources.model.ModelBaker;
-import net.minecraft.client.resources.model.sprite.Material;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
-
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Predicate;
+import java.util.function.Function;
+import net.minecraft.client.model.geom.builders.UVPair;
+import net.minecraft.client.renderer.FaceInfo;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
+import net.minecraft.client.resources.model.sprite.Material;
+import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.phys.AABB;
+import net.minecraftforge.client.model.data.ModelData;
+import org.joml.Vector3f;
+import org.joml.Vector3fc;
 
-/** Immutable public snapshots key chunk geometry; there is no per-frame conduit renderer. */
-final class ConduitBlockModel extends WrapperBlockStateModel {
+/** Immutable public snapshots key native chunk geometry; no per-frame conduit renderer. */
+final class ConduitBlockModel implements BlockStateModel {
     private static final String[] ROLES = {"tube", "collar", "endpoint", "endpoint_insert", "endpoint_extract", "endpoint_both"};
     private final Map<String, Material.Baked> materials;
-    private final Map<ConduitVisualState, Mesh> meshes = new LinkedHashMap<>(64, .75F, true);
+    private final Map<ConduitVisualState, BlockStateModelPart> meshes = new LinkedHashMap<>(64, .75F, true);
+    private final int materialFlags;
+    private final BlockStateModel delegate;
 
-    ConduitBlockModel(BlockStateModel fallback, ModelBaker baker) {
-        super(fallback);
+    ConduitBlockModel(BlockStateModel fallback, Function<Identifier, TextureAtlasSprite> sprites) {
+        delegate = fallback;
         Map<String, Material.Baked> loaded = new HashMap<>();
+        int flags = fallback.materialFlags();
         for (ConduitKind kind : ConduitKind.values()) for (String role : ROLES) {
             String name = kind.name().toLowerCase(Locale.ROOT) + "_" + role;
-            loaded.put(name, baker.materials().get(new Material(BackpackRegistry.id("block/automation/" + name)),
-                    () -> "fabricated_backpacks:conduit_bundle/" + name));
+            var material = new Material.Baked(sprites.apply(BackpackRegistry.id("block/automation/" + name)), false);
+            loaded.put(name, material);
+            flags |= BakedQuad.MaterialInfo.of(material, material.sprite().transparency(), -1, null, 0).flags();
         }
         materials = Map.copyOf(loaded);
+        materialFlags = flags;
     }
 
-    private static ConduitVisualState snapshot(BlockAndTintGetter view, BlockPos position) {
-        return view.getBlockEntity(position) instanceof ConduitBundleBlockEntity bundle ? bundle.visualState() : ConduitVisualState.EMPTY;
+    private static ConduitVisualState snapshot(ModelData data) {
+        // Forge supplies the model-data snapshot to its native chunk mesher.
+        // Never reach into the live block entity from this thread.
+        var visual = data.get(ConduitBundleBlockEntity.VISUAL_MODEL);
+        return visual == null ? ConduitVisualState.EMPTY : visual;
     }
-    @Override public Object createGeometryKey(BlockAndTintGetter view, BlockPos position, BlockState state, RandomSource random) {
-        return snapshot(view, position);
-    }
-    @Override public Material.Baked particleMaterial(BlockAndTintGetter view, BlockPos position, BlockState state) {
-        ConduitVisualState visual = snapshot(view, position);
+
+    @Override public Material.Baked particleMaterial(ModelData data) {
+        ConduitVisualState visual = snapshot(data);
         for (ConduitKind kind : ConduitKind.values()) if (visual.has(kind)) return material(kind, "tube");
-        return wrapped.particleMaterial();
-    }
-    @Override public void emitQuads(QuadEmitter emitter, BlockAndTintGetter view, BlockPos position, BlockState state,
-                                    RandomSource random, Predicate<Direction> cullTest) {
-        ConduitVisualState visual = snapshot(view, position);
-        if (visual.installedMask() == 0) {
-            super.emitQuads(emitter, view, position, state, random, cullTest);
-            return;
-        }
-        mesh(visual).outputTo(emitter);
+        return delegate.particleMaterial(data);
     }
 
-    private synchronized Mesh mesh(ConduitVisualState state) {
-        Mesh found = meshes.get(state);
+    @Override public Material.Baked particleMaterial() { return delegate.particleMaterial(); }
+    @Override public int materialFlags() { return materialFlags; }
+
+    @Override public void collectParts(RandomSource random, List<BlockStateModelPart> output) {
+        delegate.collectParts(random, output);
+    }
+
+    @Override public void collectParts(RandomSource random, List<BlockStateModelPart> output, ModelData data) {
+        ConduitVisualState visual = snapshot(data);
+        if (visual.installedMask() == 0) {
+            delegate.collectParts(random, output, data);
+        } else output.add(mesh(visual));
+    }
+
+    private synchronized BlockStateModelPart mesh(ConduitVisualState state) {
+        BlockStateModelPart found = meshes.get(state);
         if (found != null) return found;
-        var builder = Renderer.get().mutableMesh();
-        QuadEmitter emitter = builder.emitter();
+        List<BakedQuad> quads = new ArrayList<>();
         var parts = ConduitGeometry.parts(state);
         for (ConduitGeometry.Part part : parts) {
             String role = switch (part.role()) {
@@ -79,29 +89,48 @@ final class ConduitBlockModel extends WrapperBlockStateModel {
                         ? state.inserting(part.kind(), part.side()) ? "endpoint_both" : "endpoint_extract"
                         : state.inserting(part.kind(), part.side()) ? "endpoint_insert" : "endpoint";
             };
-            AABB bounds = part.bounds();
             Material.Baked material = material(part.kind(), role);
             for (Direction face : Direction.values()) {
-                if (ConduitGeometry.coveredTubeCap(part, face, parts)) continue;
-                // Native square supplies six correct face windings. Scale it
-                // into the exact same cuboid used by collision and targeting.
-                emitter.square(face, 0, 0, 1, 1, 0);
-                for (int vertex = 0; vertex < 4; vertex++) {
-                    float x = (float) (bounds.minX + emitter.x(vertex) * (bounds.maxX - bounds.minX));
-                    float y = (float) (bounds.minY + emitter.y(vertex) * (bounds.maxY - bounds.minY));
-                    float z = (float) (bounds.minZ + emitter.z(vertex) * (bounds.maxZ - bounds.minZ));
-                    emitter.pos(vertex, x, y, z).normal(vertex, face.getStepX(), face.getStepY(), face.getStepZ());
-                }
-                emitter.cullFace(null).color(-1, -1, -1, -1).tintIndex(-1).ambientOcclusion(TriState.TRUE);
-                emitter.uvUnitSquare();
-                emitter.materialBake(material, MutableQuadView.BAKE_NORMALIZED).emit();
+                if (!ConduitGeometry.coveredTubeCap(part, face, parts)) quads.add(quad(part.bounds(), face, material));
             }
         }
-        Mesh result = builder.immutableCopy();
+        Material.Baked particle = material(parts.getFirst().kind(), "tube");
+        BlockStateModelPart result = new Geometry(List.copyOf(quads), particle,
+                quads.stream().mapToInt(quad -> quad.materialInfo().flags()).reduce(0, (a, b) -> a | b));
         if (meshes.size() >= 512) meshes.remove(meshes.keySet().iterator().next());
         meshes.put(state, result);
         return result;
     }
+
+    static Vector3fc[] vertices(AABB bounds, Direction face) {
+        var min = new Vector3f((float) bounds.minX, (float) bounds.minY, (float) bounds.minZ);
+        var max = new Vector3f((float) bounds.maxX, (float) bounds.maxY, (float) bounds.maxZ);
+        Vector3fc[] vertices = new Vector3fc[4];
+        for (int index = 0; index < vertices.length; index++)
+            vertices[index] = FaceInfo.fromFacing(face).getVertexInfo(index).select(min, max);
+        return vertices;
+    }
+
+    private static BakedQuad quad(AABB bounds, Direction face, Material.Baked material) {
+        Vector3fc[] vertices = vertices(bounds, face);
+        var sprite = material.sprite();
+        // Full texture on each cuboid face, matching the former unit-square UVs.
+        long uv0 = UVPair.pack(sprite.getU0(), sprite.getV0());
+        long uv1 = UVPair.pack(sprite.getU0(), sprite.getV1());
+        long uv2 = UVPair.pack(sprite.getU1(), sprite.getV1());
+        long uv3 = UVPair.pack(sprite.getU1(), sprite.getV0());
+        return new BakedQuad(vertices[0], vertices[1], vertices[2], vertices[3], uv0, uv1, uv2, uv3, face,
+                BakedQuad.MaterialInfo.of(material, sprite.transparency(), -1, null, 0));
+    }
+
+    private record Geometry(List<BakedQuad> quads, Material.Baked particleMaterial, int materialFlags)
+            implements BlockStateModelPart {
+        // Every face is uncullable against neighboring blocks, matching the
+        // exposed sub-block lanes; covered caps were removed geometrically above.
+        @Override public List<BakedQuad> getQuads(Direction side) { return side == null ? quads : List.of(); }
+        @Override public boolean useAmbientOcclusion() { return true; }
+    }
+
     private Material.Baked material(ConduitKind kind, String role) {
         return materials.get(kind.name().toLowerCase(Locale.ROOT) + "_" + role);
     }

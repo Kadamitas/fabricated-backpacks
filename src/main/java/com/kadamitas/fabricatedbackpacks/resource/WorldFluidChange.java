@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;

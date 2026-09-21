@@ -2,7 +2,7 @@ package com.kadamitas.fabricatedbackpacks.client.screen;
 
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import com.kadamitas.fabricatedbackpacks.platform.network.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;

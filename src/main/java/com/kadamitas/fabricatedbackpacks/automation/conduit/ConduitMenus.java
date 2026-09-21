@@ -1,10 +1,10 @@
 package com.kadamitas.fabricatedbackpacks.automation.conduit;
 
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
-import net.fabricmc.fabric.api.menu.v1.ExtendedMenuProvider;
-import net.fabricmc.fabric.api.menu.v1.ExtendedMenuType;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import com.kadamitas.fabricatedbackpacks.platform.menu.ExtendedMenuProvider;
+import com.kadamitas.fabricatedbackpacks.platform.menu.ExtendedMenuType;
+import com.kadamitas.fabricatedbackpacks.platform.network.PayloadTypeRegistry;
+import com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
@@ -16,7 +16,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 
 public final class ConduitMenus {
-    public static final ExtendedMenuType<ConduitMenu, BlockPos> CONDUIT = Registry.register(BuiltInRegistries.MENU,
+    public static final ExtendedMenuType<ConduitMenu, BlockPos> CONDUIT = com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(BuiltInRegistries.MENU,
             BackpackRegistry.id("conduit"), new ExtendedMenuType<>(ConduitMenu::new, BlockPos.STREAM_CODEC));
     private static boolean initialized;
     private ConduitMenus() {}
@@ -33,7 +33,7 @@ public final class ConduitMenus {
     }
     public static void open(ServerPlayer player, ConduitBundleBlockEntity bundle, Direction face) {
         if (!bundle.stillValid(player)) return;
-        player.openMenu(new ExtendedMenuProvider<BlockPos>() {
+        ExtendedMenuProvider.open(player, BlockPos.STREAM_CODEC, new ExtendedMenuProvider<BlockPos>() {
             @Override public BlockPos getScreenOpeningData(ServerPlayer viewer) { return bundle.getBlockPos(); }
             @Override public Component getDisplayName() { return Component.translatable("screen.fabricated_backpacks.conduit"); }
             @Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player viewer) {

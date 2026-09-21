@@ -7,8 +7,8 @@ import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerLifecycleEvents;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -28,20 +28,13 @@ public final class BackpackRuntime {
         ServerTickEvents.START_SERVER_TICK.register(BackpackIdentities::tick);
         ServerTickEvents.END_SERVER_TICK.register(BackpackRuntime::tick);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> { LIVE.remove(server); BackpackTraversal.stop(server); BackpackIdentities.stop(server); UpgradeEngine.stopAll(server); });
-        net.fabricmc.fabric.api.event.player.AttackBlockCallback.EVENT.register((player, level, hand, pos, face) -> {
-            if (player instanceof ServerPlayer serverPlayer && hand == net.minecraft.world.InteractionHand.MAIN_HAND)
-                for (BagInventory bag : carried(serverPlayer)) if (UpgradeEngine.blockAttack(bag, serverPlayer, level.getBlockState(pos), false)) break;
-            return net.minecraft.world.InteractionResult.PASS;
+        net.minecraftforge.event.entity.player.PlayerInteractEvent.LeftClickBlock.BUS.addListener((net.minecraftforge.event.entity.player.PlayerInteractEvent.LeftClickBlock event) -> {
+            if (event.getEntity() instanceof ServerPlayer serverPlayer && event.getAction() == net.minecraftforge.event.entity.player.PlayerInteractEvent.LeftClickBlock.Action.START)
+                for (BagInventory bag : carried(serverPlayer)) if (UpgradeEngine.blockAttack(bag, serverPlayer, event.getLevel().getBlockState(event.getPos()), false)) break;
         });
-        net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
-            if (player instanceof ServerPlayer serverPlayer && entity instanceof net.minecraft.world.entity.LivingEntity target)
+        net.minecraftforge.event.entity.player.AttackEntityEvent.BUS.addListener((net.minecraftforge.event.entity.player.AttackEntityEvent event) -> {
+            if (event.getEntity() instanceof ServerPlayer serverPlayer && event.getTarget() instanceof net.minecraft.world.entity.LivingEntity target)
                 for (BagInventory bag : carried(serverPlayer)) if (UpgradeEngine.entityAttack(bag, serverPlayer, target, false)) break;
-            return net.minecraft.world.InteractionResult.PASS;
-        });
-        net.fabricmc.fabric.api.event.player.PlayerPickItemEvents.BLOCK.register((player, pos, state, data) -> {
-            ItemStack desired = state.getCloneItemStack(player.level(), pos, false);
-            for (BagInventory bag : carried(player)) if (UpgradeEngine.pickBlock(bag, player, desired)) break;
-            return null;
         });
         for (var tier : com.kadamitas.fabricatedbackpacks.domain.BackpackTier.values()) {
             net.minecraft.world.level.block.DispenserBlock.registerBehavior(BackpackRegistry.item(tier), new net.minecraft.core.dispenser.OptionalDispenseItemBehavior() {
@@ -53,6 +46,11 @@ public final class BackpackRuntime {
                 }
             });
         }
+    }
+    public static void pickBlock(ServerPlayer player, net.minecraft.core.BlockPos pos) {
+        if (!player.isWithinBlockInteractionRange(pos, 1.0) || !player.level().isLoaded(pos)) return;
+        ItemStack desired = player.level().getBlockState(pos).getCloneItemStack(player.level(), pos, false);
+        for (BagInventory bag : carried(player)) if (UpgradeEngine.pickBlock(bag, player, desired)) break;
     }
     private static BagInventory handle(ServerPlayer player, ItemStack stack) {
         Map<ItemStack, BagInventory> live = LIVE.computeIfAbsent(player.level().getServer(), ignored -> new IdentityHashMap<>());
@@ -103,7 +101,9 @@ public final class BackpackRuntime {
                     }
                 }
             }
-            if (server.getTickCount() % 20 == 0) for (BagInventory bag : physicalCarried(player)) {
+            // Forge increments tickCount between Pre and Post. Archive in the same
+            // logical frame as the START identity repair, not one frame before it.
+            if ((server.getTickCount() - 1) % 20 == 0) for (BagInventory bag : physicalCarried(player)) {
                 seen.add(bag.stack());
                 archiveTree(bag, player.level(), player);
             }

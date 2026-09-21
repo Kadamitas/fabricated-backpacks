@@ -51,6 +51,13 @@ public final class ConduitBundleBlock extends BaseEntityBlock implements SimpleW
     @Override protected FluidState getFluidState(BlockState state) {
         return state.getValue(WATERLOGGED) ? Fluids.WATER.getSource(false) : super.getFluidState(state);
     }
+    @Override public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos position,
+                                                Player player, boolean willHarvest, FluidState fluid) {
+        // The server removes one selected lane. Keep the client block entity until its authoritative
+        // update arrives instead of letting generic client prediction delete every surviving lane.
+        if (level.isClientSide()) return false;
+        return super.onDestroyedByPlayer(state, level, position, player, willHarvest, fluid);
+    }
     @Override protected BlockState updateShape(BlockState state, LevelReader level, ScheduledTickAccess ticks, BlockPos pos,
                                                Direction direction, BlockPos neighbor, BlockState neighborState, RandomSource random) {
         if (state.getValue(WATERLOGGED)) ticks.scheduleTick(pos, Fluids.WATER, Fluids.WATER.getTickDelay(level));

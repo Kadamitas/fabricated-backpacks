@@ -1,7 +1,8 @@
 {
   "required": true,
   "package": "com.kadamitas.fabricatedbackpacks.client.mixin",
-  "compatibilityLevel": "JAVA_25",
-  "client": ["AvatarBackpackStateMixin", "ContainerScreenAccess", "SlotPositionAccess", "ConduitMiningPredictionMixin"],
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "client": ["AvatarBackpackStateMixin", "AvatarRenderStateMixin", "SlotPositionAccess"],
   "injectors": {"defaultRequire": 1}
 }

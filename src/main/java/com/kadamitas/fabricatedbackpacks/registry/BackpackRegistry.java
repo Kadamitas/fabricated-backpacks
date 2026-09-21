@@ -6,7 +6,6 @@ import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.item.BackpackItem;
 import com.kadamitas.fabricatedbackpacks.item.UpgradeItem;
-import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -38,7 +37,7 @@ public final class BackpackRegistry {
         for (BackpackTier tier : BackpackTier.values()) {
             var properties = BlockBehaviour.Properties.of().setId(ResourceKey.create(Registries.BLOCK, id(tier.id())))
                     .strength(1.5F).noOcclusion().sound(SoundType.WOOL).mapColor(MapColor.COLOR_BROWN);
-            var block = Registry.register(BuiltInRegistries.BLOCK, id(tier.id()), new BackpackBlock(properties));
+            var block = com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(BuiltInRegistries.BLOCK, id(tier.id()), new BackpackBlock(properties));
             BLOCKS.put(tier, block);
             Item.Properties itemProperties = properties(tier.id()).stacksTo(1);
             if (tier == BackpackTier.NETHERITE) itemProperties.fireResistant();
@@ -55,15 +54,15 @@ public final class BackpackRegistry {
                 register(path, new Item(properties(path)));
             }
         }
-        BLOCK_ENTITY = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, id("backpack"),
-                FabricBlockEntityTypeBuilder.create(BackpackBlockEntity::new, BLOCKS.values().toArray(Block[]::new)).build());
+        BLOCK_ENTITY = com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, id("backpack"),
+                new BlockEntityType<>(BackpackBlockEntity::new, java.util.Set.copyOf(BLOCKS.values())));
     }
 
     private static Item.Properties properties(String path) {
         return new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id(path)));
     }
     private static Item register(String path, Item item) {
-        Registry.register(BuiltInRegistries.ITEM, id(path), item);
+        com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(BuiltInRegistries.ITEM, id(path), item);
         ITEMS.put(path, item);
         return item;
     }

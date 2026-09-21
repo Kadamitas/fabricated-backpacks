@@ -7,8 +7,8 @@ import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import com.kadamitas.fabricatedbackpacks.upgrade.JukeboxRuntime;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import com.kadamitas.fabricatedbackpacks.platform.network.PayloadTypeRegistry;
+import com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -29,7 +29,7 @@ public final class BackpackNetworking {
         PayloadTypeRegistry.clientboundPlay().register(BagSettings.TYPE, BagSettings.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorkstationState.TYPE, WorkstationState.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ServerRules.TYPE, ServerRules.STREAM_CODEC);
-        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+        com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 sender.sendPacket(new ServerRules(com.kadamitas.fabricatedbackpacks.config.ConfigFile.encode(
                         com.kadamitas.fabricatedbackpacks.config.BackpackConfig.get()))));
         com.kadamitas.fabricatedbackpacks.menu.WorkstationMenus.setStateListener((player, state) ->
@@ -138,9 +138,10 @@ public final class BackpackNetworking {
                 menu.bag().stack().getOrDefault(BagComponents.MEMORY, InventorySnapshot.EMPTY)));
     }
     private static void transferLookedAt(ServerPlayer player, String action) {
-        if (!(player.pick(player.blockInteractionRange(), 1F, false) instanceof BlockHitResult hit)
-                || !(player.level().getBlockEntity(hit.getBlockPos()) instanceof Container target)) return;
-        if (!target.stillValid(player) || !player.level().mayInteract(player, hit.getBlockPos())) return;
+        if (!(player.pick(player.blockInteractionRange(), 1F, false) instanceof BlockHitResult hit)) return;
+        Container target = com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity.interactionInventory(
+                player.level().getBlockEntity(hit.getBlockPos()), player);
+        if (target == null || !player.level().mayInteract(player, hit.getBlockPos())) return;
         if (com.kadamitas.fabricatedbackpacks.config.RuleMatchers.block(player.level().getBlockState(hit.getBlockPos()),
                 com.kadamitas.fabricatedbackpacks.config.BackpackConfig.get().storage().blockedInteractions())) return;
         var bags = BackpackRuntime.carried(player);
