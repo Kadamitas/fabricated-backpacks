@@ -312,8 +312,7 @@ public final class BackpackClientGameTests implements NativeClientGameTest {
                     + controls.stream().map(button -> button.getMessage().getString()).toList());
             for (BackpackIconButton control : controls) {
                 String label = control.getMessage().getString();
-                var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) control)
-                        .fabricatedBackpacksTests$tooltip().get();
+                var tooltip = UiInspection.tooltip(control);
                 if (!expected) {
                     check(tooltip == null, "Upgrade context help stays hidden without Shift: " + label);
                     continue;
@@ -1036,13 +1035,13 @@ public final class BackpackClientGameTests implements NativeClientGameTest {
             var screen = (AbstractContainerScreen<?>) client.gui.screen();
             var menu = client.player.containerMenu;
             var slot = menu.slots.get(slotIndex);
-            var origin = (com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess) screen;
+            var origin = (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) screen;
             check(slot.isActive(), "The requested physical slot must be visible before a real mouse click: " + slotIndex);
-            check(origin.fabricatedBackpacks$left() + slot.x >= 0 && origin.fabricatedBackpacks$top() + slot.y >= 0
-                            && origin.fabricatedBackpacks$left() + slot.x + 16 <= screen.width
-                            && origin.fabricatedBackpacks$top() + slot.y + 16 <= screen.height,
+            check(origin.getLeftPos() + slot.x >= 0 && origin.getTopPos() + slot.y >= 0
+                            && origin.getLeftPos() + slot.x + 16 <= screen.width
+                            && origin.getTopPos() + slot.y + 16 <= screen.height,
                     "The requested physical slot must fit the actual viewport: " + slotIndex);
-            return new double[]{origin.fabricatedBackpacks$left() + slot.x + 8, origin.fabricatedBackpacks$top() + slot.y + 8};
+            return new double[]{origin.getLeftPos() + slot.x + 8, origin.getTopPos() + slot.y + 8};
         });
         clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
     }
@@ -1058,9 +1057,9 @@ public final class BackpackClientGameTests implements NativeClientGameTest {
             var screen = (AbstractContainerScreen<?>) client.gui.screen();
             var slot = client.player.containerMenu.slots.stream().filter(candidate -> candidate.container == client.player.getInventory()
                     && candidate.getContainerSlot() == inventorySlot).findFirst().orElseThrow();
-            var origin = (com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess) screen;
-            double x = origin.fabricatedBackpacks$left() + slot.x + 8;
-            double y = origin.fabricatedBackpacks$top() + slot.y + 8;
+            var origin = (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) screen;
+            double x = origin.getLeftPos() + slot.x + 8;
+            double y = origin.getTopPos() + slot.y + 8;
             return new double[]{x * client.getWindow().getScreenWidth() / client.getWindow().getGuiScaledWidth(),
                     y * client.getWindow().getScreenHeight() / client.getWindow().getGuiScaledHeight()};
         });

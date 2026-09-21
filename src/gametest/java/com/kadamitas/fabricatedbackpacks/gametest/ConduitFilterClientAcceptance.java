@@ -8,7 +8,6 @@ import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitMode;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.client.automation.ConduitScreen;
 import com.kadamitas.fabricatedbackpacks.client.browser.RegistryPickerScreen;
-import com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
@@ -204,10 +203,10 @@ final class ConduitFilterClientAcceptance {
     }
     private static void checkTitleTooltip(ClientGameTestContext context) {
         double[] pointer = context.computeOnClient(client -> {
-            var origin = (ContainerScreenAccess) (Object) client.gui.screen();
-            return new double[]{(origin.fabricatedBackpacks$left() + 20) * client.getWindow().getScreenWidth()
+            var origin = (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) client.gui.screen();
+            return new double[]{(origin.getLeftPos() + 20) * client.getWindow().getScreenWidth()
                     / (double) client.getWindow().getGuiScaledWidth(),
-                    (origin.fabricatedBackpacks$top() + 9) * client.getWindow().getScreenHeight()
+                    (origin.getTopPos() + 9) * client.getWindow().getScreenHeight()
                             / (double) client.getWindow().getGuiScaledHeight()};
         });
         context.getInput().setCursorPos(pointer[0], pointer[1]);
@@ -215,8 +214,8 @@ final class ConduitFilterClientAcceptance {
         context.takeScreenshot("automation-conduit-help-gui-" + context.computeOnClient(client -> client.getWindow().getGuiScale()));
         context.runOnClient(client -> {
             var screen = (ConduitScreen) client.gui.screen();
-            var origin = (ContainerScreenAccess) (Object) screen;
-            int mouseX = origin.fabricatedBackpacks$left() + 20, mouseY = origin.fabricatedBackpacks$top() + 9;
+            var origin = (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) screen;
+            int mouseX = origin.getLeftPos() + 20, mouseY = origin.getTopPos() + 9;
             var state = new GuiRenderState();
             var graphics = new GuiGraphicsExtractor(client, state, mouseX, mouseY);
             screen.extractBackground(graphics, mouseX, mouseY, 0);

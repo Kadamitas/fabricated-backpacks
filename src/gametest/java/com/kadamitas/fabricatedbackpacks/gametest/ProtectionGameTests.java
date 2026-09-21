@@ -68,7 +68,7 @@ final class ProtectionGameTests {
         level.explode(null, protectedPos.getX() + 1, protectedPos.getY() + 1, protectedPos.getZ() + .5, 4, Level.ExplosionInteraction.TNT);
         helper.assertTrue(level.getBlockEntity(protectedPos) == protectedBag, "A real explosion preserves the placed everlasting bag");
         helper.assertFalse(level.getBlockState(ordinaryPos).is(BackpackRegistry.block(BackpackTier.LEATHER)), "The same explosion destroys the nearby ordinary backpack");
-        helper.assertValueEqual(count(protectedBag, Items.EMERALD), 9, "Explosion resistance retains stored contents");
+        helper.assertValueEqual(count(protectedBag.inventory(), Items.EMERALD), 9, "Explosion resistance retains stored contents");
         helper.succeed();
     }
 }

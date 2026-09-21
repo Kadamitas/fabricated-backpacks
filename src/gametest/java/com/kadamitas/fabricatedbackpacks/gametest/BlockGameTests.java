@@ -79,8 +79,8 @@ final class BlockGameTests {
         helper.assertValueEqual(snapshot.entries().size(), 1, "Appearance packet contains only the selected display item");
         helper.assertValueEqual(snapshot.entries().getFirst().count(), 1, "Display count is normalized so automation does not spam appearance updates");
         helper.assertFalse(update.toString().contains("Private storage contents") || update.toString().contains("private query"), "Appearance sync excludes other items and private navigation state");
-        helper.assertValueEqual(count(block, Items.DIAMOND), 999, "Sanitizing network appearance does not mutate saved contents");
-        helper.assertValueEqual(count(block, Items.PAPER), 41, "Non-displayed storage remains unchanged");
+        helper.assertValueEqual(count(block.inventory(), Items.DIAMOND), 999, "Sanitizing network appearance does not mutate saved contents");
+        helper.assertValueEqual(count(block.inventory(), Items.PAPER), 41, "Non-displayed storage remains unchanged");
         var nested = bag(BackpackTier.LEATHER);
         nested.setItem(0, privateItem.copy());
         var secret = new net.minecraft.nbt.CompoundTag();

@@ -192,7 +192,7 @@ public final class UpgradeEngine {
     private static boolean pickupLocal(BagInventory bag, ItemEntity item, ServerPlayer player) {
         for (InstalledUpgrade upgrade : bag.installedUpgrades()) {
             if (!upgrade.kind().family().equals("pickup") || !UpgradeFilters.enabled(bag, upgrade) || !UpgradeFilters.matches(bag, upgrade, item.getItem())) continue;
-            collect(bag, item, player);
+            collect(bag, item, player, true);
             if (!item.isAlive() || item.getItem().isEmpty()) return true;
         }
         return false;
@@ -200,8 +200,7 @@ public final class UpgradeEngine {
 
     private static boolean canCollect(ItemEntity item, LivingEntity carrier, boolean remote) {
         if (!item.isAlive() || item.hasPickUpDelay() || item.getItem().isEmpty()) return false;
-        if (!(item instanceof UpgradeAccess.ItemClaims claims)) return false;
-        if (claims.fabricatedBackpacks$target() != null && (carrier == null || !claims.fabricatedBackpacks$target().equals(carrier.getUUID()))) return false;
+        if (item.getTarget() != null && (carrier == null || !item.getTarget().equals(carrier.getUUID()))) return false;
         if (!remote) return true;
         CompoundTag data = item.getItem().getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
         if (data.getBooleanOr("prevent_remote_movement", false) || data.getBooleanOr("no_magnet", false)) return false;
@@ -210,6 +209,10 @@ public final class UpgradeEngine {
     }
 
     private static boolean collect(BagInventory bag, ItemEntity item, LivingEntity carrier) {
+        return collect(bag, item, carrier, false);
+    }
+
+    private static boolean collect(BagInventory bag, ItemEntity item, LivingEntity carrier, boolean preserveStackReference) {
         ItemStack original = item.getItem();
         ItemStack remainder = insert(bag, original, false);
         int moved = original.getCount() - remainder.getCount();
@@ -219,7 +222,10 @@ public final class UpgradeEngine {
             player.awardStat(Stats.ITEM_PICKED_UP.get(original.getItem()), moved);
             player.onItemPickup(item);
         }
-        if (remainder.isEmpty()) item.discard(); else item.setItem(remainder);
+        // NeoForge's pickup event runs after vanilla captures the stack reference. Mutate that
+        // same stack there; replacing it would let vanilla insert the pre-upgrade count again.
+        if (preserveStackReference) original.setCount(remainder.getCount());
+        if (remainder.isEmpty()) item.discard(); else if (!preserveStackReference) item.setItem(remainder);
         item.level().playSound(null, item.getX(), item.getY(), item.getZ(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, .2F, 1);
         return true;
     }

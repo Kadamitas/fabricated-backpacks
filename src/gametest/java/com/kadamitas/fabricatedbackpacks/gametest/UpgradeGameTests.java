@@ -453,6 +453,16 @@ public final class UpgradeGameTests {
             helper.assertValueEqual(count(pickup, Items.DIAMOND), 64, "Partial pickup fills only the available room");
             helper.assertValueEqual(partial.getItem().getCount(), 6, "Unaccepted pickup items remain in the world");
             delayed.discard(); owned.discard(); partial.discard();
+            pickup.setItem(0, new ItemStack(Items.DIAMOND, 60));
+            player.getInventory().clearContent();
+            player.getInventory().setItem(0, pickup.stack());
+            ItemEntity collision = item(helper, position, 2, new ItemStack(Items.DIAMOND, 10));
+            collision.playerTouch(player);
+            helper.assertValueEqual(count(BagInventory.of(player.getInventory().getItem(0)), Items.DIAMOND), 64,
+                    "Native pickup event stores exactly the backpack's remaining capacity");
+            helper.assertValueEqual(count(player.getInventory(), Items.DIAMOND), 6,
+                    "Vanilla receives only the original entity's mutated remainder, never the full ten again");
+            helper.assertFalse(collision.isAlive(), "The backpack and vanilla inventory fully consume the one physical pickup");
             helper.succeed();
         });
     }

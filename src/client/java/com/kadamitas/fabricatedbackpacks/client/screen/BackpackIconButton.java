@@ -94,6 +94,7 @@ public final class BackpackIconButton extends Button {
         setTooltip(value ? Tooltip.create(getMessage()) : null);
         return this;
     }
+    public boolean isAutomaticTooltip() { return automaticTooltip; }
     public BackpackIconButton setItem(ItemStack value) { item = value == null ? ItemStack.EMPTY : value.copy(); return this; }
     @Override public void setMessage(Component label) {
         super.setMessage(label);

@@ -57,6 +57,12 @@ public final class ConduitBundleBlock extends BaseEntityBlock implements SimpleW
         return super.updateShape(state, level, ticks, pos, direction, neighbor, neighborState, random);
     }
     @Override public BlockEntity newBlockEntity(BlockPos position, BlockState state) { return new ConduitBundleBlockEntity(position, state); }
+    @Override public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos position, Player player,
+                                                 ItemStack tool, boolean willHarvest, FluidState fluid) {
+        // The server decides which lane was mined. Keep the client block entity until its
+        // authoritative update arrives, so prediction cannot discard the surviving lanes.
+        return !level.isClientSide() && super.onDestroyedByPlayer(state, level, position, player, tool, willHarvest, fluid);
+    }
     @Override public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         return level.isClientSide() ? null : createTickerHelper(type, AutomationRegistry.CONDUIT_BUNDLE_ENTITY, ConduitBundleBlockEntity::tick);
     }

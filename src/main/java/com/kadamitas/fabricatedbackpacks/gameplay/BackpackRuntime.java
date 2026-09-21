@@ -25,6 +25,13 @@ public final class BackpackRuntime {
     private static final Map<MinecraftServer, Map<ItemStack, BagInventory>> LIVE = new IdentityHashMap<>();
     private BackpackRuntime() {}
     public static void initialize() {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent.Pre event) -> {
+            if (!event.canPickup().isFalse() && event.getPlayer() instanceof ServerPlayer player) {
+                ItemEntity item = event.getItemEntity();
+                pickup(item, player);
+                if (item.isRemoved() || item.getItem().isEmpty()) event.setCanPickup(net.minecraft.util.TriState.FALSE);
+            }
+        });
         ServerTickEvents.START_SERVER_TICK.register(BackpackIdentities::tick);
         ServerTickEvents.END_SERVER_TICK.register(BackpackRuntime::tick);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> { LIVE.remove(server); BackpackTraversal.stop(server); BackpackIdentities.stop(server); UpgradeEngine.stopAll(server); });

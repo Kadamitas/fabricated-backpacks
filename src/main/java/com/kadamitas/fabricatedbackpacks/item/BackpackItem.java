@@ -24,6 +24,14 @@ import java.util.function.Consumer;
 
 public final class BackpackItem extends BlockItem {
     public BackpackItem(Block block, Properties properties) { super(block, properties); }
+    @Override public boolean onEntityItemUpdate(ItemStack stack, net.minecraft.world.entity.item.ItemEntity entity) {
+        com.kadamitas.fabricatedbackpacks.gameplay.BackpackRuntime.protectDropped(entity);
+        return false;
+    }
+    @Override public boolean canBeHurtBy(ItemStack stack, net.minecraft.world.damagesource.DamageSource source) {
+        return !com.kadamitas.fabricatedbackpacks.gameplay.BackpackRuntime.everlasting(stack)
+                && super.canBeHurtBy(stack, source);
+    }
     @Override public boolean canFitInsideContainerItems() {
         return com.kadamitas.fabricatedbackpacks.config.BackpackConfig.get().storage().allowBagInContainerItems();
     }
@@ -61,8 +69,9 @@ public final class BackpackItem extends BlockItem {
             }
             return InteractionResult.SUCCESS;
         }
-        if (player instanceof ServerPlayer serverPlayer && player.isShiftKeyDown()
-                && context.getLevel().getBlockEntity(context.getClickedPos()) instanceof net.minecraft.world.Container target
+        var target = player instanceof ServerPlayer && player.isShiftKeyDown()
+                ? BackpackBlockEntity.interactionTarget(context.getLevel().getBlockEntity(context.getClickedPos()), player) : null;
+        if (player instanceof ServerPlayer serverPlayer && player.isShiftKeyDown() && target != null
                 && target.stillValid(player) && context.getLevel().mayInteract(player, context.getClickedPos())
                 && !com.kadamitas.fabricatedbackpacks.config.RuleMatchers.block(clicked,
                         com.kadamitas.fabricatedbackpacks.config.BackpackConfig.get().storage().blockedInteractions())) {

@@ -3,7 +3,6 @@ package com.kadamitas.fabricatedbackpacks.automation.conduit;
 import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
 import com.kadamitas.fabricatedbackpacks.config.AutomationConfig;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
-import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerBlockEntityEvents;
 import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerChunkEvents;
 import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerLevelEvents;
 import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerTickEvents;
@@ -56,13 +55,6 @@ public final class ConduitNetworks {
     public static void initialize() {
         if (initialized) return;
         initialized = true;
-        // Bundles register through their own native onLoad/setRemoved; only foreign endpoints are observed here.
-        ServerBlockEntityEvents.BLOCK_ENTITY_LOAD.register((entity, level) -> {
-            if (!(entity instanceof ConduitBundleBlockEntity) && WORLDS.containsKey(level)) WORLDS.get(level).endpointChanged(entity.getBlockPos());
-        });
-        ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD.register((entity, level) -> {
-            if (!(entity instanceof ConduitBundleBlockEntity) && WORLDS.containsKey(level)) WORLDS.get(level).endpointChanged(entity.getBlockPos());
-        });
         ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> {
             WorldNetworks world = WORLDS.get(level);
             if (world != null) { world.unloading.add(chunk.getPos().pack()); world.chunkChanged(chunk.getPos().pack()); }
@@ -105,8 +97,10 @@ public final class ConduitNetworks {
     public static void unregister(ConduitBundleBlockEntity bundle) {
         if (!(bundle.getLevel() instanceof ServerLevel level)) return;
         WorldNetworks world = WORLDS.get(level);
-        if (world != null && world.nodes.remove(bundle.getBlockPos().asLong(), bundle))
+        if (world != null && world.nodes.remove(bundle.getBlockPos().asLong(), bundle)) {
+            world.endpointListeners.remove(bundle.getBlockPos().asLong());
             for (ConduitKind kind : ConduitKind.values()) if (bundle.has(kind)) world.lanes.get(kind).invalidateAround(bundle.getBlockPos());
+        }
     }
     public static void changed(ConduitBundleBlockEntity bundle, ConduitKind kind) {
         if (!bundle.current()) return;
@@ -210,6 +204,9 @@ public final class ConduitNetworks {
     private static final class WorldNetworks {
         final ServerLevel level;
         final Map<Long, ConduitBundleBlockEntity> nodes = new HashMap<>();
+        // NeoForge holds weak listener references; each live node owns its six adjacent subscriptions.
+        final Map<Long, List<net.neoforged.neoforge.capabilities.ICapabilityInvalidationListener>> endpointListeners = new HashMap<>();
+        final Set<BlockPos> changedEndpoints = new HashSet<>();
         final Set<Long> unloading = new HashSet<>();
         final EnumMap<ConduitKind, Lane> lanes = new EnumMap<>(ConduitKind.class);
         final EnumMap<ConduitKind, Map<Object, ConduitBudget>> budgets = new EnumMap<>(ConduitKind.class);
@@ -224,6 +221,21 @@ public final class ConduitNetworks {
         }
         void track(ConduitBundleBlockEntity bundle) {
             ConduitBundleBlockEntity previous = nodes.put(bundle.getBlockPos().asLong(), bundle);
+            if (previous != bundle) {
+                List<net.neoforged.neoforge.capabilities.ICapabilityInvalidationListener> listeners = new ArrayList<>();
+                for (Direction side : Direction.values()) {
+                    BlockPos endpoint = bundle.getBlockPos().relative(side).immutable();
+                    net.neoforged.neoforge.capabilities.ICapabilityInvalidationListener listener = () -> {
+                        if (WORLDS.get(level) != this || nodes.get(bundle.getBlockPos().asLong()) != bundle) return false;
+                        // Placement/removal may still be updating the chunk map. Resolve only at the next tick.
+                        changedEndpoints.add(endpoint);
+                        return true;
+                    };
+                    listeners.add(listener);
+                    level.registerCapabilityListener(endpoint, listener);
+                }
+                endpointListeners.put(bundle.getBlockPos().asLong(), listeners);
+            }
             if (previous != bundle) for (ConduitKind kind : ConduitKind.values())
                 if (bundle.has(kind) || previous != null && previous.has(kind)) lanes.get(kind).invalidateAround(bundle.getBlockPos());
         }
@@ -298,6 +310,11 @@ public final class ConduitNetworks {
             return false;
         }
         void tick() {
+            if (!changedEndpoints.isEmpty()) {
+                var changed = List.copyOf(changedEndpoints);
+                changedEndpoints.clear();
+                changed.forEach(this::endpointChanged);
+            }
             if (networkLimit != limits().maximumNetworkNodes()) { networkLimit = limits().maximumNetworkNodes(); invalidateAll(); }
             for (Lane lane : lanes.values()) lane.advance(limits().maximumEndpointVisitsPerTick());
             List<Component> active = new ArrayList<>();
