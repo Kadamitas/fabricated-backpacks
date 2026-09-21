@@ -12,7 +12,6 @@ import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.client.automation.ConduitScreen;
 import com.kadamitas.fabricatedbackpacks.client.automation.SteamEngineScreen;
 import com.kadamitas.fabricatedbackpacks.client.automation.SteamEngineSideScreen;
-import com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
@@ -434,8 +433,8 @@ final class AutomationClientAcceptance {
     private static void checkEngineHeading(ClientGameTestContext context, boolean requireClipping) {
         context.runOnClient(client -> {
             var screen = (SteamEngineScreen) client.gui.screen();
-            var origin = (ContainerScreenAccess) (Object) screen;
-            int left = origin.fabricatedBackpacks$left(), top = origin.fabricatedBackpacks$top();
+            var origin = UiInspection.container(screen);
+            int left = origin.left(), top = origin.top();
             var state = new GuiRenderState();
             screen.extractRenderState(new GuiGraphicsExtractor(client, state, -1, -1), -1, -1, 0);
             var runs = new ArrayList<GuiTextRenderState>();

@@ -2,7 +2,6 @@ package com.kadamitas.fabricatedbackpacks.gametest;
 
 import com.google.gson.JsonParser;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
-import com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackIconButton;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackScreen;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
@@ -103,10 +102,10 @@ final class ConfiguredClientAcceptance {
             var panel = screen.upgradePanelBounds().orElseThrow();
             check(panel.width() < screen.getMenu().panelWidth() && inside(panel, screen.width, screen.height),
                     "The side panel reflows to fewer columns when its ordinary width would clip");
-            var origin = (ContainerScreenAccess) (Object) screen;
+            var origin = UiInspection.container(screen);
             for (var slot : screen.getMenu().slots) if (slot.isActive())
-                check(inside(new ScreenRectangle(origin.fabricatedBackpacks$left() + slot.x,
-                                origin.fabricatedBackpacks$top() + slot.y, 16, 16), screen.width, screen.height),
+                check(inside(new ScreenRectangle(origin.left() + slot.x,
+                                origin.top() + slot.y, 16, 16), screen.width, screen.height),
                         "The narrow viewport keeps every active slot reachable");
             for (var child : screen.children()) if (child instanceof AbstractWidget widget && widget.visible)
                 check(inside(new ScreenRectangle(widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight()), screen.width, screen.height),
@@ -143,15 +142,15 @@ final class ConfiguredClientAcceptance {
         String clientState = context.computeOnClient(client -> {
             var screen = (BackpackScreen) client.gui.screen();
             var menu = screen.getMenu();
-            var origin = (ContainerScreenAccess) (Object) screen;
+            var origin = UiInspection.container(screen);
             var slot = menu.getSlot(index);
-            var hovered = origin.fabricatedBackpacks$hoveredSlot();
-            int x = origin.fabricatedBackpacks$left() + slot.x + 8, y = origin.fabricatedBackpacks$top() + slot.y + 8;
+            var hovered = origin.hoveredSlot();
+            int x = origin.left() + slot.x + 8, y = origin.top() + slot.y + 8;
             var widgets = screen.children().stream().filter(AbstractWidget.class::isInstance).map(AbstractWidget.class::cast)
                     .filter(widget -> widget.visible && widget.isMouseOver(x, y)).map(widget -> widget.getMessage().getString()).toList();
             return "client[id=" + menu.containerId + ",selected=" + menu.selectedSlot() + ",slot=" + index + ":" + slot.getItem()
                     + ",active=" + slot.isActive() + ",cursor=" + menu.getCarried() + ",click=" + x + "," + y
-                    + ",slotXY=" + slot.x + "," + slot.y + ",origin=" + origin.fabricatedBackpacks$left() + "," + origin.fabricatedBackpacks$top()
+                    + ",slotXY=" + slot.x + "," + slot.y + ",origin=" + origin.left() + "," + origin.top()
                     + ",gui=" + screen.width + "x" + screen.height + ",window=" + client.getWindow().getScreenWidth() + "x" + client.getWindow().getScreenHeight()
                     + ",hovered=" + (hovered == null ? "none" : menu.slots.indexOf(hovered) + ":" + hovered.getItem())
                     + ",slotComponents=" + slot.getItem().getComponents() + ",cursorComponents=" + menu.getCarried().getComponents()
@@ -700,9 +699,9 @@ final class ConfiguredClientAcceptance {
             var screen = (BackpackScreen) client.gui.screen();
             var menu = screen.getMenu();
             var layout = menu.layout();
-            var origin = (ContainerScreenAccess) (Object) screen;
-            int left = origin.fabricatedBackpacks$left();
-            int top = origin.fabricatedBackpacks$top();
+            var origin = UiInspection.container(screen);
+            int left = origin.left();
+            int top = origin.top();
             var panel = screen.upgradePanelBounds();
             var visibleUpgrades = menu.bag().installedUpgrades().stream()
                     .filter(upgrade -> screen.upgradeTabBounds(upgrade.slot()).isPresent()).toList();
@@ -723,7 +722,7 @@ final class ConfiguredClientAcceptance {
                     for (int edge : new int[]{0, 15}) {
                         int mouseX = left + slot.x + 8, mouseY = top + slot.y + edge;
                         screen.extractRenderState(new GuiGraphicsExtractor(client, new GuiRenderState(), mouseX, mouseY), mouseX, mouseY, 0);
-                        check(origin.fabricatedBackpacks$hoveredSlot() == slot,
+                        check(origin.hoveredSlot() == slot,
                                 "The native hit test selects the correct compact upgrade slot at both vertical edges: " + index);
                     }
                 }
@@ -837,8 +836,7 @@ final class ConfiguredClientAcceptance {
         context.runOnClient(client -> {
             for (var child : client.gui.screen().children()) {
                 if (child instanceof BackpackIconButton button && button.visible
-                        && !((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestIconButtonAccess) (Object) button)
-                        .fabricatedBackpacksTests$automaticTooltip()) {
+                        && !((BackpackIconButton) button).isAutomaticTooltip()) {
                     checkIcon(button, false, button.getMessage().getString());
                 }
             }
@@ -847,10 +845,10 @@ final class ConfiguredClientAcceptance {
 
     private static void checkInventoryStrip(BackpackScreen screen) {
         var client = net.minecraft.client.Minecraft.getInstance();
-        var origin = (ContainerScreenAccess) (Object) screen;
+        var origin = UiInspection.container(screen);
         var layout = screen.getMenu().layout();
-        var expected = new ScreenRectangle(origin.fabricatedBackpacks$left() + layout.storagePanelX() + 3,
-                origin.fabricatedBackpacks$top() + layout.inventoryTitleY(), layout.storageWidth() - 6, 12);
+        var expected = new ScreenRectangle(origin.left() + layout.storagePanelX() + 3,
+                origin.top() + layout.inventoryTitleY(), layout.storageWidth() - 6, 12);
         var state = new GuiRenderState();
         screen.extractBackground(new GuiGraphicsExtractor(client, state, -1, -1), -1, -1, 0);
         int[] bars = {0};
@@ -874,11 +872,9 @@ final class ConfiguredClientAcceptance {
         check(text.isEmpty(), "An icon control never paints its accessible label as on-screen text: " + button.getMessage().getString());
         String label = button.getMessage().getString();
         check(!label.isBlank(), "Icon-only controls retain a complete accessible label");
-        var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) button)
-                .fabricatedBackpacksTests$tooltip().get();
+        var tooltip = UiInspection.tooltip(button);
         boolean contextual = button instanceof BackpackIconButton
-                && !((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestIconButtonAccess) (Object) button)
-                .fabricatedBackpacksTests$automaticTooltip();
+                && !((BackpackIconButton) button).isAutomaticTooltip();
         if (contextual && !client.hasShiftDown()) {
             check(tooltip == null, "Contextual icon help stays hidden without Shift: " + label);
         } else if (contextual) {
@@ -1150,10 +1146,10 @@ final class ConfiguredClientAcceptance {
                     "The extras gear sits in the furnace's unused lower-right corner without replacing one of the four filters");
             targets.add(moreBounds);
             for (int index = 0; index < 12; index++) targets.add(screen.ghostBounds(index).orElseThrow());
-            var origin = (ContainerScreenAccess) (Object) screen;
+            var origin = UiInspection.container(screen);
             for (int index = 0; index < 3; index++) {
                 var slot = screen.getMenu().getSlot(screen.getMenu().auxiliaryStart() + index);
-                targets.add(new ScreenRectangle(origin.fabricatedBackpacks$left() + slot.x, origin.fabricatedBackpacks$top() + slot.y, 16, 16));
+                targets.add(new ScreenRectangle(origin.left() + slot.x, origin.top() + slot.y, 16, 16));
             }
             for (int index = 0; index < targets.size(); index++) {
                 var bounds = targets.get(index);
@@ -1210,7 +1206,7 @@ final class ConfiguredClientAcceptance {
             var menu = screen.getMenu();
             var upgrade = menu.selected().orElseThrow();
             var panel = screen.upgradePanelBounds().orElseThrow();
-            var origin = (ContainerScreenAccess) (Object) screen;
+            var origin = UiInspection.container(screen);
             check(upgrade.kind() == UpgradeKind.AUTO_SMELTING && menu.bag().cookingInputFilters(upgrade) == 8
                             && menu.bag().cookingFuelFilters(upgrade) == 4 && menu.bag().filterSlots(upgrade) == 12,
                     "The default auto-smelting fixture exposes eight input and four distinct fuel filter addresses");
@@ -1219,8 +1215,8 @@ final class ConfiguredClientAcceptance {
             var occupied = new ArrayList<ScreenRectangle>();
             for (int index = 0; index < 3; index++) {
                 var slot = menu.getSlot(menu.auxiliaryStart() + index);
-                var bounds = new ScreenRectangle(origin.fabricatedBackpacks$left() + slot.x,
-                        origin.fabricatedBackpacks$top() + slot.y, 16, 16);
+                var bounds = new ScreenRectangle(origin.left() + slot.x,
+                        origin.top() + slot.y, 16, 16);
                 int expectedX = panel.left() + (index == 2 ? panel.width() - 24 : 6);
                 int expectedY = panel.top() + (index == 0 ? 86 : index == 1 ? 122 : 104);
                 check(slot.isActive() && bounds.equals(new ScreenRectangle(expectedX, expectedY, 16, 16))
@@ -1287,8 +1283,7 @@ final class ConfiguredClientAcceptance {
             var title = screen.children().stream().filter(StringWidget.class::isInstance).map(StringWidget.class::cast)
                     .filter(widget -> widget.getMessage().getString().equals(screen.getTitle().getString())).findFirst().orElseThrow();
             check(renderedText(title).equals(screen.getTitle().getString()), "The short backpack title stays complete");
-            var actualTooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) label)
-                    .fabricatedBackpacksTests$tooltip().get();
+            var actualTooltip = UiInspection.tooltip(label);
             check(actualTooltip != null, "The heading exposes its full name in a tooltip");
             String tooltip = actualTooltip.toCharSequence(client).stream().map(ConfiguredClientAcceptance::plain)
                     .collect(java.util.stream.Collectors.joining());
@@ -1334,9 +1329,9 @@ final class ConfiguredClientAcceptance {
         check(inventoryRuns.size() == 1, "The full screen paints the Inventory caption exactly once; runs=" + inventoryRuns.size());
         checkNoTextShadow(inventoryRuns.getFirst(), inventory);
         var captionOrigin = nativeTextOrigin(inventoryRuns.getFirst());
-        var screenOrigin = (ContainerScreenAccess) (Object) screen;
-        check(captionOrigin.x == screenOrigin.fabricatedBackpacks$left() + screen.getMenu().inventoryX()
-                        && captionOrigin.y == screenOrigin.fabricatedBackpacks$top() + screen.getMenu().layout().inventoryTitleY() + 2,
+        var screenOrigin = UiInspection.container(screen);
+        check(captionOrigin.x == screenOrigin.left() + screen.getMenu().inventoryX()
+                        && captionOrigin.y == screenOrigin.top() + screen.getMenu().layout().inventoryTitleY() + 2,
                 "The actual Inventory caption starts two pixels below the full-width strip's top: " + captionOrigin);
     }
 

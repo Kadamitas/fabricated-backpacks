@@ -61,8 +61,9 @@ public final class BackpackItem extends BlockItem {
             }
             return InteractionResult.SUCCESS;
         }
-        if (player instanceof ServerPlayer serverPlayer && player.isShiftKeyDown()
-                && context.getLevel().getBlockEntity(context.getClickedPos()) instanceof net.minecraft.world.Container target
+        var target = player instanceof ServerPlayer && player.isShiftKeyDown()
+                ? BackpackBlockEntity.interactionTarget(context.getLevel().getBlockEntity(context.getClickedPos()), player) : null;
+        if (player instanceof ServerPlayer serverPlayer && player.isShiftKeyDown() && target != null
                 && target.stillValid(player) && context.getLevel().mayInteract(player, context.getClickedPos())
                 && !com.kadamitas.fabricatedbackpacks.config.RuleMatchers.block(clicked,
                         com.kadamitas.fabricatedbackpacks.config.BackpackConfig.get().storage().blockedInteractions())) {
