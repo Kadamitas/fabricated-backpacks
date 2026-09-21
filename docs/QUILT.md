@@ -5,8 +5,8 @@ Quilt 0.30.1 exposes Fabric Loader 0.19.3 compatibility. The Quilt artifact
 therefore has its own loader constraints; the Fabric branch requires 0.19.5.
 
 This branch retains the main branch's complete source and test suites.
-Unit tests use Fabric Loader JUnit as a compilation/testing facility; only
-the real game-launch tasks provide evidence that the code works under Quilt.
+The unit-test session uses Quilt's transformed class loader. Unit checks still
+do not replace the real server and rendered-client game-launch tests.
 Run `./gradlew test runGameTest runClientGameTest` before a release.
 
 The development launch translates Fabric Loom's settings to Quilt's loader

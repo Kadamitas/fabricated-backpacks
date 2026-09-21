@@ -171,6 +171,23 @@ class EvidenceGateTest(unittest.TestCase):
         self.assertEqual(self.multiplayer_id, released["client"]["multiplayer"]["run_id"])
         self.assertEqual(gate.sha256(self.manual_image), released["client"]["manual"]["verified_screenshots"][0]["sha256"])
 
+    def test_loader_specific_archive_is_selected_without_falling_back(self) -> None:
+        properties = f"minecraft_version={self.minecraft}\nmod_version={self.version}\narchives_base_name=fabricated-backpacks-quilt\n"
+        self.write(self.root / "gradle.properties", properties.encode())
+        self.start_record()
+        with self.assertRaisesRegex(ValueError, "Expected current main release JAR"):
+            gate.verify(False)
+        quilt_jar = self.root / f"build/libs/fabricated-backpacks-quilt-{self.version}.jar"
+        self.write(quilt_jar, self.clean_jar)
+        self.assertEqual(quilt_jar.relative_to(self.root).as_posix(), gate.verify(False)["artifact"]["path"])
+
+    def test_archive_basename_cannot_escape_build_directory(self) -> None:
+        for name in ("../outside", "/absolute", "nested/name", "C:\\outside", ".hidden"):
+            with self.subTest(name=name):
+                self.write(self.root / "gradle.properties", f"archives_base_name={name}\n".encode())
+                with self.assertRaisesRegex(ValueError, "archives_base_name"):
+                    gate.archive_base_name()
+
     def test_each_required_report_and_jar_is_mandatory(self) -> None:
         for path in (self.unit, self.execution, self.server, self.jar, self.client / "full-pass.json", self.client / "restart-pass.json",
                      self.output / "multiplayer.json", self.multiplayer / "host-pass.json", self.output / "manual.json"):
@@ -402,11 +419,14 @@ class EvidenceGateTest(unittest.TestCase):
 
     def test_unit_classes_nested_classes_sources_and_nonstandard_test_helpers_are_excluded(self) -> None:
         self.write(self.root / "src/test/java/example/Support.java", b"package example; class Support {}")
+        self.write(self.root / "src/quiltDevelopment/java/example/DevelopmentLauncher.java",
+                   b"package example; class DevelopmentLauncher {}")
         self.start_record()
         for name in ("com/kadamitas/fabricatedbackpacks/browser/BrowserProtocolTest.class",
                      "com/kadamitas/fabricatedbackpacks/browser/BrowserProtocolTest$Nested.class",
                      "com/kadamitas/fabricatedbackpacks/browser/BrowserProtocolTest.java",
-                     "com/example/ValidationTests.class", "example/Support.class", "example/Support$Inner.class"):
+                     "com/example/ValidationTests.class", "example/Support.class", "example/Support$Inner.class",
+                     "example/DevelopmentLauncher.class"):
             with self.subTest(entry=name):
                 buffer = io.BytesIO(self.clean_jar)
                 with ZipFile(buffer, "a") as archive:

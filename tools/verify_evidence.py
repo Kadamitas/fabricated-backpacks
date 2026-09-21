@@ -103,6 +103,13 @@ def release_coordinates() -> tuple[str, str]:
     return version, minecraft
 
 
+def archive_base_name() -> str:
+    name = project_properties().get("archives_base_name", "fabricated-backpacks")
+    require(re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name) is not None,
+            "Missing or invalid archives_base_name in gradle.properties")
+    return name
+
+
 def inputs() -> dict[str, str]:
     required = ("build.gradle", "settings.gradle", "gradle.properties", "gradlew", "gradlew.bat", "LICENSE", ".gitattributes", ".gitignore")
     files = [ROOT / name for name in required]
@@ -286,7 +293,7 @@ def expected_server_ids() -> set[str]:
 
 def test_source_classes() -> set[str]:
     result = set()
-    for directory in ("src/test/java", "src/gametest/java"):
+    for directory in ("src/test/java", "src/gametest/java", "src/quiltDevelopment/java"):
         for path in (ROOT / directory).rglob("*.java"):
             source = java_declarations(path)
             package = re.search(r"\bpackage\s+([\w.]+)\s*;", source)
@@ -302,7 +309,8 @@ def archive_names(jar: ZipFile, context: str) -> list[str]:
             f"Oversized JAR contents in {context}")
     for entry in jar.infolist():
         require(entry.orig_filename == entry.filename, f"Unsafe JAR entry was normalized by the ZIP reader in {context}: {entry.orig_filename!r}")
-    forbidden = ("gametest", "fabricated_backpacks_tests", ".codex-local", "fixture", "test_instance", "secret")
+    forbidden = ("gametest", "fabricated_backpacks_tests", ".codex-local", "fixture", "test_instance", "secret",
+                 "quilt-development-bootstrap", "fabricated_backpacks_quilt_dev")
     source_classes = test_source_classes()
     for name in names:
         path = PurePosixPath(name)
@@ -534,7 +542,7 @@ def verify(release: bool) -> dict:
               "unit_tests": len(unit_cases), "unit_test_classes": len(actual_unit), "server_tests": len(server),
               "unit_test_methods": unit_execution["methods"], "unit_execution": unit_execution,
               "mod_server_tests": len(actual), "scope": "release" if release else "unit-and-server", "inputs": start["inputs"]}
-    jar = ROOT / "build/libs" / f"fabricated-backpacks-{version}.jar"
+    jar = ROOT / "build/libs" / f"{archive_base_name()}-{version}.jar"
     require(jar.is_file(), f"Expected current main release JAR: {jar.name}")
     result["artifact"] = audit_jar(jar, started, version, minecraft)
     if release:

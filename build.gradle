@@ -5,7 +5,7 @@ plugins {
 
 version = project.mod_version
 group = 'com.kadamitas'
-base { archivesName = 'fabricated-backpacks-quilt' }
+base { archivesName = project.archives_base_name }
 
 repositories {
     maven { url = 'https://maven.quiltmc.org/repository/release/' }
@@ -77,7 +77,7 @@ dependencies {
         gametestRuntimeOnly "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
         productionMods "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
     }
-    testImplementation "net.fabricmc:fabric-loader-junit:${loader_version}"
+    testCompileOnly "org.quiltmc:quilt-loader:${quilt_loader_version}"
     testImplementation platform('org.junit:junit-bom:6.1.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.platform:junit-platform-launcher'
@@ -101,7 +101,13 @@ tasks.named('processResources') {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    def originalClasspath = classpath
+    classpath = originalClasspath.filter {
+        !it.name.startsWith('fabric-loader-') && !it.name.startsWith('sponge-mixin-')
+                && !it.name.startsWith('mixinextras-fabric-')
+    } + configurations.quiltRuntime + sourceSets.quiltDevelopment.output
     systemProperty 'fabricated.backpacks.unitEvidence', layout.buildDirectory.file('test-results/test/unit-execution.json').get().asFile.absolutePath
+    systemProperty 'fabricated.backpacks.quiltUnitGameDir', layout.buildDirectory.dir('run/quiltUnit').get().asFile.absolutePath
     testLogging { events 'failed', 'skipped' }
 }
 
