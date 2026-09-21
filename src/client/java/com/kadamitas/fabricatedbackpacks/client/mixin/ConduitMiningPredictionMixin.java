@@ -17,8 +17,9 @@ abstract class ConduitMiningPredictionMixin {
 
     // Keep the BE until the server confirms its new lanes or final removal. Deleting it predictively
     // can discard the authoritative lane packet before the normal block-change acknowledgement arrives.
+    // NeoForge performs the removal through its block-state hook after the normal break checks.
     @Inject(method = "destroyBlock", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/world/level/Level;setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z"),
+            target = "Lnet/minecraft/world/level/block/state/BlockState;onDestroyedByPlayer(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/ItemStack;ZLnet/minecraft/world/level/material/FluidState;)Z"),
             cancellable = true)
     private void fabricatedBackpacks$retainConduitUntilConfirmed(BlockPos position, CallbackInfoReturnable<Boolean> result) {
         if (minecraft.level != null && minecraft.level.getBlockState(position).getBlock() instanceof ConduitBundleBlock)
