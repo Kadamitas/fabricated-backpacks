@@ -386,7 +386,7 @@ public final class UpgradeGameTests {
         ingots.setItem(0, new ItemStack(Items.IRON_INGOT, 13));
         ingots.updateSettings(upgrade(ingots), state -> state.putBoolean("compact_anything", true));
         ingots = BagInventory.of(BackpackTestSupport.roundTrip(helper.getLevel(), ingots.stack()));
-        helper.assertTrue(ingots.settings(upgrade(ingots)).getBooleanOr("compact_anything", false), "A stale unsafe setting survives an old-backpack codec round trip for the migration test");
+        helper.assertTrue(NbtAccess.getBooleanOr(ingots.settings(upgrade(ingots)), "compact_anything", false), "A stale unsafe setting survives an old-backpack codec round trip for the migration test");
         helper.assertValueEqual(CompactingRuntime.compact(ingots, upgrade(ingots), helper.getLevel(), 64), 1,
                 "Only the one reversible iron-block operation is reported from thirteen ingots");
         helper.assertValueEqual(count(ingots, Items.IRON_BLOCK), 1, "Nine iron ingots compact into their reversible iron block");
@@ -536,7 +536,7 @@ public final class UpgradeGameTests {
                 "The basic jukebox exposes both doubled physical disc slots at runtime");
         basic.upgradeInventory(basicUpgrade).setItem(1, available.getFirst().copy());
         JukeboxRuntime.action(basic, basicUpgrade, helper.getLevel(), position, null, "play");
-        helper.assertValueEqual(basic.settings(basicUpgrade).getIntOr("active_slot", -1), 1,
+        helper.assertValueEqual(NbtAccess.getIntOr(basic.settings(basicUpgrade), "active_slot", -1), 1,
                 "The basic jukebox can play a disc stored in its new second slot");
         JukeboxRuntime.stopUpgrade(basic, basicUpgrade.slot(), helper.getLevel().getServer());
         JukeboxRuntime.tick(bag, upgrade, helper.getLevel(), position, null);
