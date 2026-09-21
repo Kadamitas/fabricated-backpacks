@@ -56,7 +56,7 @@ public final class SteamEngineMenu extends AbstractContainerMenu {
         addSlot(new Slot(inventory, index, x, y) {
             @Override public boolean mayPlace(ItemStack stack) {
                 if (stack.isEmpty()) return false;
-                return index == SteamEngineBlockEntity.FUEL ? owner.level().fuelValues().isFuel(stack)
+                return index == SteamEngineBlockEntity.FUEL ? com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.isFuel(stack)
                         : index == SteamEngineBlockEntity.WATER_INPUT && SteamEngineStorage.containsWater(stack);
             }
             @Override public boolean mayPickup(Player player) { return validInteraction(player); }
@@ -107,7 +107,7 @@ public final class SteamEngineMenu extends AbstractContainerMenu {
         if (index < SteamEngineBlockEntity.SLOT_COUNT) {
             if (!moveItemStackTo(slot.getItem(), SteamEngineBlockEntity.SLOT_COUNT, slots.size(), true)) return ItemStack.EMPTY;
         } else {
-            int destination = owner.level().fuelValues().isFuel(original) ? SteamEngineBlockEntity.FUEL
+            int destination = com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.isFuel(original) ? SteamEngineBlockEntity.FUEL
                     : SteamEngineStorage.containsWater(original) ? SteamEngineBlockEntity.WATER_INPUT : -1;
             if (destination < 0 || !moveItemStackTo(slot.getItem(), destination, destination + 1, false)) return ItemStack.EMPTY;
         }

@@ -42,7 +42,7 @@ final class BackpackRenderLayer extends RenderLayer<AvatarRenderState, PlayerMod
             int overlay = LivingEntityRenderer.getOverlayCoords(state, 0);
             for (NativeBackpackModel.MaterialGroup group : model.groups()) {
                 collector.submitModel(group.model(), Unit.INSTANCE, poses, RenderTypes.entityCutout(group.texture()),
-                        light, overlay, group.color(backpack), null, state.outlineColor, null);
+                        light, overlay, group.color(backpack), null, state.outlineColor);
             }
             BackpackDisplayState display = ((FabricRenderState) state).getData(BackpackRendering.DISPLAY);
             if (display != null) display.submitWorn(poses, collector, light, overlay, state.outlineColor);

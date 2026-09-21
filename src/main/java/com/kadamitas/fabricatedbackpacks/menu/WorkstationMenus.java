@@ -222,7 +222,7 @@ public final class WorkstationMenus {
             if (taken.isEmpty()) return ItemStack.EMPTY;
             ItemStack remainder = InventoryMoves.insert(destination, taken, false);
             // A result callback may alter inventories, but every item still has an explicit owner.
-            if (!remainder.isEmpty()) player.getInventory().placeItemBackInInventory(remainder);
+            if (!remainder.isEmpty()) player.getInventory().placeItemBackInInventory(remainder, net.minecraft.util.Prediction.SERVER_ONLY);
             resultSlot.onTake(player, taken);
             menu.broadcastChanges();
             publish(player);
@@ -384,7 +384,7 @@ public final class WorkstationMenus {
                         session.refill(craftSlots, before, actor);
                     } finally { bulk = false; }
                     slotsChanged(craftSlots);
-                    for (ItemStack drop : drops) actor.drop(drop, false);
+                    for (ItemStack drop : drops) actor.drop(drop, false, net.minecraft.util.Prediction.SERVER_ONLY);
                     publish(actor);
                 }
             });

@@ -66,13 +66,13 @@ final class BackpackDisplayState {
             // Original cuboids map to torso coordinates by offset minus source.
             // Flip item Y/Z with a proper rotation, preserving readable faces.
             poses.translate(0F, 13.75F / 16F - POCKET_Y, 15.375F / 16F - POCKET_FRONT + depth);
-            poses.mulPose(Axis.XP.rotationDegrees(180F));
+            poses.rotate(Axis.XP.rotationDegrees(180F));
             submitItem(poses, collector, light, overlay, outline);
         } finally { poses.popPose(); }
     }
 
     private void submitItem(PoseStack poses, SubmitNodeCollector collector, int light, int overlay, int outline) {
-        poses.mulPose(Axis.ZP.rotationDegrees(rotation));
+        poses.rotate(Axis.ZP.rotationDegrees(rotation));
         poses.scale(scale, scale, scale);
         poses.translate(-centerX, -centerY, 0F);
         item.submit(poses, collector, light, overlay, outline);

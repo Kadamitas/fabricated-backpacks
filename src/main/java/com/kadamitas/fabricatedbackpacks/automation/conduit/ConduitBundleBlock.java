@@ -1,7 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.automation.conduit;
 
 import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
-import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -40,13 +39,11 @@ import java.util.List;
 
 public final class ConduitBundleBlock extends BaseEntityBlock implements SimpleWaterloggedBlock {
     public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
-    public static final MapCodec<ConduitBundleBlock> CODEC = simpleCodec(ConduitBundleBlock::new);
 
     public ConduitBundleBlock(Properties properties) {
         super(properties);
         registerDefaultState(stateDefinition.any().setValue(WATERLOGGED, false));
     }
-    @Override protected MapCodec<ConduitBundleBlock> codec() { return CODEC; }
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(WATERLOGGED); }
     @Override public BlockState getStateForPlacement(BlockPlaceContext context) {
         return defaultBlockState().setValue(WATERLOGGED, context.getLevel().getFluidState(context.getClickedPos()).is(Fluids.WATER));

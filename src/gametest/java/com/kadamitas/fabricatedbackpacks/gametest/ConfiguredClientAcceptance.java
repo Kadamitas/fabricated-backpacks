@@ -50,7 +50,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import org.lwjgl.glfw.GLFW;
+
 import team.reborn.energy.api.EnergyStorage;
 
 import java.util.ArrayList;
@@ -288,14 +288,14 @@ final class ConfiguredClientAcceptance {
                     "The larger viewport exposes the configured final physical row without paging");
             context.takeScreenshot("ui-configured144-full-rows-scale-2");
             resizeLayout(context, 3);
-            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
-            mappedInput(context, GLFW.GLFW_KEY_H, -1);
-            mappedInput(context, -1, GLFW.GLFW_MOUSE_BUTTON_4);
+            mappedInput(context, com.mojang.blaze3d.platform.InputConstants.KEY_H, -1);
+            mappedInput(context, -1, com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_4);
         } catch (Exception exception) { throw new AssertionError("Configured client acceptance failed", exception); }
         finally {
             context.runOnClient(client -> {
-                KeyMapping.get("key.fabricated_backpacks.open").setKey(InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_B));
+                KeyMapping.get("key.fabricated_backpacks.open").setKey(InputConstants.Type.KEYBOARD.getOrCreate(com.mojang.blaze3d.platform.InputConstants.KEY_B));
                 KeyMapping.resetMapping();
                 client.options.guiScale().set(2);
                 client.resizeGui();
@@ -410,7 +410,7 @@ final class ConfiguredClientAcceptance {
                 checkCompactFrame(context, true);
                 context.takeScreenshot("ui-basic27-empty-scale-" + scale);
             }
-            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
         } finally {
             world.getServer().runOnServer(server -> {
@@ -593,7 +593,7 @@ final class ConfiguredClientAcceptance {
                             .upgradeInventory(upgrade(((BackpackMenu) player(world).containerMenu).bag(), 2)), fixture.records())),
                     "Returning the retained final record preserves all 200 physical addresses, counts and names on both sides");
             context.takeScreenshot("ui-retained200-jukebox-record-returned");
-            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
         } finally {
             world.getServer().runOnServer(server -> {
@@ -936,7 +936,7 @@ final class ConfiguredClientAcceptance {
                         && bag.settings(upgrade(bag, 1)).getIntOr("burn_total", 0) > 0
                         && player(world).containerMenu.getCarried().isEmpty();
             }), "Compact cooker slots and enable controls preserve two-item recipe output and one consumed fuel item");
-            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
         } finally {
             world.getServer().runOnServer(server -> {
@@ -987,7 +987,7 @@ final class ConfiguredClientAcceptance {
             var bounds = ((BackpackScreen) client.gui.screen()).ghostBounds(index).orElseThrow();
             return new double[]{bounds.left() + 8, bounds.top() + 8};
         });
-        clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
     }
 
     private static void cookingControlStates(ClientGameTestContext context, TestSingleplayerContext world, CookingGuard guard,
@@ -1096,7 +1096,7 @@ final class ConfiguredClientAcceptance {
                         "The four cooking actions occupy the reference16-pixel buttons in semantic order: " + labels[index]);
                 checkIcon(button, false, labels[index]);
                 var narrator = new ScreenNarrationCollector();
-                narrator.update(button::updateNarration);
+                narrator.update(button::updateNarration, net.minecraft.client.gui.narration.NarrationTrigger.KEYBOARD);
                 check(narrator.collectNarrationText(true).contains(labels[index]), "Native button narration announces the action and current state: " + labels[index]);
                 targets.add(expected);
                 if (icons != null) {
@@ -1353,18 +1353,18 @@ final class ConfiguredClientAcceptance {
 
     private static void mappedInput(ClientGameTestContext context, int keyboard, int mouse) {
         context.runOnClient(client -> {
-            KeyMapping.get("key.fabricated_backpacks.open").setKey((keyboard >= 0 ? InputConstants.Type.KEYSYM : InputConstants.Type.MOUSE)
+            KeyMapping.get("key.fabricated_backpacks.open").setKey((keyboard >= 0 ? InputConstants.Type.KEYBOARD : InputConstants.Type.MOUSE)
                     .getOrCreate(keyboard >= 0 ? keyboard : mouse));
             KeyMapping.resetMapping();
         });
-        context.getInput().pressKey(GLFW.GLFW_KEY_E);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_E);
         context.waitForScreen(InventoryScreen.class);
         hoverPlayerSlot(context, 4);
         if (keyboard >= 0) context.getInput().pressKey(keyboard); else context.getInput().pressMouse(mouse);
         context.waitTicks(4);
         check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
                 "A rebound " + (keyboard >= 0 ? "keyboard" : "mouse") + " shortcut is ignored while a menu is open");
-        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
         context.waitTicks(4);
         check(context.computeOnClient(client -> client.gui.screen() == null),
@@ -1373,7 +1373,7 @@ final class ConfiguredClientAcceptance {
         context.waitForScreen(BackpackScreen.class);
         check(context.computeOnClient(client -> client.gui.screen() instanceof BackpackScreen),
                 "The rebound " + (keyboard >= 0 ? "keyboard" : "mouse") + " shortcut still opens a backpack during gameplay");
-        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
     }
 }

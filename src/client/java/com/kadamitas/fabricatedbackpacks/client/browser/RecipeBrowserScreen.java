@@ -19,7 +19,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -368,18 +368,18 @@ final class RecipeBrowserScreen extends Screen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
-        if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_F) {
+        if (event.hasControlDown() && event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_F) {
             setFocused(search);
             search.setFocused(true);
             return true;
         }
-        if (event.hasAltDown() && event.key() == GLFW.GLFW_KEY_LEFT) { navigateHistory(false); return true; }
-        if (event.hasAltDown() && event.key() == GLFW.GLFW_KEY_RIGHT) { navigateHistory(true); return true; }
+        if (event.hasAltDown() && event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_LEFT) { navigateHistory(false); return true; }
+        if (event.hasAltDown() && event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_RIGHT) { navigateHistory(true); return true; }
         if (!search.isFocused()) {
             Identifier item = hoveredItem == null ? selected : hoveredItem;
-            if (event.key() == GLFW.GLFW_KEY_R) { select(item, false); return true; }
-            if (event.key() == GLFW.GLFW_KEY_U) { select(item, true); return true; }
-            if (event.key() == GLFW.GLFW_KEY_B) {
+            if (event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_R) { select(item, false); return true; }
+            if (event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_U) { select(item, true); return true; }
+            if (event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_B) {
                 if (!RecipeBrowserClient.bookmarks().toggleItem(item)) bookmarkLimit();
                 refreshItems();
                 refreshRecipes();

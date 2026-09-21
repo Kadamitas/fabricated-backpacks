@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.3-alpha+mc26.3 (unreleased)
+
+- Target Minecraft 26.3 with Fabric Loader 0.19.5 and Fabric API 0.161.0.
+- Adapt cooking and engine fuel handling to data-driven cooking-fuel components.
+- Update item-drop prediction, block placement, loot rolls, rendering submissions,
+  and input constants for the new Minecraft APIs.
+- Preserve the existing unit, asset, server, and client test scenarios and adapt
+  their fixtures to 26.3. Historical 0.5.2 evidence does not verify this patch.
+
 ## 0.5.2-alpha+mc26.2
 
 Patch alpha for Minecraft 26.2. Back up worlds before testing it.

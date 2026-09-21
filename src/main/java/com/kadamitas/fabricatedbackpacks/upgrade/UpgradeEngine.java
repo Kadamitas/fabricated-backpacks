@@ -268,7 +268,7 @@ public final class UpgradeEngine {
             case "jukebox" -> JukeboxRuntime.isDisc(stack);
             case "cooking" -> switch (slot) {
                 case CookingRuntime.INPUT -> CookingRuntime.recipe(level, upgrade.kind(), stack).isPresent();
-                case CookingRuntime.FUEL -> level.fuelValues().isFuel(stack) || stack.is(Items.BUCKET);
+                case CookingRuntime.FUEL -> com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.isFuel(stack) || stack.is(Items.BUCKET);
                 default -> false;
             };
             case "tank", "battery" -> com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime.isValidAuxiliary(upgrade.kind(), slot, stack);

@@ -19,7 +19,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
-import org.lwjgl.glfw.GLFW;
+
 
 public final class FabricatedBackpacksClient implements ClientModInitializer {
     @Override public void onInitializeClient() {
@@ -37,13 +37,13 @@ public final class FabricatedBackpacksClient implements ClientModInitializer {
         com.kadamitas.fabricatedbackpacks.client.tooltip.BackpackTooltips.initialize();
         com.kadamitas.fabricatedbackpacks.client.screen.WorkstationControls.initialize();
         var category = KeyMapping.Category.register(BackpackRegistry.id("backpacks"));
-        var open = key("open", GLFW.GLFW_KEY_B, category);
-        var gear = key("equipment", GLFW.GLFW_KEY_G, category);
-        var browser = key("browser", GLFW.GLFW_KEY_O, category);
-        var transfer = key("transfer", GLFW.GLFW_KEY_C, category);
-        var deposit = key("deposit", GLFW.GLFW_KEY_UNKNOWN, category);
-        var restock = key("restock", GLFW.GLFW_KEY_UNKNOWN, category);
-        var tool = key("tool_cycle", GLFW.GLFW_KEY_K, category);
+        var open = key("open", com.mojang.blaze3d.platform.InputConstants.KEY_B, category);
+        var gear = key("equipment", com.mojang.blaze3d.platform.InputConstants.KEY_G, category);
+        var browser = key("browser", com.mojang.blaze3d.platform.InputConstants.KEY_O, category);
+        var transfer = key("transfer", com.mojang.blaze3d.platform.InputConstants.KEY_C, category);
+        var deposit = key("deposit", com.mojang.blaze3d.platform.InputConstants.UNKNOWN.getValue(), category);
+        var restock = key("restock", com.mojang.blaze3d.platform.InputConstants.UNKNOWN.getValue(), category);
+        var tool = key("tool_cycle", com.mojang.blaze3d.platform.InputConstants.KEY_K, category);
         com.kadamitas.fabricatedbackpacks.client.screen.BackpackInput.initialize(category);
         ClientPlayNetworking.registerGlobalReceiver(JukeboxAudio.TYPE, (packet, context) -> context.client().execute(() -> BackpackAudio.receive(packet)));
         ClientPlayNetworking.registerGlobalReceiver(BagSettings.TYPE, (packet, context) -> context.client().execute(() -> {

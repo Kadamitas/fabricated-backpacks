@@ -21,7 +21,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.util.List;
 import java.util.Set;
@@ -102,39 +102,39 @@ final class StorageClientAcceptance {
         clickButton(context, "Store matching");
         world.getServer().waitFor(server -> count(storage(world), Items.DIAMOND) == 1);
         check(world.getServer().computeOnServer(server -> count(storage(world), Items.GOLD_INGOT)) == 0, "Ordinary bulk clicks transfer matching contents and memory only");
-        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         clickButton(context, "Store matching");
-        context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         world.getServer().waitFor(server -> count(storage(world), Items.GOLD_INGOT) == 4);
         check(world.getServer().computeOnServer(server -> count(storage(world), Items.EMERALD)) == 47, "Shift bulk-store preserves all emeralds across multiple input stacks");
         clickButton(context, "Exclude all from sort");
-        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         clickButton(context, "Take matching");
-        context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         check(world.getServer().computeOnServer(server -> count(storage(world), Items.EMERALD)) == 47, "Excluded cells remain protected even in all-transfer mode");
         clickButton(context, "Clear sort exclusions");
-        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         clickButton(context, "Take matching");
-        context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         world.getServer().waitFor(server -> storage(world).isEmpty());
         check(world.getServer().computeOnServer(server -> count(player(world).getInventory(), Items.EMERALD)) == 47, "Actual all-transfer output conserves the full quantity");
         context.takeScreenshot("storage-bulk-controls-and-color");
         clickButton(context, "Back");
         clickButton(context, "Back to backpack");
         context.waitForScreen(BackpackScreen.class);
-        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
     }
 
     static void checkSettingsTooltips(ClientGameTestContext context) {
         context.waitTicks(2);
         checkSettingsTooltips(context, false);
-        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         try {
             context.waitTicks(2);
             checkSettingsTooltips(context, true);
         } finally {
-            context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+            context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         }
         context.waitTicks(2);
         checkSettingsTooltips(context, false);
@@ -248,7 +248,7 @@ final class StorageClientAcceptance {
             int firstIndex = releaseOutside ? 2 : 0; // Distinct starts avoid vanilla's time-based double-click path.
             double[] first = storageSlotPosition(context, firstIndex);
             context.getInput().setCursorPos(first[0] + 1, first[1]);
-            context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            context.getInput().holdMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
             try {
                 context.getInput().setCursorPos(first[0], first[1]);
                 context.waitTick();
@@ -270,7 +270,7 @@ final class StorageClientAcceptance {
                 });
                 context.getInput().setCursorPos(release[0], release[1]);
                 context.waitTick();
-            } finally { context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT); }
+            } finally { context.getInput().releaseMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT); }
             world.getConnection().waitForServerboundPackets();
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(2);
@@ -349,7 +349,7 @@ final class StorageClientAcceptance {
 
     private static void dragAcrossStorage(ClientGameTestContext context, double[][] points) {
         context.getInput().setCursorPos(points[0][0] + 1, points[0][1]);
-        context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        context.getInput().holdMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
         try {
             for (int row = 0; row < 12; row++) for (int column = 0; column < 12; column++) {
                 int slot = row * 12 + (row % 2 == 0 ? column : 11 - column);
@@ -358,7 +358,7 @@ final class StorageClientAcceptance {
             }
             context.takeScreenshot("storage-drag144-held-preview");
         } finally {
-            context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            context.getInput().releaseMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
         }
     }
 
@@ -392,7 +392,7 @@ final class StorageClientAcceptance {
                 && client.getConnection().getConnection().isConnected());
         if (connected) {
             if (context.computeOnClient(client -> client.gui.screen() instanceof BackpackScreen)) {
-                context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+                context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
                 context.waitFor(client -> client.gui.screen() == null);
             }
             world.getServer().waitFor(server -> player(world).containerMenu == player(world).inventoryMenu);

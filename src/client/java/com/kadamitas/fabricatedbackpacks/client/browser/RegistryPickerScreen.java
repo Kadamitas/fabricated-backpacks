@@ -17,7 +17,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -145,7 +145,7 @@ public final class RegistryPickerScreen extends Screen {
     }
 
     @Override public boolean keyPressed(KeyEvent event) {
-        if (event.hasControlDown() && event.key() == GLFW.GLFW_KEY_F) {
+        if (event.hasControlDown() && event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_F) {
             setFocused(search); search.setFocused(true); return true;
         }
         return super.keyPressed(event);

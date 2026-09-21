@@ -88,8 +88,16 @@ public final class BackpackItem extends BlockItem {
         }
         return placed;
     }
-    @Override protected boolean updateCustomBlockEntityTag(BlockPos pos, Level level, Player player, ItemStack stack, BlockState state) {
-        return false; // The live bag is installed by placeBlock; item commands cannot replace its block entity.
+    @Override public InteractionResult place(BlockPlaceContext context) {
+        // 26.3 applies block-entity data through a static method, so remove that
+        // component during placement instead of allowing it to replace live storage.
+        ItemStack stack = context.getItemInHand();
+        var data = stack.remove(net.minecraft.core.component.DataComponents.BLOCK_ENTITY_DATA);
+        try {
+            return super.place(context);
+        } finally {
+            if (data != null) stack.set(net.minecraft.core.component.DataComponents.BLOCK_ENTITY_DATA, data);
+        }
     }
     @Override public java.util.Optional<net.minecraft.world.inventory.tooltip.TooltipComponent> getTooltipImage(ItemStack stack) {
         return java.util.Optional.of(BackpackTooltip.from(stack));

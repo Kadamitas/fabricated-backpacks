@@ -401,7 +401,7 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
             }
             case QUICK_MOVE -> quickMoveInfinite(player, index);
             case THROW -> {
-                if ((button == 0 || button == 1) && getCarried().isEmpty()) player.drop(seed.copyWithCount(button == 0 ? 1 : limit), true);
+                if ((button == 0 || button == 1) && getCarried().isEmpty()) player.drop(seed.copyWithCount(button == 0 ? 1 : limit), true, net.minecraft.util.Prediction.SERVER_ONLY);
             }
             case SWAP -> {
                 if (button < 0 || button > 8 && button != Inventory.SLOT_OFFHAND) return;

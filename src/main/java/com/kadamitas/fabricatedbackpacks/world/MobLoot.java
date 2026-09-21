@@ -79,7 +79,7 @@ public final class MobLoot {
                     int offered = batch.getCount();
                     recipient.getInventory().add(batch);
                     int given = offered - batch.getCount();
-                    if (!batch.isEmpty() && recipient.drop(batch.copy(), false) != null) given += batch.getCount();
+                    if (!batch.isEmpty() && recipient.drop(batch.copy(), false, net.minecraft.util.Prediction.SERVER_ONLY) != null) given += batch.getCount();
                     if (given == 0) break;
                     remainder.shrink(given);
                     changed = true;

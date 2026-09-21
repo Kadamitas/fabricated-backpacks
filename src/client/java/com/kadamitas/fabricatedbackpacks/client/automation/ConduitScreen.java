@@ -30,7 +30,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -255,17 +255,17 @@ public final class ConduitScreen extends AbstractContainerScreen<ConduitMenu> {
         }
 
         @Override protected boolean isValidClickButton(MouseButtonInfo button) {
-            return button.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT || button.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT;
+            return button.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT || button.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT;
         }
 
         @Override public void onPress(InputWithModifiers input) {
-            if (input instanceof MouseButtonEvent mouse && mouse.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT)
+            if (input instanceof MouseButtonEvent mouse && mouse.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT)
                 send(ConduitFilterAction.Operation.CLEAR_ENTRY, slot, Optional.empty());
             else openPicker(slot);
         }
 
         @Override public boolean keyPressed(KeyEvent event) {
-            if (event.key() == GLFW.GLFW_KEY_DELETE || event.key() == GLFW.GLFW_KEY_BACKSPACE) {
+            if (event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_DELETE || event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_BACKSPACE) {
                 send(ConduitFilterAction.Operation.CLEAR_ENTRY, slot, Optional.empty());
                 return true;
             }

@@ -48,7 +48,7 @@ public final class ConduitWrenchItem extends Item {
                 ItemStack removed = bundle.remove(part.kind());
                 if (bundle.installedMask() == 0) context.getLevel().setBlock(context.getClickedPos(),
                         water ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState(), 3);
-                if (!removed.isEmpty() && !player.getInventory().add(removed)) player.drop(removed, false);
+                if (!removed.isEmpty() && !player.getInventory().add(removed)) player.drop(removed, false, net.minecraft.util.Prediction.SERVER_ONLY);
             } else if (part.role() == ConduitGeometry.Role.ENDPOINT && part.side() != null) {
                 ConduitMenus.open(server, bundle, part.side());
             } else if (part.role() == ConduitGeometry.Role.HUB) {

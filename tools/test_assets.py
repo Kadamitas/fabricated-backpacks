@@ -621,7 +621,9 @@ class AssetGenerationTest(unittest.TestCase):
         with ZipFile(TARGET_JAR) as jar:
             names = set(jar.namelist())
             version = json.loads(jar.read("version.json"))
-            self.assertEqual("26.2", version["id"])
+            properties = dict(line.split("=", 1) for line in (Path(__file__).resolve().parent.parent / "gradle.properties").read_text().splitlines()
+                              if "=" in line and not line.lstrip().startswith("#"))
+            self.assertEqual(properties["minecraft_version"], version["id"])
             for recipe_id, recipe in self.recipes.items():
                 ingredients = list(recipe.get("key", {}).values()) + recipe.get("ingredients", [])
                 ingredients.extend(recipe[key] for key in ("template", "base", "addition") if key in recipe)

@@ -55,7 +55,7 @@ final class NativeBackpackModel {
 
     void applyFlapTransform(PoseStack poses, float openness) {
         poses.translate(flapTransform.x / 16F, flapTransform.y / 16F, flapTransform.z / 16F);
-        poses.mulPose(Axis.XP.rotationDegrees(flapTransform.closedAngle
+        poses.rotate(Axis.XP.rotationDegrees(flapTransform.closedAngle
                 + (flapTransform.openAngle - flapTransform.closedAngle) * openness));
         poses.translate(-flapTransform.x / 16F, -flapTransform.y / 16F, -flapTransform.z / 16F);
     }

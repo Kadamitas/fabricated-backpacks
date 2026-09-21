@@ -2,7 +2,6 @@ package com.kadamitas.fabricatedbackpacks.automation.engine;
 
 import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitWrenchItem;
-import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -33,7 +32,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import java.util.List;
 
 public final class SteamEngineBlock extends BaseEntityBlock {
-    public static final MapCodec<SteamEngineBlock> CODEC = simpleCodec(SteamEngineBlock::new);
     public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty ACTIVE = BooleanProperty.create("active");
 
@@ -41,7 +39,6 @@ public final class SteamEngineBlock extends BaseEntityBlock {
         super(properties);
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(ACTIVE, false));
     }
-    @Override protected MapCodec<SteamEngineBlock> codec() { return CODEC; }
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(FACING, ACTIVE); }
     @Override public BlockState getStateForPlacement(BlockPlaceContext context) {
         return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());

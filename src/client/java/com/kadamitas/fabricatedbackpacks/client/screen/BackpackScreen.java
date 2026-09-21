@@ -779,13 +779,13 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         return super.mouseReleased(event);
     }
     @Override public boolean keyPressed(KeyEvent event) {
-        if (event.hasControlDown() && event.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_F) {
+        if (event.hasControlDown() && event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_F) {
             if (!searchExpanded) toggleSearch();
             setFocused(search);
             search.setFocused(true);
             return true;
         }
-        if (search.isFocused() && event.key() != org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) return search.keyPressed(event);
+        if (search.isFocused() && event.key() != com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) return search.keyPressed(event);
         return super.keyPressed(event);
     }
     private String selectionKey() { return menu.selectedSlot() + ":" + menu.selected().map(upgrade -> upgrade.kind().id()).orElse(""); }

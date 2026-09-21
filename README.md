@@ -2,12 +2,13 @@
 
 <img src="docs/media/project-icon.png" alt="Original gold backpack model" width="144" height="144">
 
-Modular backpacks for **Minecraft Java Edition 26.2 on Fabric**.
+Modular backpacks for **Minecraft Java Edition 26.3 on Fabric**.
 
-**0.5.2-alpha is a development build.** Back up worlds before testing it.
+**0.5.3-alpha is a development build.** Back up worlds before testing it.
 The feature list describes the current implementation, not a claim that every
 interaction or multiplayer scenario has passed acceptance testing. Release
-evidence belongs in the [0.5.2 verification record](docs/VERIFICATION_0.5.2.md).
+evidence must be collected for this version. The [0.5.2 verification record](docs/VERIFICATION_0.5.2.md)
+is historical and does not verify the 26.3 port.
 
 This alpha also contains the interface, worn-model and automation revision.
 See the [UI revision record](docs/UI_REVISION.md) and
@@ -41,10 +42,10 @@ workstation behavior and remaining alpha work.
 
 | Component | Target |
 | --- | --- |
-| Minecraft Java Edition | 26.2 |
+| Minecraft Java Edition | 26.3 |
 | Java | 25 |
 | Fabric Loader | 0.19.5 or newer |
-| Fabric API | 0.158.0+26.2 or newer compatible 26.2 build |
+| Fabric API | 0.161.0+26.3 or newer compatible 26.3 build |
 | Team Reborn Energy API | 5.0.0, included in the built mod JAR |
 
 Install the same mod build and compatible Fabric API on the client and server.
@@ -52,7 +53,7 @@ The native equipment slot and recipe browser do not require separate equipment
 or recipe-viewer mods. Only the target listed above is supported by this build;
 other Minecraft versions and loaders need separate ports.
 
-The working branch optionally integrates with JEI for Fabric 26.2. Its built-in
+The working branch optionally integrates with JEI for Fabric 26.3. Its built-in
 filter search remains available without JEI; the mod does not bundle JEI.
 
 When a verified release is available, place its main JAR in the instance's

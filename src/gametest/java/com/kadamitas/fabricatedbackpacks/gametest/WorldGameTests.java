@@ -305,12 +305,12 @@ public final class WorldGameTests {
 
     public static void creeperCloudProtection(GameTestHelper helper) {
         var carrier = helper.spawn(EntityTypes.CREEPER, new BlockPos(2, 1, 2));
-        carrier.setNoAi(true); carrier.setInvulnerable(true);
+        carrier.setNoAi(true); carrier.setPermanentlyInvulnerable(true);
         helper.assertTrue(WorldBackpacks.evaluate(carrier, 0, rules("{}").carriers(), RandomSource.create(2)), "The test creeper wears a real carrier bag");
         carrier.addEffect(new MobEffectInstance(MobEffects.SPEED, 200, 0));
         carrier.addEffect(new MobEffectInstance(MobEffects.POISON, 200, 0));
         var ordinary = helper.spawn(EntityTypes.CREEPER, new BlockPos(6, 1, 6));
-        ordinary.setNoAi(true); ordinary.setInvulnerable(true);
+        ordinary.setNoAi(true); ordinary.setPermanentlyInvulnerable(true);
         WorldBackpacks.evaluate(ordinary, 0, rules("{\"spawnChance\":0}").carriers(), RandomSource.create(2));
         ordinary.addEffect(new MobEffectInstance(MobEffects.SPEED, 200, 0));
         carrier.ignite(); ordinary.ignite();

@@ -182,7 +182,7 @@ final class ClientAcceptanceFiles {
                     BackpackClientGameTests.check(ItemStack.matches(player.getInventory().getItem(0), bag), "Every main-backpack component survives a full JVM restart");
                     BackpackClientGameTests.check(ItemStack.matches(BackpackEquipment.get(player), equipment), "Every independent equipment component survives a full JVM restart");
                 });
-                context.getInput().pressKey(org.lwjgl.glfw.GLFW.GLFW_KEY_B);
+                context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
                 context.waitForScreen(com.kadamitas.fabricatedbackpacks.client.screen.BackpackScreen.class);
                 context.takeScreenshot("restart-equipped-backpack");
                 BackpackClientGameTests.clickButton(context, "Items");

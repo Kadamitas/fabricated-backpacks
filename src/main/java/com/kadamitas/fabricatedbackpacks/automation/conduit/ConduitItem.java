@@ -39,7 +39,15 @@ public final class ConduitItem extends AutomationBlockItem {
             bundle.install(kind);
         return true;
     }
-    @Override protected boolean updateCustomBlockEntityTag(BlockPos position, Level level, Player player, ItemStack stack, BlockState state) {
-        return false;
+    @Override public InteractionResult place(BlockPlaceContext context) {
+        // 26.3 applies block-entity data through a static method, so remove that
+        // component during placement instead of allowing it to replace live storage.
+        ItemStack stack = context.getItemInHand();
+        var data = stack.remove(net.minecraft.core.component.DataComponents.BLOCK_ENTITY_DATA);
+        try {
+            return super.place(context);
+        } finally {
+            if (data != null) stack.set(net.minecraft.core.component.DataComponents.BLOCK_ENTITY_DATA, data);
+        }
     }
 }

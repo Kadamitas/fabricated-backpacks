@@ -19,7 +19,6 @@ import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import com.kadamitas.fabricatedbackpacks.resource.BackpackTank;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import com.mojang.serialization.MapCodec;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
@@ -118,9 +117,7 @@ public final class ConduitGameTests {
     }
 
     private static final class MachineBlock extends BaseEntityBlock {
-        private static final MapCodec<MachineBlock> CODEC = simpleCodec(MachineBlock::new);
         MachineBlock(Properties properties) { super(properties); }
-        @Override protected MapCodec<MachineBlock> codec() { return CODEC; }
         @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new Machine(pos, state); }
         @Override public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
             return level.isClientSide() ? null : createTickerHelper(type, machineType, (world, position, blockState, machine) -> {

@@ -110,7 +110,7 @@ public final class CookingRuntime {
         if (idle && !due(state, "auto_idle_next", now, rules.idleTicks())) return;
         if (due(state, "auto_output_next", now, rules.retryMaximum())) {
             boolean changed = push(bag, inventory, OUTPUT);
-            if (!inventory.getItem(FUEL).isEmpty() && !level.fuelValues().isFuel(inventory.getItem(FUEL))
+            if (!inventory.getItem(FUEL).isEmpty() && !com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.isFuel(inventory.getItem(FUEL))
                     && !(inventory.getItem(FUEL).is(Items.BUCKET) && inventory.getItem(INPUT).is(Items.WET_SPONGE))) changed |= push(bag, inventory, FUEL);
             if (!inventory.getItem(INPUT).isEmpty() && recipe(level, upgrade.kind(), inventory.getItem(INPUT)).isEmpty()) changed |= push(bag, inventory, INPUT);
             retry(state, "auto_output", changed, now, rules);
@@ -161,7 +161,7 @@ public final class CookingRuntime {
 
     private static int consumeFuel(BagInventory bag, Container inventory, ServerLevel level) {
         ItemStack fuel = inventory.getItem(FUEL);
-        int duration = level.fuelValues().burnDuration(fuel);
+        int duration = CookingFuels.burnDuration(level, fuel, inventory);
         if (duration <= 0) return 0;
         ItemStack rest = craftingRemainder(fuel);
         Container storage = BackpackTraversal.processingInventory(bag);
@@ -204,7 +204,7 @@ public final class CookingRuntime {
             if (!candidate.isEmpty() && !storage.canTakeItem(inventory, source, candidate)) continue;
             if (candidate.isEmpty() || (!present.isEmpty() && !ItemStack.isSameItemSameComponents(present, candidate))) continue;
             boolean fuel = slot == FUEL;
-            if (fuel ? !level.fuelValues().isFuel(candidate) : recipe(level, upgrade.kind(), candidate).isEmpty()) continue;
+            if (fuel ? !com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.isFuel(candidate) : recipe(level, upgrade.kind(), candidate).isEmpty()) continue;
             if (!UpgradeFilters.matches(bag, upgrade, candidate, fuel ? "fuel_" : "input_",
                     fuel ? bag.cookingInputFilters(upgrade) : 0,
                     fuel ? bag.cookingFuelFilters(upgrade) : bag.cookingInputFilters(upgrade), fuel, null)) continue;

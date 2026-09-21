@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.gametest.mixin;
 
 import net.fabricmc.fabric.impl.client.gametest.TestInputImpl;
-import org.lwjgl.glfw.GLFW;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -22,10 +22,10 @@ abstract class TestInputModifiersMixin {
 
     private static int heldModifiers() {
         int flags = 0;
-        if (held(GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT)) flags |= GLFW.GLFW_MOD_SHIFT;
-        if (held(GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL)) flags |= GLFW.GLFW_MOD_CONTROL;
-        if (held(GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT)) flags |= GLFW.GLFW_MOD_ALT;
-        if (held(GLFW.GLFW_KEY_LEFT_SUPER, GLFW.GLFW_KEY_RIGHT_SUPER)) flags |= GLFW.GLFW_MOD_SUPER;
+        if (held(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT, com.mojang.blaze3d.platform.InputConstants.KEY_RSHIFT)) flags |= com.mojang.blaze3d.platform.InputConstants.MOD_SHIFT;
+        if (held(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL, com.mojang.blaze3d.platform.InputConstants.KEY_RCONTROL)) flags |= com.mojang.blaze3d.platform.InputConstants.MOD_CONTROL;
+        if (held(com.mojang.blaze3d.platform.InputConstants.KEY_LALT, com.mojang.blaze3d.platform.InputConstants.KEY_RALT)) flags |= com.mojang.blaze3d.platform.InputConstants.MOD_ALT;
+        if (held(com.mojang.blaze3d.platform.InputConstants.KEY_LGUI, com.mojang.blaze3d.platform.InputConstants.KEY_RGUI)) flags |= com.mojang.blaze3d.platform.InputConstants.MOD_SUPER;
         return flags;
     }
 

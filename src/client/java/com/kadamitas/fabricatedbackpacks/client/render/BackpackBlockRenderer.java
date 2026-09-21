@@ -62,7 +62,7 @@ final class BackpackBlockRenderer implements BlockEntityRenderer<BackpackBlockEn
         poses.pushPose();
         try {
             poses.translate(.5F, 0F, .5F);
-            poses.mulPose(Axis.YP.rotationDegrees(state.rotation));
+            poses.rotate(Axis.YP.rotationDegrees(state.rotation));
             poses.translate(-.5F, 0F, -.5F);
             if (state.flap != null) {
                 poses.pushPose();
@@ -70,7 +70,13 @@ final class BackpackBlockRenderer implements BlockEntityRenderer<BackpackBlockEn
                     state.flap.applyFlapTransform(poses, state.openness);
                     for (NativeBackpackModel.MaterialGroup group : state.flap.groups())
                         collector.submitModel(group.model(), Unit.INSTANCE, poses, RenderTypes.entityCutout(group.texture()),
-                                state.lightCoords, OverlayTexture.NO_OVERLAY, group.color(state.visual), null, 0, state.breakProgress);
+                                state.lightCoords, OverlayTexture.NO_OVERLAY, group.color(state.visual), null, 0);
+                    if (state.breakProgress != null) {
+                        for (var group : state.flap.groups())
+                            collector.submitCrumblingOverlay(group.model(), Unit.INSTANCE, poses,
+                                    RenderTypes.entityCutout(group.texture()), state.lightCoords,
+                                    OverlayTexture.NO_OVERLAY, group.color(state.visual), state.breakProgress);
+                    }
                 } finally { poses.popPose(); }
             }
             state.display.submitPlaced(poses, collector, state.lightCoords, OverlayTexture.NO_OVERLAY);

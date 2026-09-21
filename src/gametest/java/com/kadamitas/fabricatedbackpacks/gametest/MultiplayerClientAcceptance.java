@@ -61,7 +61,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -141,7 +141,7 @@ public final class MultiplayerClientAcceptance {
                         server.runOnServer(value -> setupHost(value, hostId));
                         connection.waitForClientboundPackets();
                         verifyTcp(context);
-                        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+                        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
                         context.waitForScreen(BackpackScreen.class);
                         selectUpgrade(context, 0);
                         context.waitFor(client -> ((BackpackScreen)client.gui.screen()).getMenu().selectedSlot() == 0);
@@ -735,7 +735,7 @@ public final class MultiplayerClientAcceptance {
             check(search.getValue().isEmpty(), "A fresh registry picker starts with an empty query");
             return new double[]{search.getX() + 8, search.getY() + search.getHeight() / 2.0};
         });
-        BackpackClientGameTests.clickAt(context, searchPosition[0], searchPosition[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        BackpackClientGameTests.clickAt(context, searchPosition[0], searchPosition[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
         context.getInput().typeChars(FILTERED_ITEM.toString());
         context.waitFor(client -> client.gui.screen() instanceof RegistryPickerScreen
                 && client.gui.screen().children().stream().filter(EditBox.class::isInstance).map(EditBox.class::cast)
@@ -872,12 +872,12 @@ public final class MultiplayerClientAcceptance {
         AutomationClientAcceptance.aimAtConduit(context, AUTOMATION_PIPE, ConduitKind.FLUID);
         files.write("automation-guest-mining-aimed", new JsonObject());
         files.await(context, "automation-mining-target-confirmed", Duration.ofMinutes(1));
-        context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        context.getInput().holdMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
         try {
             context.waitFor(client -> client.level.getBlockEntity(AUTOMATION_PIPE) instanceof ConduitBundleBlockEntity pipe
                     && pipe.installedMask() == 5, 100);
         } finally {
-            context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            context.getInput().releaseMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
         }
         check(context.computeOnClient(client -> client.level.getBlockEntity(AUTOMATION_PIPE) == original),
                 "Normal guest mining prediction retains its live bundle until the lane update arrives");
@@ -915,7 +915,7 @@ public final class MultiplayerClientAcceptance {
 
     private static void closeAutomationScreen(ClientGameTestContext context) {
         if (context.computeOnClient(client -> client.gui.screen() != null)) {
-            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
         }
     }
@@ -924,7 +924,7 @@ public final class MultiplayerClientAcceptance {
         context.getInput().lookAt(position);
         context.waitTicks(4);
         context.waitFor(client -> client.hitResult instanceof net.minecraft.world.phys.BlockHitResult hit && hit.getBlockPos().equals(position));
-        context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+        context.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT);
         context.waitTicks(4);
     }
 
@@ -1023,13 +1023,13 @@ public final class MultiplayerClientAcceptance {
         check(context.computeOnClient(client -> ((BackpackScreen)client.gui.screen()).getMenu().bag().getItem(0).isEmpty()), "The authorized shared menu opens the original empty storage");
     }
     private static void crouchClick(ClientGameTestContext context, UUID host) {
-        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         try {
             context.waitTicks(3);
             context.getInput().lookAt(new BlockPos(0, 80, 0));
             context.waitFor(client -> client.hitResult instanceof EntityHitResult hit && hit.getEntity().getUUID().equals(host));
-            context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-        } finally { context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT); }
+            context.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT);
+        } finally { context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT); }
     }
     private static void verifyTcp(ClientGameTestContext context) {
         check(context.computeOnClient(client -> client.getConnection() != null && !client.getConnection().getConnection().isMemoryConnection()
@@ -1089,7 +1089,7 @@ public final class MultiplayerClientAcceptance {
         } finally {
             try { walkCaptureTo(context, previous.x, previous.z); }
             finally {
-                context.getInput().releaseKey(GLFW.GLFW_KEY_W);
+                context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_W);
                 context.getInput().lookAt(look[0], look[1]);
                 context.runOnClient(client -> client.options.setCameraType(camera));
                 BackpackClientGameTests.hideCaptureHud(context, hudHidden);
@@ -1102,13 +1102,13 @@ public final class MultiplayerClientAcceptance {
         double[] offset = context.computeOnClient(client -> new double[]{x - client.player.getX(), z - client.player.getZ()});
         if (offset[0] * offset[0] + offset[1] * offset[1] < .04) return;
         context.getInput().lookAt((float) Math.toDegrees(Math.atan2(-offset[0], offset[1])), 0F);
-        context.getInput().holdKey(GLFW.GLFW_KEY_W);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_W);
         try {
             context.waitFor(client -> {
                 double dx = x - client.player.getX(), dz = z - client.player.getZ();
                 return dx * dx + dz * dz < .16;
             }, 120);
-        } finally { context.getInput().releaseKey(GLFW.GLFW_KEY_W); }
+        } finally { context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_W); }
         context.waitTicks(4);
         check(context.computeOnClient(client -> {
             double dx = x - client.player.getX(), dz = z - client.player.getZ();

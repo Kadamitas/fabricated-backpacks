@@ -195,7 +195,7 @@ public final class AudioTrackingGameTests {
         Mob carrier = helper.spawn(EntityTypes.PIG, position);
         carrier.setNoAi(true);
         carrier.setNoGravity(true);
-        carrier.setInvulnerable(true);
+        carrier.setPermanentlyInvulnerable(true);
         BagInventory inventory = bag(BackpackTier.NETHERITE, UpgradeKind.JUKEBOX);
         InstalledUpgrade upgrade = upgrade(inventory, 0);
         inventory.upgradeInventory(upgrade).setItem(0, new ItemStack(Items.MUSIC_DISC_BLOCKS));

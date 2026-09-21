@@ -301,7 +301,7 @@ public final class ConfigGameTests {
                 bag.updateSettings(upgrade, state -> { state.putDouble("cooking_speed", 64); state.putDouble("fuel_efficiency", 64); });
                 int duration = (int) Math.ceil(recipe.cookingTime() / rules.upgrades().cooking().speed());
                 boolean quick = kind == UpgradeKind.SMOKING || kind == UpgradeKind.AUTO_SMOKING || kind == UpgradeKind.BLASTING || kind == UpgradeKind.AUTO_BLASTING;
-                int fuel = (int) Math.floor(helper.getLevel().fuelValues().burnDuration(new ItemStack(Items.COAL)) * rules.upgrades().cooking().fuelEfficiency() * (quick ? .5 : 1));
+                int fuel = (int) Math.floor(com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.burnDuration(helper.getLevel(), new ItemStack(Items.COAL), bag.upgradeInventory(upgrade)) * rules.upgrades().cooking().fuelEfficiency() * (quick ? .5 : 1));
                 cases.add(new CookingCase(bag, upgrade, rules, duration, fuel, recipe.assemble(new net.minecraft.world.item.crafting.SingleRecipeInput(input)).getItem()));
             }
         }

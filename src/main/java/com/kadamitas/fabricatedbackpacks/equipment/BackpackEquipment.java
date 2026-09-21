@@ -66,7 +66,7 @@ public final class BackpackEquipment {
             set(player, ItemStack.EMPTY);
             if (!net.minecraft.world.item.enchantment.EnchantmentHelper.has(equipped,
                     net.minecraft.world.item.enchantment.EnchantmentEffectComponents.PREVENT_EQUIPMENT_DROP)) {
-                player.drop(equipped.copy(), true);
+                player.drop(equipped.copy(), true, net.minecraft.util.Prediction.SERVER_ONLY);
             }
         });
     }

@@ -37,7 +37,6 @@ public final class BackpackVisuals {
         copy(source, icon, DataComponents.CUSTOM_MODEL_DATA);
         copy(source, icon, DataComponents.DYED_COLOR);
         copy(source, icon, DataComponents.POTION_CONTENTS);
-        copy(source, icon, DataComponents.MAP_COLOR);
         copy(source, icon, DataComponents.TRIM);
         copy(source, icon, DataComponents.BANNER_PATTERNS);
         copy(source, icon, DataComponents.BASE_COLOR);

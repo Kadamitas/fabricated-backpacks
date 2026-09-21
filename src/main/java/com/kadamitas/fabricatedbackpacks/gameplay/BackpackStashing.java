@@ -32,7 +32,7 @@ public final class BackpackStashing {
         ItemStack remainder = UpgradeEngine.insert(bag, taken, false);
         if (!remainder.isEmpty()) {
             remainder = source.safeInsert(remainder);
-            if (!remainder.isEmpty() && !player.level().isClientSide()) player.getInventory().placeItemBackInInventory(remainder);
+            if (!remainder.isEmpty() && !player.level().isClientSide()) player.getInventory().placeItemBackInInventory(remainder, net.minecraft.util.Prediction.SERVER_ONLY);
         }
         bag.save();
         return true;

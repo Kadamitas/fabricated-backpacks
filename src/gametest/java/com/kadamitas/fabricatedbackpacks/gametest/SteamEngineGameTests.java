@@ -112,7 +112,7 @@ public final class SteamEngineGameTests {
         long quantum = mb(rules.waterMbPerTick());
         var running = place(helper, new BlockPos(1, 1, 1), new SteamEngineState(quantum * 2, 0, 0, 0, true));
         running.setItem(SteamEngineBlockEntity.FUEL, new ItemStack(Items.COAL, 2));
-        int duration = level.fuelValues().burnDuration(new ItemStack(Items.COAL));
+        int duration = com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.burnDuration(level, new ItemStack(Items.COAL), running);
         tick(running, level);
         helper.assertTrue(running.active(), "ACTIVE starts only on an actual productive boiler tick");
         helper.assertValueEqual(running.snapshot(), new SteamEngineState(quantum, rules.energyPerTick(), duration - 1, duration, true),
@@ -170,7 +170,7 @@ public final class SteamEngineGameTests {
         helper.assertValueEqual(engine.snapshot().waterDroplets(), FluidConstants.BUCKET - mb(rules.waterMbPerTick()),
                 "The vanilla water bucket empties through the real item fluid API");
         helper.assertValueEqual(engine.snapshot().energy(), rules.energyPerTick(), "The accepted water powers one engine tick");
-        helper.assertValueEqual(engine.snapshot().burnRemaining(), level.fuelValues().burnDuration(new ItemStack(Items.LAVA_BUCKET)) - 1,
+        helper.assertValueEqual(engine.snapshot().burnRemaining(), com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.burnDuration(level, new ItemStack(Items.LAVA_BUCKET), engine) - 1,
                 "The lava bucket uses the loaded vanilla fuel duration");
         helper.assertTrue(engine.getItem(0).isEmpty() && engine.getItem(1).isEmpty(), "Both consumed containers leave their input slots");
         assertStack(helper, engine.getItem(2), Items.BUCKET, 1, "Fuel keeps its vanilla bucket remainder");
@@ -664,7 +664,7 @@ public final class SteamEngineGameTests {
         helper.assertValueEqual(internal.snapshot().waterDroplets(), FluidConstants.BUCKET - mb(rules.waterMbPerTick()),
                 "Closed external ports do not block the engine's own water-container operation");
         helper.assertValueEqual(internal.snapshot().energy(), rules.energyPerTick(), "Closed energy ports still allow internal finite generation");
-        helper.assertValueEqual(internal.snapshot().burnRemaining(), level.fuelValues().burnDuration(new ItemStack(Items.COAL)) - 1,
+        helper.assertValueEqual(internal.snapshot().burnRemaining(), com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.burnDuration(level, new ItemStack(Items.COAL), internal) - 1,
                 "Closed item ports still use exactly one unit of vanilla fuel work");
         helper.assertTrue(internal.getItem(0).isEmpty() && internal.getItem(1).isEmpty(), "Internal work consumes only the actual input items");
         assertStack(helper, internal.getItem(3), Items.BUCKET, 1, "Internal water work preserves its real bucket remainder");

@@ -44,7 +44,7 @@ final class SteamEngineRenderer implements BlockEntityRenderer<SteamEngineBlockE
         poses.pushPose();
         try {
             poses.translate(.5F, 0F, .5F);
-            poses.mulPose(Axis.YP.rotationDegrees(state.rotation));
+            poses.rotate(Axis.YP.rotationDegrees(state.rotation));
             poses.translate(-.5F, 0F, -.5F);
             group(model.wheel, model.wheelX, model.wheelY, model.wheelZ, state.phase, state, poses, collector);
             group(model.rod, state.sliderX, model.wheelY, model.rodZ, state.rodAngle, state, poses, collector);
@@ -57,9 +57,13 @@ final class SteamEngineRenderer implements BlockEntityRenderer<SteamEngineBlockE
         poses.pushPose();
         try {
             poses.translate(x / 16F, y / 16F, z / 16F);
-            poses.mulPose(Axis.ZP.rotation(angle));
-            for (var group : groups) collector.submitModel(group.model(), Unit.INSTANCE, poses,
-                    RenderTypes.entityCutout(group.texture()), state.lightCoords, OverlayTexture.NO_OVERLAY, -1, null, 0, state.breakProgress);
+            poses.rotate(Axis.ZP.rotation(angle));
+            for (var group : groups) {
+                collector.submitModel(group.model(), Unit.INSTANCE, poses,
+                        RenderTypes.entityCutout(group.texture()), state.lightCoords, OverlayTexture.NO_OVERLAY, -1, null, 0);
+                if (state.breakProgress != null) collector.submitCrumblingOverlay(group.model(), Unit.INSTANCE, poses,
+                        RenderTypes.entityCutout(group.texture()), state.lightCoords, OverlayTexture.NO_OVERLAY, -1, state.breakProgress);
+            }
         } finally { poses.popPose(); }
     }
 

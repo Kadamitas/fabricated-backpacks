@@ -24,7 +24,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.util.ArrayList;
 
@@ -76,9 +76,9 @@ final class BrowserClientAcceptance {
         clickButton(context, "☆");
         clickButton(context, "Save recipe");
         clickButton(context, "Uses");
-        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_ALT);
-        context.getInput().pressKey(GLFW.GLFW_KEY_LEFT);
-        context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_ALT);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LALT);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_LEFT);
+        context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LALT);
         context.waitTicks(3);
         clickButton(context, "Recipes");
         context.takeScreenshot("browser-recipe-transfer-before");
@@ -129,7 +129,7 @@ final class BrowserClientAcceptance {
         check(world.getServer().computeOnServer(server -> player(world).getInventory().getItem(26).is(Items.IRON_NUGGET)),
                 "The selected conflict recipe uses its own real remainder");
         context.takeScreenshot("crafting-conflict-picked-and-crafted");
-        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
 
         openHovered(context, 3);
@@ -169,7 +169,7 @@ final class BrowserClientAcceptance {
                 "Picking a searched stonecutter recipe consumes exactly one real input");
         awaitButton(context, "Recent 1");
         context.takeScreenshot("stonecutter-search-and-recent-choice");
-        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
 
         openHovered(context, 3);
@@ -237,7 +237,7 @@ final class BrowserClientAcceptance {
                     && cooking.getItem(2).is(Items.GOLD_NUGGET) && cooking.getItem(2).getCount() == 5;
         }), "The cooking browser changes only owned recipe inputs, preserving real fuel and old output");
         context.takeScreenshot("browser-cooking-maximum-inputs");
-        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
     }
 
@@ -270,6 +270,9 @@ final class BrowserClientAcceptance {
                     "Search tooltip retains the full quoted-phrase and exclusion syntax");
             StringBuilder narration = new StringBuilder();
             search.updateWidgetNarration(new NarrationElementOutput() {
+                @Override public net.minecraft.client.gui.narration.NarrationTrigger narrationTrigger() {
+                    return net.minecraft.client.gui.narration.NarrationTrigger.KEYBOARD;
+                }
                 @Override public void add(NarratedElementType type, NarrationThunk<?> value) { value.getText(narration::append); }
                 @Override public NarrationElementOutput nest() { return this; }
             });
@@ -301,7 +304,7 @@ final class BrowserClientAcceptance {
     }
 
     static void openHovered(ClientGameTestContext context, int inventorySlot) {
-        context.getInput().pressKey(GLFW.GLFW_KEY_E);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_E);
         context.waitForScreen(InventoryScreen.class);
         hoverPlayerSlot(context, inventorySlot);
         check(context.computeOnClient(client -> ((com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess) client.gui.screen())

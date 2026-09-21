@@ -34,7 +34,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,7 +60,7 @@ final class ConduitFilterClientAcceptance {
         // The searchable registry also includes this mod, and ghost clearing consumes nothing.
         pick(context, ConduitKind.ITEM, 8, "@fabricated_backpacks \"steam engine\"", "Steam Engine");
         var last = context.computeOnClient(client -> ((ConduitScreen) client.gui.screen()).filterTargets().get(8).bounds());
-        clickAt(context, last.left() + 8, last.top() + 8, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+        clickAt(context, last.left() + 8, last.top() + 8, com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT);
         context.waitFor(client -> ((ConduitScreen) client.gui.screen()).getMenu().filter(ConduitKind.ITEM).entry(8).isEmpty());
         check(context.computeOnClient(client -> client.player.containerMenu == nativeMenu), "Searching and returning preserves the exact live conduit menu");
         checkWidgets(context);
@@ -153,7 +153,7 @@ final class ConduitFilterClientAcceptance {
             player(world).getInventory().setSelectedSlot(8);
             player(world).inventoryMenu.broadcastChanges();
         });
-        context.getInput().pressKey(GLFW.GLFW_KEY_9);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_9);
         context.waitFor(client -> client.player.getMainHandItem().isEmpty());
     }
 
@@ -191,7 +191,7 @@ final class ConduitFilterClientAcceptance {
     }
 
     static void close(ClientGameTestContext context) {
-        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
     }
     private static String prefix(ConduitKind kind) { return title(kind.name()) + " Conduit: North: "; }

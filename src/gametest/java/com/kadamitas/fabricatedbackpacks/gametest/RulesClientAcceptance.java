@@ -15,7 +15,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.level.block.Blocks;
-import org.lwjgl.glfw.GLFW;
+
 
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests.*;
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackTestSupport.*;
@@ -58,7 +58,7 @@ final class RulesClientAcceptance {
         world.getServer().waitFor(server -> rules(world).settings(upgrade(rules(world), 1)).getStringOr("refill_target_0", "").equals("MAIN_HAND"));
         context.takeScreenshot("refill-per-filter-targets");
         clickButton(context, "Back");
-        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
         contextualTransfer(context, world);
     }
@@ -87,7 +87,7 @@ final class RulesClientAcceptance {
             world.getConnection().waitForClientboundPackets();
             context.getInput().lookAt(chestPos);
             context.waitTicks(3);
-            context.getInput().pressKey(GLFW.GLFW_KEY_C);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_C);
             world.getServer().waitFor(server -> count((Container) server.overworld().getBlockEntity(chestPos), Items.AMETHYST_SHARD) == 23);
             check(world.getServer().computeOnServer(server -> BagInventory.of(com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.get(player(world))).isEmpty()),
                     "A real C keypress deposits the equipped bag's items exactly once");

@@ -17,7 +17,7 @@ final class AdminDelivery {
             // Archive before the inventory mutates its supplied count. The recipient owns this new identity.
             ItemStack archived = copy.copy();
             recipient.getInventory().add(copy);
-            if (!copy.isEmpty() && recipient.drop(copy, false) == null) continue;
+            if (!copy.isEmpty() && recipient.drop(copy, false, net.minecraft.util.Prediction.SERVER_ONLY) == null) continue;
             BackpackArchives.record(recipient.level(), BagInventory.of(archived), recipient);
             recipient.containerMenu.broadcastChanges();
             delivered++;

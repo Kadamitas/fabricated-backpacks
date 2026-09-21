@@ -1,6 +1,6 @@
 # Building and testing
 
-Target: **Minecraft 26.2, Fabric, Java 25**. The checked-in Gradle wrapper and
+Target: **Minecraft 26.3, Fabric, Java 25**. The checked-in Gradle wrapper and
 `gradle.properties` define the toolchain and dependency versions.
 
 This guide includes the current experimental alpha source. Its coordinate comes
@@ -24,7 +24,7 @@ Gradle may download the configured toolchain and dependencies on the first run.
 Do not point development runs at an existing personal world.
 
 The main artifact for the current coordinate is
-`build/libs/fabricated-backpacks-0.5.2-alpha+mc26.2.jar`. The adjacent sources JAR is
+`build/libs/fabricated-backpacks-0.5.3-alpha+mc26.3.jar`. The adjacent sources JAR is
 for development and is not installed in Minecraft. The runtime JAR includes
 the configured Team Reborn Energy dependency; Fabric Loader and Fabric API
 remain instance dependencies.
@@ -50,11 +50,11 @@ Python 3.10 or newer is sufficient; the asset tools use the standard library.
 ```powershell
 python tools/generate_assets.py
 python tools/generate_assets.py --check --review
-python tools/test_assets.py --minecraft-jar '<path to the exact Minecraft 26.2 client JAR>'
+python tools/test_assets.py --minecraft-jar '<path to the exact Minecraft 26.3 client JAR>'
 ```
 
 The exact game JAR check resolves vanilla recipe ingredients and model parents;
-use the matching 26.2 JAR, not a different version. Loom stores its downloaded
+use the matching 26.3 JAR, not a different version. Loom stores its downloaded
 game files in Gradle's cache.
 
 Edit the generator or its explicit language inputs, not generated files.
@@ -119,7 +119,7 @@ claim the full backpack scenario ran. See the
 ### Optional JEI development and tests
 
 The adapter compiles against JEI's public Fabric API pinned to **30.28.0.191**
-for Minecraft **26.2**. JEI is not embedded in the main JAR and is absent from
+for Minecraft **26.3**. JEI is not embedded in the main JAR and is absent from
 default development/test runtimes. The built-in item/fluid picker works without
 it. Opt in to the actual JEI runtime for a development session or its focused
 drag-and-drop scenario:
@@ -224,7 +224,7 @@ Collect the release artifacts after the recorded checks pass:
 ```
 
 This task writes main/sources JARs and SHA-256 files under
-`release/0.5.2-alpha+mc26.2`. It runs `verifyReleaseEvidence`, which requires fresh,
+`release/0.5.3-alpha+mc26.3`. It runs `verifyReleaseEvidence`, which requires fresh,
 nonempty passing unit/server reports, unchanged source inputs, separate-JVM
 restart evidence, both multiplayer process results and the installed-JAR
 observations. It does not run those client checks for you. Failed, skipped,

@@ -50,7 +50,8 @@ jobs:
           import subprocess
           import sys
           gradle_home = Path(os.environ.get('GRADLE_USER_HOME', Path.home() / '.gradle'))
-          jar = gradle_home / 'caches/fabric-loom/26.2/minecraft-client.jar'
+          properties = dict(line.split('=', 1) for line in Path('gradle.properties').read_text().splitlines() if '=' in line and not line.lstrip().startswith('#'))
+          jar = gradle_home / f"caches/fabric-loom/{properties['minecraft_version']}/minecraft-client.jar"
           if not jar.is_file():
               raise SystemExit(f'Missing Loom original target client JAR: {jar}')
           subprocess.run([sys.executable, 'tools/test_assets.py', '--minecraft-jar', str(jar)], check=True)

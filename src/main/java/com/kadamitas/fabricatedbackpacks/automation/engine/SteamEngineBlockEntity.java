@@ -130,7 +130,7 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
 
     private boolean generate(ServerLevel level) {
         ItemStack fuel = getItem(FUEL);
-        int duration = state.burnRemaining() > 0 ? 0 : level.fuelValues().burnDuration(fuel);
+        int duration = state.burnRemaining() > 0 ? 0 : com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.burnDuration(level, fuel, this);
         ItemStack remainder = ItemStack.EMPTY;
         if (duration > 0 && fuel.getItem().getCraftingRemainder() != null)
             remainder = fuel.getItem().getCraftingRemainder().create();
@@ -184,7 +184,7 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
     @Override public void clearContent() { items.clear(); setChanged(); }
     @Override public boolean canPlaceItem(int slot, ItemStack stack) {
         if (stack.isEmpty()) return false;
-        return slot == FUEL ? level instanceof ServerLevel server && server.fuelValues().isFuel(stack)
+        return slot == FUEL ? level instanceof ServerLevel server && com.kadamitas.fabricatedbackpacks.upgrade.CookingFuels.isFuel(stack)
                 : slot == WATER_INPUT && SteamEngineStorage.containsWater(stack);
     }
     @Override public int[] getSlotsForFace(Direction side) {

@@ -92,7 +92,7 @@ final class ConduitBlockModel extends WrapperBlockStateModel {
                     float z = (float) (bounds.minZ + emitter.z(vertex) * (bounds.maxZ - bounds.minZ));
                     emitter.pos(vertex, x, y, z).normal(vertex, face.getStepX(), face.getStepY(), face.getStepZ());
                 }
-                emitter.cullFace(null).color(-1, -1, -1, -1).tintIndex(-1).diffuseShade(true).ambientOcclusion(TriState.TRUE);
+                emitter.cullFace(null).color(-1, -1, -1, -1).tintIndex(-1).ambientOcclusion(TriState.TRUE);
                 emitter.uvUnitSquare();
                 emitter.materialBake(material, MutableQuadView.BAKE_NORMALIZED).emit();
             }

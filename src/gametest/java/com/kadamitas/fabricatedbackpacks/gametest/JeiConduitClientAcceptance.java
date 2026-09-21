@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.material.Fluids;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -107,16 +107,16 @@ public final class JeiConduitClientAcceptance implements IModPlugin {
             var properties = runtime.getScreenHelper().getGuiProperties(client.gui.screen()).orElseThrow();
             return new int[]{(properties.guiRight() + properties.screenWidth()) / 2, properties.screenHeight() - 12};
         });
-        clickAt(context, point[0], point[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        clickAt(context, point[0], point[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
         try { context.waitFor(client -> runtime.getIngredientListOverlay().hasKeyboardFocus()); }
         catch (AssertionError failure) {
             context.takeScreenshot("automation-jei-search-focus-failure");
             throw new AssertionError("Native click must focus the visible JEI search field", failure);
         }
-        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_CONTROL);
-        try { context.getInput().pressKey(GLFW.GLFW_KEY_A); }
-        finally { context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_CONTROL); }
-        context.getInput().pressKey(GLFW.GLFW_KEY_BACKSPACE);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL);
+        try { context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_A); }
+        finally { context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL); }
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_BACKSPACE);
         context.getInput().typeChars(query);
         context.waitFor(client -> runtime.getIngredientFilter().getFilterText().equals(query));
         context.waitTicks(4);
@@ -135,12 +135,12 @@ public final class JeiConduitClientAcceptance implements IModPlugin {
         }
         check(found, "The searched JEI ingredient is visible and can be targeted with the native cursor");
         var target = context.computeOnClient(client -> ((ConduitScreen) client.gui.screen()).filterTargets().get(ghost).bounds());
-        context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        context.getInput().holdMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
         try {
             context.waitTicks(2);
             cursor(context, target.left() + 8, target.top() + 8);
             context.waitTicks(2);
-        } finally { context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT); }
+        } finally { context.getInput().releaseMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT); }
         context.waitTicks(3);
     }
     private static void cursor(ClientGameTestContext context, int x, int y) {

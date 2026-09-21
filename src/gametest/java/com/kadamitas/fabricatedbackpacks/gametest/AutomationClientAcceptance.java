@@ -48,7 +48,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
+
 import team.reborn.energy.api.EnergyStorage;
 
 import java.util.List;
@@ -91,7 +91,7 @@ final class AutomationClientAcceptance {
             });
             move(context, world, new Vec3(20.5, 80, -.5));
             checkAutomationTooltips(context);
-            context.getInput().pressKey(GLFW.GLFW_KEY_9);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_9);
             interact(context, ENGINE);
             context.waitForScreen(SteamEngineScreen.class);
             clickPlayerSlot(context, BUCKET);
@@ -133,7 +133,7 @@ final class AutomationClientAcceptance {
             move(context, world, new Vec3(21.5, 80, -.5));
             hand(context, world, AutomationRegistry.ITEM_CONDUIT, 2);
             aim(context, new Vec3(21.5, 79.99, 2.5));
-            context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+            context.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT);
             world.getServer().waitFor(server -> server.overworld().getBlockEntity(CENTER) instanceof ConduitBundleBlockEntity node && node.installedMask() == 1);
             context.waitFor(client -> client.level.getBlockEntity(CENTER) instanceof ConduitBundleBlockEntity node && node.installedMask() == 1);
             context.waitTicks(6);
@@ -146,11 +146,11 @@ final class AutomationClientAcceptance {
             long beforeBreak = world.getServer().computeOnServer(server -> recoverableConduits(world));
             aim(context, Vec3.atCenterOf(CENTER.east()));
             context.waitFor(client -> client.hitResult instanceof BlockHitResult hit && hit.getBlockPos().equals(CENTER.east()));
-            context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            context.getInput().holdMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
             try {
                 world.getServer().waitFor(server -> server.overworld().isEmptyBlock(CENTER.east()), 100);
             } finally {
-                context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+                context.getInput().releaseMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
             }
             check(world.getServer().computeOnServer(server -> recoverableConduits(world)) == beforeBreak + 1,
                     "Actual empty-hand mining returns the single conduit as one recoverable item");
@@ -191,7 +191,7 @@ final class AutomationClientAcceptance {
                     hit.getLocation().subtract(Vec3.atLowerCornerOf(CENTER)), hit.getDirection())
                     .filter(part -> part.side() == Direction.NORTH && part.role() != ConduitGeometry.Role.ENDPOINT).isPresent());
             context.takeScreenshot("automation-disabled-interface-wrench-target");
-            context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+            context.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT);
             world.getServer().waitFor(server -> node(server.overworld(), CENTER).mode(ConduitKind.ITEM, Direction.NORTH) == ConduitMode.EXTRACT);
             check(context.computeOnClient(client -> client.gui.screen() == null), "The wrench restores the disabled tube directly without opening a center UI");
             context.waitFor(client -> ((ConduitBundleBlockEntity) client.level.getBlockEntity(CENTER)).visualState()
@@ -289,7 +289,7 @@ final class AutomationClientAcceptance {
                 player(world).teleportTo(previous.position().x, previous.position().y, previous.position().z);
                 player(world).inventoryMenu.broadcastChanges();
             });
-            context.getInput().pressKey(GLFW.GLFW_KEY_1 + previous.selected());
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_1 + previous.selected());
             context.runOnClient(client -> { client.options.setCameraType(camera); client.options.guiScale().set(previousScale); client.resizeGui(); });
         }
     }
@@ -338,12 +338,12 @@ final class AutomationClientAcceptance {
             long[] beforeDrops = world.getServer().computeOnServer(server -> java.util.Arrays.stream(ConduitKind.values())
                     .mapToLong(kind -> recoverableConduits(world, kind)).toArray());
             aimAtConduit(context, position, mined);
-            context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            context.getInput().holdMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
             try {
                 world.getServer().waitFor(server -> server.overworld().getBlockEntity(position) == originalServer
                         && originalServer.installedMask() == expectedMask, 100);
             } finally {
-                context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+                context.getInput().releaseMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
             }
             context.waitFor(client -> client.level.getBlockEntity(position) instanceof ConduitBundleBlockEntity bundle
                     && bundle.installedMask() == expectedMask);
@@ -365,7 +365,7 @@ final class AutomationClientAcceptance {
         for (ConduitKind restored : List.of(ConduitKind.FLUID, ConduitKind.ITEM)) {
             hand(context, world, AutomationRegistry.conduit(restored), 1);
             aimAtConduit(context, position, ConduitKind.ENERGY);
-            context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+            context.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT);
             world.getServer().waitFor(server -> originalServer.has(restored));
             context.waitFor(client -> ((ConduitBundleBlockEntity) client.level.getBlockEntity(position)).has(restored));
             check(world.getServer().computeOnServer(server -> player(world).getMainHandItem().isEmpty()),
@@ -480,7 +480,7 @@ final class AutomationClientAcceptance {
     private static void interact(ClientGameTestContext context, BlockPos position) {
         aim(context, Vec3.atCenterOf(position));
         context.waitFor(client -> client.hitResult instanceof BlockHitResult hit && hit.getBlockPos().equals(position));
-        context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+        context.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT);
         context.waitTicks(3);
     }
     static void interactInterface(ClientGameTestContext context, BlockPos position, ConduitKind kind, Direction face) {
@@ -516,7 +516,7 @@ final class AutomationClientAcceptance {
                     ? hit.getBlockPos() + "/" + hit.getDirection() + "/" + hit.getLocation() : client.hitResult));
             throw new AssertionError("Cannot aim at the physical " + kind + " " + face + " interface: " + actual, failure);
         }
-        context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+        context.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT);
         context.waitTicks(3);
     }
     private static boolean isInterfaceHit(ClientLevel level, BlockHitResult hit, BlockPos position, ConduitKind kind, Direction face) {
@@ -524,7 +524,7 @@ final class AutomationClientAcceptance {
                 && ConduitGeometry.hitPart(node.visualState(), hit.getLocation().subtract(Vec3.atLowerCornerOf(position)), hit.getDirection())
                 .filter(part -> part.kind() == kind && part.role() == ConduitGeometry.Role.ENDPOINT && part.side() == face).isPresent();
     }
-    private static void close(ClientGameTestContext context) { context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE); context.waitFor(client -> client.gui.screen() == null); }
+    private static void close(ClientGameTestContext context) { context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE); context.waitFor(client -> client.gui.screen() == null); }
     private static void checkWidgetsFit(ClientGameTestContext context) {
         check(context.computeOnClient(client -> client.gui.screen().children().stream().filter(AbstractWidget.class::isInstance)
                 .map(AbstractWidget.class::cast).filter(widget -> widget.visible).allMatch(widget -> widget.getX() >= 0 && widget.getY() >= 0

@@ -54,7 +54,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeManager;
-import net.minecraft.world.item.crafting.RecipeMap;
 import net.minecraft.world.item.crafting.StonecutterRecipe;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 import net.minecraft.world.item.crafting.display.RecipeDisplay;
@@ -608,10 +607,10 @@ public final class BrowserGameTests {
                     ((StonecutterRecipe) original.value()).input(), new ItemStackTemplate(Items.COPPER_INGOT, 3)));
             List<RecipeHolder<?>> changed = new ArrayList<>(originals);
             changed.set(changed.indexOf(original), replacement);
-            // Exercise vanilla's actual apply/finalize reload phase without yielding. Restoring the identical
-            // original holders in finally prevents this focused cache fixture from invalidating other live tests.
+            // Rebuild vanilla's registry-backed recipe manager without yielding. Restore the original
+            // recipe values in finally so this cache fixture cannot affect other live tests.
             try {
-                applyRecipes(helper, manager, RecipeMap.create(changed));
+                applyRecipes(helper, manager, changed);
                 helper.assertTrue(menu.getSlot(1).getItem().is(Items.STONE_SLAB), "Same input keeps vanilla's old preview until the cache is refreshed");
                 helper.assertTrue(WorkstationMenus.transfer(fixture.player, recipeId, true), "A current recipe transfer refreshes a same-item native stonecutter cache");
                 helper.assertTrue(menu.getSlot(1).getItem().is(Items.COPPER_INGOT) && menu.getSlot(1).getItem().getCount() == 3,
@@ -624,30 +623,38 @@ public final class BrowserGameTests {
                 helper.assertValueEqual(menu.getSlot(0).getItem().getCount(), 7, "The updated recipe consumes one owned input");
                 ItemStack produced = menu.getCarried();
                 menu.setCarried(ItemStack.EMPTY);
-                fixture.player.getInventory().placeItemBackInInventory(produced);
+                fixture.player.getInventory().placeItemBackInInventory(produced, net.minecraft.util.Prediction.SERVER_ONLY);
                 List<ItemStack> before = snapshot(fixture.player.getInventory());
                 changed.remove(replacement);
-                applyRecipes(helper, manager, RecipeMap.create(changed));
+                applyRecipes(helper, manager, changed);
                 helper.assertFalse(WorkstationMenus.transfer(fixture.player, recipeId, true), "A recipe removed by the apply phase cannot transfer from an old cache");
                 helper.assertValueEqual(menu.getSlot(0).getItem().getCount(), 7, "Removed-recipe rejection preserves the current input");
                 for (int slot = 0; slot < before.size(); slot++) assertStack(helper, fixture.player.getInventory().getItem(slot), before.get(slot), "Removed recipe preserves player slot " + slot);
             } finally {
-                applyRecipes(helper, manager, RecipeMap.create(originals));
+                applyRecipes(helper, manager, originals);
                 fixture.close();
             }
             helper.succeed();
         });
     }
 
-    private static void applyRecipes(GameTestHelper helper, RecipeManager manager, RecipeMap recipes) {
+    private static void applyRecipes(GameTestHelper helper, RecipeManager manager, List<RecipeHolder<?>> recipes) {
         try {
-            var apply = RecipeManager.class.getDeclaredMethod("apply", RecipeMap.class,
-                    net.minecraft.server.packs.resources.ResourceManager.class, net.minecraft.util.profiling.ProfilerFiller.class);
-            apply.setAccessible(true);
-            apply.invoke(manager, recipes, helper.getLevel().getServer().getResourceManager(), net.minecraft.util.profiling.InactiveProfiler.INSTANCE);
+            var registry = new net.minecraft.core.MappedRegistry<net.minecraft.world.item.crafting.Recipe<?>>(
+                    Registries.RECIPE, com.mojang.serialization.Lifecycle.stable());
+            for (var recipe : recipes) net.minecraft.core.Registry.register(registry, recipe.id(), recipe.value());
+            registry.freeze();
+            var replacement = new RecipeManager(net.minecraft.core.HolderLookup.Provider.create(java.util.stream.Stream.of(registry)));
+            // 26.3 removed apply(): construction now consumes the reloadable registry.
+            // Keep the live manager identity for existing menus while replacing its recipe snapshot.
+            for (String name : List.of("recipes", "learnableRecipes")) {
+                var field = RecipeManager.class.getDeclaredField(name);
+                field.setAccessible(true);
+                field.set(manager, field.get(replacement));
+            }
             manager.finalizeRecipeLoading(helper.getLevel().enabledFeatures());
         } catch (ReflectiveOperationException invalidFixture) {
-            throw new AssertionError("Cannot exercise the actual vanilla recipe apply phase", invalidFixture);
+            throw new AssertionError("Cannot install the rebuilt vanilla recipe manager snapshot", invalidFixture);
         }
     }
 

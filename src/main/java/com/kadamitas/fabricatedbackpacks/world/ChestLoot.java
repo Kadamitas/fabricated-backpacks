@@ -9,7 +9,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.entries.EmptyLootItem;
 import net.minecraft.world.level.storage.loot.entries.LootItem;
-import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ConstantValue;
 
 import java.util.List;
 import java.util.Map;
@@ -50,7 +50,7 @@ public final class ChestLoot {
             if (roll == null) return;
             // External and experimental datapack replacements keep control of their own tables.
             if (!BackpackConfig.get().chestLoot() || !source.isBuiltin()) return;
-            LootPool.Builder pool = LootPool.lootPool().setRolls(ConstantValue.exactly(1));
+            LootPool.Builder pool = LootPool.lootPool().setRolls(net.minecraft.core.Holder.direct(new ConstantValue(1)));
             if (roll.emptyWeight() > 0) pool.add(EmptyLootItem.emptyItem().setWeight(roll.emptyWeight()));
             for (Outcome outcome : roll.outcomes()) pool.add(LootItem.lootTableItem(item(outcome.item())).setWeight(outcome.weight()));
             builder.withPool(pool);

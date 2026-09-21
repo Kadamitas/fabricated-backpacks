@@ -53,7 +53,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
 import com.mojang.blaze3d.platform.InputConstants;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -125,7 +125,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             identity = world.getServer().computeOnServer(server -> bag(world).identity());
             screenshot(context, "01-new-world-six-tiers");
 
-            context.getInput().pressKey(GLFW.GLFW_KEY_B);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
             context.waitForScreen(BackpackScreen.class);
             context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().bag().getItem(0).getCount() == 200_000);
             check(world.getServer().computeOnServer(server -> bag(world).getItem(0).getCount()) == 200_000, "Enlarged count must survive server/client menu synchronization");
@@ -154,25 +154,25 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             world.getServer().waitFor(server -> !player(world).containerMenu.slots.get(0).getItem().isEmpty());
             check(world.getServer().computeOnServer(server -> player(world).containerMenu.slots.get(0).getItem().is(Items.OAK_PLANKS)), "Vanilla crafting recipe must produce oak planks");
             screenshot(context, "06-persistent-crafting");
-            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
             check(world.getServer().computeOnServer(server -> bag(world).upgradeInventory(BackpackTestSupport.upgrade(bag(world), 1)).getItem(0).is(Items.OAK_LOG)), "Closing the workstation must retain its grid");
 
-            context.getInput().pressKey(GLFW.GLFW_KEY_G);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_G);
             context.waitForScreen(EquipmentScreen.class);
             clickPlayerSlot(context, 2);
             clickSlot(context, 0);
             world.getServer().waitFor(server -> BackpackRegistry.tier(BackpackEquipment.get(player(world))).orElse(null) == BackpackTier.GOLD);
             check(world.getServer().computeOnServer(server -> player(world).getItemBySlot(EquipmentSlot.CHEST).is(Items.DIAMOND_CHESTPLATE)), "Native backpack equipment must leave chest armor intact");
             screenshot(context, "07-native-equipment-with-armor");
-            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
-            context.getInput().pressKey(GLFW.GLFW_KEY_F5);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_F5);
             context.getInput().lookAt(0, 15);
             context.waitTicks(6);
             screenshot(context, "08-worn-backpack-with-armor");
-            context.getInput().pressKey(GLFW.GLFW_KEY_F5);
-            context.getInput().pressKey(GLFW.GLFW_KEY_F5);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_F5);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_F5);
             context.waitTicks(2);
             wornAppearance(context, world);
             BrowserClientAcceptance.run(context, world);
@@ -196,14 +196,14 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             check(reopened.getServer().computeOnServer(server -> ResourceRuntime.tankStoredMb(bag(reopened), 2)) == 1000, "Fluid must survive world save/reopen");
             check(reopened.getServer().computeOnServer(server -> bag(reopened).upgradeInventory(BackpackTestSupport.upgrade(bag(reopened), 1)).getItem(0).getCount()) == 3, "Crafting input must survive world save/reopen");
             check(reopened.getServer().computeOnServer(server -> BackpackRegistry.tier(BackpackEquipment.get(player(reopened))).orElse(null)) == BackpackTier.GOLD, "Independent equipment attachment must survive world save/reopen");
-            context.getInput().pressKey(GLFW.GLFW_KEY_B);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
             context.waitForScreen(BackpackScreen.class);
             check(context.computeOnClient(client -> ((BackpackScreen) client.gui.screen()).getMenu().bag().tier()) == BackpackTier.GOLD, "B must open the equipped backpack after reconnect");
             screenshot(context, "09-world-reopened-equipment");
             evidence.add("Save/reopen: identity, 200000-count stack, all12records, 1000mB water, persistent crafting input, independent equipment");
             evidence.add("Save/reopen: exact paused steam engine components, physical slots and every installed conduit lane/face mode.");
             evidence.add("Reload routing: the reconstructed conduit graph transfers a new physical item and the saved engine resumes natural generation.");
-            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
             expected = ClientAcceptanceFiles.snapshot(reopened);
         }
@@ -222,7 +222,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
     }
 
     private static void inputIsolation(ClientGameTestContext context, TestSingleplayerContext world) {
-        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
         context.waitForScreen(BackpackScreen.class);
         context.runOnClient(client -> {
             var screen = (BackpackScreen) client.gui.screen();
@@ -243,7 +243,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         context.waitForScreen(BackpackScreen.class);
         searchBrowser(context, "seed");
         int containerId = context.computeOnClient(client -> client.player.containerMenu.containerId);
-        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
         context.getInput().typeChars("b");
         context.waitTicks(3);
         check(context.computeOnClient(client -> client.gui.screen() instanceof BackpackScreen screen
@@ -252,41 +252,41 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                         .anyMatch(box -> box.visible && box.active && box.isFocused() && box.getValue().equals("seedb"))),
                 "Typing physical B into a backpack search field keeps the same menu focused and enters the letter");
 
-        context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
         context.waitFor(client -> client.gui.screen() == null);
-        context.getInput().pressKey(GLFW.GLFW_KEY_E);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_E);
         context.waitForScreen(InventoryScreen.class);
-        for (int press = 0; press < 3; press++) context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        for (int press = 0; press < 3; press++) context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
         context.waitTicks(5);
         check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
                 "Repeated backpack key presses are ignored while an inventory menu is open");
         world.getServer().waitFor(server -> player(world).containerMenu == player(world).inventoryMenu);
         allBindingsIgnoreMenus(context, world);
-        context.getInput().holdKey(GLFW.GLFW_KEY_B);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
         try {
             context.waitTicks(3);
-            context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE);
             context.waitFor(client -> client.gui.screen() == null);
             context.waitTicks(5);
             world.getServer().waitFor(server -> player(world).containerMenu == player(world).inventoryMenu);
             check(context.computeOnClient(client -> client.gui.screen() == null),
                     "A held backpack key consumed by a menu does not queue an open after that menu closes");
         } finally {
-            context.getInput().releaseKey(GLFW.GLFW_KEY_B);
+            context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
         }
-        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
         context.waitForScreen(BackpackScreen.class);
     }
 
     private static void checkUpgradeSettingTooltips(ClientGameTestContext context) {
         context.waitTicks(2);
         checkUpgradeSettingTooltips(context, false);
-        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         try {
             context.waitTicks(2);
             checkUpgradeSettingTooltips(context, true);
         } finally {
-            context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+            context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
         }
         context.waitTicks(2);
         checkUpgradeSettingTooltips(context, false);
@@ -333,39 +333,39 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         });
         try {
             for (String name : MOD_KEY_BINDINGS) {
-                bindOnly(context, name, InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_F10);
+                bindOnly(context, name, InputConstants.Type.KEYBOARD, com.mojang.blaze3d.platform.InputConstants.KEY_F10);
                 boolean upgrade = name.contains(".upgrade_");
-                if (upgrade) context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_ALT);
+                if (upgrade) context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LALT);
                 try {
-                    context.getInput().pressKey(GLFW.GLFW_KEY_F10);
+                    context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_F10);
                     context.waitTicks(2);
                 } finally {
-                    if (upgrade) context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_ALT);
+                    if (upgrade) context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LALT);
                 }
                 check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
                         name + " cannot replace or close an open keyboard-driven menu");
 
-                bindOnly(context, name, InputConstants.Type.MOUSE, GLFW.GLFW_MOUSE_BUTTON_4);
-                if (upgrade) context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_ALT);
+                bindOnly(context, name, InputConstants.Type.MOUSE, com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_4);
+                if (upgrade) context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LALT);
                 try {
-                    context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_4);
+                    context.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_4);
                     context.waitTicks(2);
                 } finally {
-                    if (upgrade) context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_ALT);
+                    if (upgrade) context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LALT);
                 }
                 check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
                         name + " cannot replace or close an open mouse-driven menu");
             }
 
             context.runOnClient(client -> {
-                InputConstants.Key key = InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_F10);
+                InputConstants.Key key = InputConstants.Type.KEYBOARD.getOrCreate(com.mojang.blaze3d.platform.InputConstants.KEY_F10);
                 for (String name : MOD_KEY_BINDINGS) KeyMapping.get(name).setKey(key);
                 KeyMapping.resetMapping();
                 KeyMapping.click(key);
             });
-            context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_ALT);
+            context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LALT);
             try { context.waitTicks(3); }
-            finally { context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_ALT); }
+            finally { context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LALT); }
             check(context.computeOnClient(client -> client.gui.screen() instanceof InventoryScreen),
                     "Even pending clicks for every mod binding are drained without acting while a menu is open");
             check(world.getServer().computeOnServer(server -> player(world).containerMenu == player(world).inventoryMenu
@@ -373,7 +373,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                             && ItemStack.matches(BackpackEquipment.get(player(world)), wornBefore)),
                     "Menu-blocked bindings cannot mutate storage, equipment, or upgrade settings on the server");
         } finally {
-            context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_ALT);
+            context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LALT);
             context.runOnClient(client -> {
                 for (String name : MOD_KEY_BINDINGS) {
                     KeyMapping mapping = KeyMapping.get(name);
@@ -386,7 +386,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
 
     private static void bindOnly(ClientGameTestContext context, String selected, InputConstants.Type type, int code) {
         context.runOnClient(client -> {
-            InputConstants.Key unbound = InputConstants.Type.KEYSYM.getOrCreate(GLFW.GLFW_KEY_UNKNOWN);
+            InputConstants.Key unbound = InputConstants.Type.KEYBOARD.getOrCreate(com.mojang.blaze3d.platform.InputConstants.UNKNOWN.getValue());
             for (String name : MOD_KEY_BINDINGS) KeyMapping.get(name).setKey(unbound);
             KeyMapping.get(selected).setKey(type.getOrCreate(code));
             KeyMapping.resetMapping();
@@ -456,7 +456,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
     }
 
     private static void jukeboxPages(ClientGameTestContext context, TestSingleplayerContext world) {
-        context.getInput().pressKey(GLFW.GLFW_KEY_B);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
         context.waitForScreen(BackpackScreen.class);
         selectUpgrade(context, 0);
         context.waitFor(client -> {
@@ -628,7 +628,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                 wearer.inventoryMenu.broadcastChanges();
             });
             world.getConnection().waitForClientboundPackets();
-            context.getInput().pressKey(GLFW.GLFW_KEY_9);
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_9);
             context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
             context.getInput().lookAt(0F, 10F);
             hideCaptureHud(context, true);
@@ -655,12 +655,12 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                     String name = "worn-rear-" + (dyed ? "dyed" : "default") + (armored ? "-armor" : "-no-armor");
                     captureWorn(context, probe, captures, name, armored, body, trim, false);
                 }
-                context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+                context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
                 try {
                     context.waitFor(client -> client.player.isCrouching());
                     context.waitTicks(4);
                     captureWorn(context, probe, captures, "worn-rear-dyed-armor-crouching", true, 0xb8292f, 0xc9985f, true);
-                } finally { context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT); }
+                } finally { context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT); }
             }
             check(world.getServer().computeOnServer(server -> {
                 var pack = BackpackEquipment.inventory(player(world)).orElseThrow();
@@ -669,7 +669,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             evidence.add("Worn appearance: real local player rear views with empty hands, default/dual-dyed leather, with/without diamond chest armor, and native crouch; native extracted avatar snapshots completed through END_MAIN and selected-item display. Fit and clipping still require visual review.");
             passed = true;
         } finally {
-            context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_SHIFT);
+            context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
             world.getServer().runOnServer(server -> {
                 var wearer = player(world);
                 BackpackEquipment.set(wearer, before.backpack());
@@ -682,7 +682,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                 wearer.inventoryMenu.broadcastChanges();
             });
             world.getConnection().waitForClientboundPackets();
-            context.getInput().pressKey(GLFW.GLFW_KEY_1 + before.selected());
+            context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_1 + before.selected());
             context.getInput().lookAt(before.yaw(), before.pitch());
             context.runOnClient(client -> client.options.setCameraType(camera));
             hideCaptureHud(context, hudHidden);
@@ -718,7 +718,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
     }
 
     static void hideCaptureHud(ClientGameTestContext context, boolean hidden) {
-        if (context.computeOnClient(client -> client.gui.hud.isHidden()) != hidden) context.getInput().pressKey(GLFW.GLFW_KEY_F1);
+        if (context.computeOnClient(client -> client.gui.hud.isHidden()) != hidden) context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_F1);
         context.waitFor(client -> client.gui.hud.isHidden() == hidden);
     }
 
@@ -901,11 +901,11 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         double[] position = context.computeOnClient(client -> client.gui.screen().children().stream().filter(EditBox.class::isInstance)
                 .map(EditBox.class::cast).filter(box -> box.visible && box.active)
                 .map(box -> new double[]{box.getX() + 8, box.getY() + 8}).findFirst().orElseThrow());
-        clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
-        context.getInput().holdKey(GLFW.GLFW_KEY_LEFT_CONTROL);
-        context.getInput().pressKey(GLFW.GLFW_KEY_A);
-        context.getInput().releaseKey(GLFW.GLFW_KEY_LEFT_CONTROL);
-        context.getInput().pressKey(GLFW.GLFW_KEY_BACKSPACE);
+        clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
+        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_A);
+        context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL);
+        context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_BACKSPACE);
         context.getInput().typeChars(query);
         context.waitTicks(4);
         check(context.computeOnClient(client -> client.gui.screen().children().stream().filter(EditBox.class::isInstance)
@@ -948,7 +948,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                     "The actual backpack hit target must fit the viewport: " + bounds);
             return new double[]{bounds.left() + bounds.width() / 2.0, bounds.top() + bounds.height() / 2.0};
         });
-        clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
     }
 
     static void clickButton(ClientGameTestContext context, String label) {
@@ -971,7 +971,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                 .filter(button -> button.visible && button.active && button.getMessage().getString().equals(label))
                 .map(button -> new double[]{button.getX() + button.getWidth() / 2.0, button.getY() + button.getHeight() / 2.0})
                 .findFirst().orElseThrow());
-        clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
     }
 
     static void waitBrowser(ClientGameTestContext context) {
@@ -1007,7 +1007,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                     "The requested physical slot must fit the actual viewport: " + slotIndex);
             return new double[]{origin.fabricatedBackpacks$left() + slot.x + 8, origin.fabricatedBackpacks$top() + slot.y + 8};
         });
-        clickAt(context, position[0], position[1], GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
     }
     static void clickAt(ClientGameTestContext context, double x, double y, int button) {
         double[] window = context.computeOnClient(client -> new double[]{x * client.getWindow().getScreenWidth() / client.getWindow().getGuiScaledWidth(),

@@ -3,7 +3,6 @@ package com.kadamitas.fabricatedbackpacks.block;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenus;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
-import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -48,7 +47,6 @@ public final class BackpackBlock extends BaseEntityBlock implements SimpleWaterl
     public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty OPEN = BlockStateProperties.OPEN;
     public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
-    public static final MapCodec<BackpackBlock> CODEC = simpleCodec(BackpackBlock::new);
     // Five closed-model groups cover the shell, front pouch, side pouches and
     // handle. The visual lid does not change collision while viewers open it.
     private static final Map<Direction, VoxelShape> SHAPES = Shapes.rotateHorizontal(Shapes.or(
@@ -62,7 +60,6 @@ public final class BackpackBlock extends BaseEntityBlock implements SimpleWaterl
         super(properties);
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH).setValue(OPEN, false).setValue(WATERLOGGED, false));
     }
-    @Override protected MapCodec<BackpackBlock> codec() { return CODEC; }
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(FACING, OPEN, WATERLOGGED); }
     @Override protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) { return SHAPES.get(state.getValue(FACING)); }
     @Override public BlockState getStateForPlacement(BlockPlaceContext context) {
