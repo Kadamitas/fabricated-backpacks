@@ -23,6 +23,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.BackupConfirmScreen;
 import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.contents.TranslatableContents;
@@ -70,7 +71,9 @@ public final class ClientGameTestImpl {
 	}
 
 	private static boolean isWorldLoadingFinished(Minecraft client) {
-		LOGGER.info("World loading finished: {} screen: {}", client.level, client.gui.screen());
+		if (client.gui.screen() instanceof DisconnectedScreen disconnected) {
+			throw new AssertionError("Disconnected while loading the test world: " + disconnected.getNarrationMessage().getString());
+		}
 		return client.level != null && !(client.gui.screen() instanceof LevelLoadingScreen);
 	}
 }

@@ -76,7 +76,8 @@ neoForge {
             systemProperty 'fabricated.backpacks.evidenceRoot', layout.projectDirectory.dir('.codex-local/client-evidence').asFile.absolutePath
             systemProperty 'fabric.client.gametest.testModResourcesPath', layout.projectDirectory.dir('src/gametest/resources').asFile.absolutePath
             programArgument '--username'
-            programArgument 'BackpackClientTests'
+            // The login protocol caps profile names at 16 characters.
+            programArgument 'BackpackTests'
         }
     }
     mods {
