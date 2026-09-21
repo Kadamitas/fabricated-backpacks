@@ -42,12 +42,30 @@ jobs:
           python tools/generate_assets.py --check
           python tools/test_verify_evidence.py
           python tools/test_run_multiplayer.py
+      - name: Compute the production hash of the shipped mod
+        id: production
+        run: python tools/ci_ledger.py hash
+      - name: Restore the passed-stage ledger for this branch and production hash
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .ci-ledger
+          key: passed-${{ github.ref_name }}-${{ steps.production.outputs.hash }}-${{ github.run_id }}
+          restore-keys: passed-${{ github.ref_name }}-${{ steps.production.outputs.hash }}-
       - name: Start a fresh verification record
         run: python tools/verify_evidence.py begin
+      - name: Skip unit and server tests only if they passed for this exact production hash
+        id: unit
+        run: python tools/ci_ledger.py check unit-server
       - name: Execute unit and real native server tests and build the production JAR
+        if: steps.unit.outputs.skip != 'true'
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --console=plain --no-build-cache --rerun-tasks test runGameTestServer jar
+      - name: Build the production JAR (unit and server tests already passed for this production hash)
+        if: steps.unit.outputs.skip == 'true'
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain --no-build-cache --rerun-tasks jar
       - name: Audit assets against the exact resolved Minecraft client
         run: |
           python - <<'PY'
@@ -64,21 +82,53 @@ jobs:
           PY
       - name: Require exact discovery, fresh passing reports and a clean production JAR
         run: python tools/verify_evidence.py check
+      - name: Record the unit and server pass in the ledger
+        if: steps.unit.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq '{unit_tests, unit_test_classes, unit_test_methods, server_tests, mod_server_tests}' build/verification/automated.json > build/verification/unit-server-summary.json
+          python tools/ci_ledger.py record unit-server --summary build/verification/unit-server-summary.json
+      - name: Skip the rendered client stages only if they passed for this exact production hash
+        id: client
+        run: |
+          python tools/ci_ledger.py check client-full
+          python tools/ci_ledger.py check client-restart --output restart
+          python tools/ci_ledger.py check multiplayer --output multiplayer
       - name: Install virtual display for non-invasive automated acceptance
+        if: steps.client.outputs.skip != 'true' || steps.client.outputs.multiplayer != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libopengl0 libopenal1 mesa-utils mesa-vulkan-drivers
       # Exercise the native multiplayer bootstrap first for fast diagnostics;
       # full rendered/restart acceptance remains mandatory before bundling.
       - name: Run actual two-JVM multiplayer acceptance
+        if: steps.client.outputs.multiplayer != 'true'
         run: timeout --signal=INT --kill-after=60 25m xvfb-run -a -s '-screen 0 1280x800x24' python tools/run_multiplayer.py
+      - name: Record the multiplayer pass in the ledger
+        if: steps.client.outputs.multiplayer != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq '{run_id, host_pid, guest_pid, host_exit, guest_exit}' build/verification/multiplayer.json > build/verification/multiplayer-summary.json
+          python tools/ci_ledger.py record multiplayer --summary build/verification/multiplayer-summary.json
       - name: Run full native client and separate-JVM restart acceptance
+        if: steps.client.outputs.skip != 'true'
         run: |
           # A loading-error screen or a stalled harness must fail the step, not idle until the job limit.
           timeout --signal=INT --kill-after=60 20m xvfb-run -a -s '-screen 0 1280x800x24' bash -c 'glxinfo -B && exec ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest'
           timeout --signal=INT --kill-after=60 15m xvfb-run -a -s '-screen 0 1280x800x24' ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest -PclientScenario=restart
           mkdir -p .codex-local/client-evidence/restart-screenshots
           cp -p build/run/clientGameTest/screenshots/*.png .codex-local/client-evidence/restart-screenshots/
+      - name: Record the full and restart client passes in the ledger
+        if: steps.client.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jq '{pid, checks: (.checks | length)}' .codex-local/client-evidence/full-pass.json > build/verification/client-full-summary.json
+          jq '{writer_pid, reader_pid}' .codex-local/client-evidence/restart-pass.json > build/verification/client-restart-summary.json
+          python tools/ci_ledger.py record client-full --summary build/verification/client-full-summary.json
+          python tools/ci_ledger.py record client-restart --summary build/verification/client-restart-summary.json
       - name: Bundle stable release with explicitly automated-only verification
         run: ./gradlew --no-daemon --max-workers=2 --console=plain releaseBundle
       - name: Upload verified release bundle
@@ -87,6 +137,12 @@ jobs:
           name: release-bundle-${{ github.run_id }}
           if-no-files-found: error
           path: release/
+      - name: Save the passed-stage ledger (only stages that passed in this job are ever recorded)
+        if: ${{ !cancelled() && hashFiles('.ci-ledger/ledger.json') != '' }}
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .ci-ledger
+          key: passed-${{ github.ref_name }}-${{ steps.production.outputs.hash }}-${{ github.run_id }}
       - name: Upload diagnostics and automated evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -104,6 +160,8 @@ jobs:
             build/verification/automated.json
             build/verification/release.json
             build/verification/multiplayer.json
+            build/verification/skipped.json
+            .ci-ledger/
             .codex-local/client-evidence/
             build/run/clientGameTest/logs/
             build/run/clientGameTest/screenshots/
