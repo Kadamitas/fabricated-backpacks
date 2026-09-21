@@ -477,7 +477,7 @@ def verify_multiplayer(started: float) -> dict:
     return record
 
 
-def verify_clients(started: float, artifact: dict) -> dict:
+def verify_clients(started: float, artifact: dict, automated_release: bool = False) -> dict:
     full = read_object(CLIENT / "full-pass.json", started)
     restart = read_object(CLIENT / "restart-pass.json", started)
     require(full.get("passed") is True and restart.get("passed") is True, "Client acceptance did not finish successfully")
@@ -493,6 +493,9 @@ def verify_clients(started: float, artifact: dict) -> dict:
         for screenshot in screenshots:
             audit_screenshot(screenshot, started)
     multiplayer = verify_multiplayer(started)
+    if automated_release:
+        return {"full": full, "restart": restart, "multiplayer": multiplayer, "manual": None,
+                "manual_status": "Not performed at the owner's request; automated verification only"}
     manual = read_object(OUTPUT / "manual.json", started)
     require(manual.get("passed") is True and manual.get("artifact_sha256") == artifact["sha256"],
             "Manual installed-JAR acceptance is missing or for another binary")
@@ -507,7 +510,7 @@ def verify_clients(started: float, artifact: dict) -> dict:
     return {"full": full, "restart": restart, "multiplayer": multiplayer, "manual": manual}
 
 
-def verify(release: bool) -> dict:
+def verify(release: bool, automated_release: bool = False) -> dict:
     start = object_json((OUTPUT / "start.json").read_bytes(), "verification start")
     require(start.get("schema") == 1, "Unsupported verification-start schema; run begin again")
     run_id = canonical_uuid(start.get("run_id"), "verification start")
@@ -537,8 +540,9 @@ def verify(release: bool) -> dict:
     jar = ROOT / "build/libs" / f"fabricated-backpacks-{version}.jar"
     require(jar.is_file(), f"Expected current main release JAR: {jar.name}")
     result["artifact"] = audit_jar(jar, started, version, minecraft)
-    if release:
-        result["client"] = verify_clients(started, result["artifact"])
+    if release or automated_release:
+        result["scope"] = "release-automated" if automated_release else "release"
+        result["client"] = verify_clients(started, result["artifact"], automated_release)
     return result
 
 
@@ -554,7 +558,9 @@ def write_atomic(path: Path, record: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("begin", "check"))
-    parser.add_argument("--release", action="store_true", help="Require full client, separate-JVM restart, multiplayer and installed-JAR manual evidence")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--release", action="store_true", help="Require full client, separate-JVM restart, multiplayer and installed-JAR manual evidence")
+    modes.add_argument("--automated-release", action="store_true", help="Require every automated release check; explicitly omit owner-waived manual testing")
     args = parser.parse_args(argv)
     try:
         OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -566,9 +572,9 @@ def main(argv: list[str] | None = None) -> int:
             write_atomic(OUTPUT / "start.json", record)
             print(f"Verification started: {record['run_id']} ({len(snapshot)} input files)")
         else:
-            target = OUTPUT / ("release.json" if args.release else "automated.json")
+            target = OUTPUT / ("release.json" if args.release or args.automated_release else "automated.json")
             target.unlink(missing_ok=True)
-            record = verify(args.release)
+            record = verify(args.release, args.automated_release)
             write_atomic(target, record)
             print(f"Verified {record['unit_tests']} unit and {record['server_tests']} server tests; scope={record['scope']}; sha256={record['artifact']['sha256']}")
         return 0

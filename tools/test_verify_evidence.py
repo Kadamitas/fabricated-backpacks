@@ -159,6 +159,18 @@ class EvidenceGateTest(unittest.TestCase):
             code = gate.main(arguments)
         return code, output.getvalue()
 
+    def test_automated_release_explicitly_omits_manual_only(self) -> None:
+        (self.output / "manual.json").unlink()
+        result = gate.verify(False, automated_release=True)
+        self.assertEqual("release-automated", result["scope"])
+        self.assertIsNone(result["client"]["manual"])
+        for path in (self.client / "full-pass.json", self.client / "restart-pass.json", self.output / "multiplayer.json"):
+            original = path.read_bytes()
+            path.unlink()
+            with self.assertRaises(Exception):
+                gate.verify(False, automated_release=True)
+            self.write(path, original)
+
     def test_complete_automated_and_release_fixtures_are_accepted(self) -> None:
         automated = gate.verify(False)
         self.assertEqual((1, 3, 2), (automated["unit_tests"], automated["server_tests"], automated["mod_server_tests"]))

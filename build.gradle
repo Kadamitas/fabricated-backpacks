@@ -126,9 +126,9 @@ tasks.withType(Jar).configureEach {
 
 tasks.register('verifyReleaseEvidence', Exec) {
     group = 'verification'
-    description = 'Require fresh build, server, real-client and manual evidence before bundling a release.'
+    description = 'Require fresh build, server and real-client automated evidence; manual testing is owner-waived.'
     dependsOn tasks.named('build')
-    commandLine 'python', 'tools/verify_evidence.py', 'check', '--release'
+    commandLine 'python', 'tools/verify_evidence.py', 'check', '--automated-release'
 }
 
 tasks.register('releaseBundle') {

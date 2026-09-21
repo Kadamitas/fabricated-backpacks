@@ -52,7 +52,8 @@ jobs:
           digest="$(sha256sum "$artifact" | cut -d ' ' -f 1)"
           [[ "$(cat "$artifact.sha256")" == "$digest  $artifact" ]]
           jq -e --arg digest "$digest" --arg version "$version" --arg minecraft "${version##*+mc}" \
-            '.schema == 1 and .passed == true and .scope == "release" and .client != null
+            '.schema == 1 and .passed == true and (.scope == "release" or .scope == "release-automated")
+              and .client.full.passed == true and .client.restart.passed == true and .client.multiplayer.passed == true
              and .artifact.sha256 == $digest and .artifact.version == $version and .artifact.minecraft == $minecraft' \
             "$artifact.release.json" > /dev/null
           echo "ARTIFACT=$artifact" >> "$GITHUB_ENV"
