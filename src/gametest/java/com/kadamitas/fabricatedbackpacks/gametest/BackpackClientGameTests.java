@@ -276,6 +276,9 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         }
         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
         context.waitForScreen(BackpackScreen.class);
+        // The search-entry scenario deliberately persisted "seedb". Clear it
+        // before the following storage-transfer scenario needs unfiltered slots.
+        searchBrowser(context, "");
     }
 
     private static void checkUpgradeSettingTooltips(ClientGameTestContext context) {
@@ -924,8 +927,17 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
             return "Upgrade " + (upgradeSlot + 1) + ": " + upgrade.stack().getHoverName().getString();
         });
         clickButton(context, label);
-        context.waitFor(client -> client.gui.screen() instanceof BackpackScreen screen
-                && screen.getMenu().selectedSlot() == upgradeSlot);
+        try {
+            context.waitFor(client -> client.gui.screen() instanceof BackpackScreen screen
+                    && screen.getMenu().selectedSlot() == upgradeSlot);
+        } catch (AssertionError failure) {
+            context.takeScreenshot("upgrade-tab-timeout");
+            String details = context.computeOnClient(client -> "screen=" + client.gui.screen()
+                    + ", mouse=" + client.mouseHandler.getScaledXPos(client.getWindow()) + ","
+                    + client.mouseHandler.getScaledYPos(client.getWindow())
+                    + ", selection=" + (client.gui.screen() instanceof BackpackScreen screen ? screen.getMenu().selectedSlot() : -1));
+            throw new AssertionError("Upgrade tab did not select slot " + upgradeSlot + ": " + details, failure);
+        }
         context.waitTicks(2);
     }
 

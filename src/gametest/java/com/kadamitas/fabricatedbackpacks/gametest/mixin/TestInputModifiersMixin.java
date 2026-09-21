@@ -7,13 +7,13 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 /**
- * Fabric's 26.2 test driver tracks held modifiers but constructs input events with zero flags.
+ * Fabric's 26.3 SDL test driver tracks held modifiers but constructs input events with zero flags.
  * Supply those flags on the test driver only; production input and screen code are unchanged.
  */
 @Mixin(value = TestInputImpl.class, remap = false)
 abstract class TestInputModifiersMixin {
     @ModifyArg(method = "pressOrReleaseKey", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/input/KeyEvent;<init>(III)V"), index = 2, require = 2)
+            target = "Lnet/minecraft/client/input/KeyEvent;<init>(III)V"), index = 2, require = 1)
     private static int keyboardModifiers(int original) { return original | heldModifiers(); }
 
     @ModifyArg(method = "pressOrReleaseKey", at = @At(value = "INVOKE",

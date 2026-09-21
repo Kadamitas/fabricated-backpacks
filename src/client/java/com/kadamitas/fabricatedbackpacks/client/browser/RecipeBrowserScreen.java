@@ -278,13 +278,13 @@ final class RecipeBrowserScreen extends Screen {
     private void choose(ItemStack stack, InputWithModifiers input) {
         if (stack.isEmpty()) return;
         Identifier id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        if (input.hasShiftDown() || input instanceof MouseButtonEvent mouse && mouse.button() == 2) {
+        if (input.hasShiftDown() || input instanceof MouseButtonEvent mouse && mouse.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_MIDDLE) {
             if (!RecipeBrowserClient.bookmarks().toggleItem(id)) bookmarkLimit();
             refreshItems();
             refreshRecipes();
             return;
         }
-        boolean nextUses = input instanceof MouseButtonEvent mouse && mouse.button() == 1;
+        boolean nextUses = input instanceof MouseButtonEvent mouse && mouse.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT;
         select(id, nextUses);
     }
 
@@ -456,7 +456,7 @@ final class RecipeBrowserScreen extends Screen {
             this.source = source;
         }
         @Override public void onPress(InputWithModifiers input) { choose(source.get(), input); }
-        @Override protected boolean isValidClickButton(MouseButtonInfo mouse) { return mouse.button() >= 0 && mouse.button() <= 2; }
+        @Override protected boolean isValidClickButton(MouseButtonInfo mouse) { return mouse.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT || mouse.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_MIDDLE || mouse.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT; }
         @Override protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             ItemStack stack = source.get();
             graphics.fill(getX(), getY(), getRight(), getBottom(), isHoveredOrFocused() ? 0xFF708B89 : 0xFF13242D);

@@ -728,7 +728,7 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
                     capture.getIntOr("width", 1) * 18 - 2, (Math.min(menu.visibleRows(), row + rows) - Math.max(0, row)) * 18 - 2,
                     event.x(), event.y())) {
                 beginCustomClick(event);
-                if (event.button() == 1) send("release_mob", index, 0, "");
+                if (event.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT) send("release_mob", index, 0, "");
                 return true;
             }
         }
@@ -743,11 +743,11 @@ public final class BackpackScreen extends AbstractContainerScreen<BackpackMenu> 
         if (upgrade != null) for (int index = 0; index < menu.bag().filterSlots(upgrade); index++) {
             if (ghostBounds(index).filter(bounds -> contains(bounds, event.x(), event.y())).isPresent()) {
                 beginCustomClick(event);
-                if (event.button() == 0 && menu.getCarried().isEmpty()) {
+                if (event.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT && menu.getCarried().isEmpty()) {
                     com.kadamitas.fabricatedbackpacks.client.browser.RecipeBrowserClient.openForGhost(this, index);
                     return true;
                 }
-                send("ghost", index, event.button() == 1 ? 1 : 0, ""); return true;
+                send("ghost", index, event.button() == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT ? 1 : 0, ""); return true;
             }
         }
         return super.mouseClicked(event, doubleClick);
