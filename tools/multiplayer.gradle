@@ -161,7 +161,12 @@ if (requestedId == null) {
                 // The same explicit project test-EULA acceptance as runClientGameTest.
                 writeNew(directory.resolve('eula.txt'), '# Synthetic acceptance server; the project test setup accepts the EULA.\neula=true\n')
                 Map<String, String> environment = new LinkedHashMap<>()
-                task.environment.each { key, value -> environment.put(key.toString(), value.toString()) }
+                // The controller inherits its process environment. Never persist inherited
+                // CI credentials or local keys in a diagnostic launch manifest.
+                task.environment.each { key, value ->
+                    if (!java.util.Objects.equals(System.getenv(key.toString()), value.toString()))
+                        environment.put(key.toString(), value.toString())
+                }
                 environment.putAll(task.environmentProperty.get())
                 commands[role] = [java: task.javaLauncher.get().executablePath.asFile.absolutePath,
                         directory: directory.toString(), argument_file: argsFile.toString(), argument_sha256: digest(argsFile),

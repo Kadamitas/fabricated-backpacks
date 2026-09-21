@@ -61,7 +61,43 @@ final class NativeHandlerGameTests {
             transaction.commit();
         }
         helper.assertValueEqual(BackpackTestSupport.count(entity.inventory(), Items.EMERALD), 7, "Native insertion is stored in the backpack");
+        nativeIndexedVoidAdmission(helper);
         helper.succeed();
+    }
+
+    private static void nativeIndexedVoidAdmission(GameTestHelper helper) {
+        BlockPos position = helper.absolutePos(new BlockPos(4, 2, 2));
+        BagInventory seed = BackpackTestSupport.bag(BackpackTier.LEATHER, UpgradeKind.VOID);
+        var upgrade = BackpackTestSupport.upgrade(seed, 0);
+        seed.setFilter(upgrade, 0, new ItemStack(Items.DIRT));
+        seed.updateSettings(upgrade, state -> state.putString("void_mode", "ALWAYS"));
+        BackpackBlockEntity entity = place(helper, position, seed);
+        BagInventory bag = entity.inventory();
+        ResourceHandler<ItemResource> handler = helper.getLevel().getCapability(Capabilities.Item.BLOCK, position, Direction.NORTH);
+        helper.assertTrue(handler != null, "The void backpack exposes a real native indexed item handler");
+        try (Transaction transaction = Transaction.openRoot()) {
+            helper.assertValueEqual(handler.insert(0, ItemResource.of(Items.DIRT), 7, transaction), 7,
+                    "Indexed native insertion honors ALWAYS void admission");
+            transaction.commit();
+        }
+        helper.assertValueEqual(BackpackTestSupport.count(bag, Items.DIRT), 0,
+                "ALWAYS void does not leak the discarded item into the selected physical slot");
+        bag.updateSettings(BackpackTestSupport.upgrade(bag, 0), state -> state.putString("void_mode", "OVERFLOW"));
+        bag.setItem(0, new ItemStack(Items.STONE, 64));
+        try (Transaction transaction = Transaction.openRoot()) {
+            helper.assertValueEqual(handler.insert(0, ItemResource.of(Items.DIRT), 7, transaction), 0,
+                    "A blocked indexed slot cannot void items while another physical slot has room");
+            helper.assertValueEqual(handler.insert(1, ItemResource.of(Items.DIRT), 7, transaction), 7,
+                    "The requested empty slot accepts overflow-mode input normally");
+        }
+        helper.assertValueEqual(BackpackTestSupport.count(bag, Items.DIRT), 0,
+                "Aborted indexed admission and capacity probes leave all physical slots unchanged");
+        try (Transaction transaction = Transaction.openRoot()) {
+            handler.insert(1, ItemResource.of(Items.DIRT), 7, transaction);
+            transaction.commit();
+        }
+        helper.assertValueEqual(bag.getItem(1).getCount(), 7, "Committed indexed insertion keeps its physical slot identity");
+        helper.assertValueEqual(bag.getItem(0).getCount(), 64, "Indexed admission never rewrites the unrelated full slot");
     }
 
     static void nativeEnergyHandlerTransfer(GameTestHelper helper) {
