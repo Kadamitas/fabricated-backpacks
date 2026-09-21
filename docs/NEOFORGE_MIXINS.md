@@ -32,4 +32,6 @@ The relocated Apache-2.0 Fabric client harness retains 24 upstream hooks for det
 
 The existing test-only `MainMixin` also prevents a second NeoForge mod-construction pass when that harness starts its real dedicated server inside the already-initialized host client JVM. It is restricted to an active harness server start in client distribution; ordinary dedicated launches retain the native loader bootstrap. The actual dedicated-server implementation, socket connections, registration results, and multiplayer assertions are unchanged.
 
+The native test harness uses an ordinary configuration-task event to isolate that embedded server's static tag bindings from its host client's frozen-registry remap. It snapshots the actual loaded server tags and sends the restored bindings through the normal tag packet after the native handshake. This applies only to the embedded host profile; the separate guest receives the unchanged native protocol. No production registry behavior or handshake acknowledgment is bypassed.
+
 Release verification still requires the real unit, server, rendered-client, separate-JVM restart, and two-client multiplayer checks. A compile-only result is not a claim that those runtime gates passed.

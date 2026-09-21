@@ -38,6 +38,8 @@ public class TestDedicatedServerContextImpl extends TestServerContextImpl implem
 	@Override
 	public TestDedicatedServerConnection connect() {
 		ThreadingImpl.checkOnGametestThread("connect");
+		var hostProfile = context.computeOnClient(client -> client.getGameProfile().id());
+		runOnServer(value -> com.kadamitas.fabricatedbackpacks.testplatform.impl.util.EmbeddedServerTagIsolation.capture(value, hostProfile));
 
 		context.runOnClient(client -> {
 			final var serverInfo = new ServerData("localhost", getConnectionAddress(), ServerData.Type.OTHER);
@@ -61,6 +63,7 @@ public class TestDedicatedServerContextImpl extends TestServerContextImpl implem
 			throw new AssertionError("Stopped the dedicated server before closing the dedicated server context");
 		}
 
+		com.kadamitas.fabricatedbackpacks.testplatform.impl.util.EmbeddedServerTagIsolation.clear(server);
 		server.halt(false);
 		context.waitFor(client -> !ThreadingImpl.isServerRunning && !server.getRunningThread().isAlive());
 	}

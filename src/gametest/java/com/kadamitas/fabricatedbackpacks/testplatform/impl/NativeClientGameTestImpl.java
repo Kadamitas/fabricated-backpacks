@@ -31,6 +31,7 @@ public class NativeClientGameTestImpl {
 		}
 
 		// Both directions carry the same handler; a missing client handler is a client loading error.
+		modBus.addListener(com.kadamitas.fabricatedbackpacks.testplatform.impl.util.EmbeddedServerTagIsolation::configure);
 		modBus.addListener((RegisterPayloadHandlersEvent event) -> event.registrar("1")
 				.playBidirectional(GameTestSyncPayload.TYPE, GameTestSyncPayload.CODEC,
 						(_, _) -> ThreadingImpl.networkSyncReceived = true,
