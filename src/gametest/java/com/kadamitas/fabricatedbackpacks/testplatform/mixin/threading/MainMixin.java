@@ -24,6 +24,15 @@ import net.minecraft.server.Main;
 
 @Mixin(Main.class)
 public class MainMixin {
+	@WrapWithCondition(method = "main", at = @At(value = "INVOKE", target = "Lnet/neoforged/neoforge/server/loading/ServerModLoader;load(Z)V"))
+	private static boolean dontConstructLoadedClientModsAgain(boolean gameTestServer) {
+		// The upstream harness starts a real dedicated server in its host client JVM.
+		// NeoForge's client already completed mod construction/registration; starting
+		// the server must reuse that runtime instead of registering every mod twice.
+		return com.kadamitas.fabricatedbackpacks.testplatform.impl.util.DedicatedServerImplUtil.serverFuture == null
+				|| !net.neoforged.fml.loading.FMLEnvironment.getDist().isClient();
+	}
+
 	@WrapWithCondition(method = "main", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Util;startTimerHackThread()V"))
 	private static boolean dontStartAnotherTimerHack() {
 		return false;

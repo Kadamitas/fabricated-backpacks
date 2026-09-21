@@ -74,7 +74,15 @@ public final class DedicatedServerImplUtil {
 		setupServer(serverProperties);
 		serverFuture = new CompletableFuture<>();
 
-		new Thread(() -> Main.main(new String[]{})).start();
+		CompletableFuture<DedicatedServer> starting = serverFuture;
+		new Thread(() -> {
+			try {
+				Main.main(new String[]{});
+				if (!starting.isDone()) starting.completeExceptionally(new IllegalStateException("Dedicated server bootstrap returned without creating a server; inspect the native server log"));
+			} catch (Throwable failure) {
+				starting.completeExceptionally(failure);
+			}
+		}, "Native dedicated test bootstrap").start();
 
 		DedicatedServer server;
 

@@ -82,7 +82,7 @@ final class NativeHandlerGameTests {
         }
         helper.assertValueEqual(BackpackTestSupport.count(bag, Items.DIRT), 0,
                 "ALWAYS void does not leak the discarded item into the selected physical slot");
-        bag.updateSettings(BackpackTestSupport.upgrade(bag, 0), state -> state.putString("void_mode", "OVERFLOW"));
+        bag.updateSettings(BackpackTestSupport.upgrade(bag, 0), state -> state.putString("void_mode", "STORAGE_OVERFLOW"));
         bag.setItem(0, new ItemStack(Items.STONE, 64));
         try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(handler.insert(0, ItemResource.of(Items.DIRT), 7, transaction), 0,

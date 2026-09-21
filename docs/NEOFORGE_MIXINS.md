@@ -30,4 +30,6 @@ The 1.0.0 NeoForge port keeps only the remaining behavior-sensitive hooks listed
 
 The relocated Apache-2.0 Fabric client harness retains 24 upstream hooks for deterministic client/server scheduling, virtual input/window handling, world setup, and screenshot capture. They are in the separate test mod, never the production JAR. The remaining project-owned test hook observes actual client mesh invalidation without changing rendering. Removing these would require redesigning the non-invasive test harness or weakening its observations; neither is part of this release cleanup.
 
+The existing test-only `MainMixin` also prevents a second NeoForge mod-construction pass when that harness starts its real dedicated server inside the already-initialized host client JVM. It is restricted to an active harness server start in client distribution; ordinary dedicated launches retain the native loader bootstrap. The actual dedicated-server implementation, socket connections, registration results, and multiplayer assertions are unchanged.
+
 Release verification still requires the real unit, server, rendered-client, separate-JVM restart, and two-client multiplayer checks. A compile-only result is not a claim that those runtime gates passed.

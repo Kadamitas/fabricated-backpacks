@@ -177,6 +177,10 @@ if (requestedId == null) {
                         stdout: launchRoot.resolve(role + '-stdout.log').toString(), stderr: launchRoot.resolve(role + '-stderr.log').toString()]
             }
             List<Map> inputs = []
+            // Native FML loads these through MOD_CLASSES, not necessarily the Java classpath.
+            // Hash the actual production/test mod outputs as well as bootstrap libraries.
+            classpathFiles.addAll(sourceSets.main.output.files)
+            classpathFiles.addAll(sourceSets.gametest.output.files)
             classpathFiles.add(project.file('src/gametest/resources'))
             classpathFiles.each { file ->
                 if (file.isDirectory()) {
