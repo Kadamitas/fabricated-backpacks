@@ -29,8 +29,12 @@ public final class FabricatedBackpacksClient {
                 !(net.minecraft.client.Minecraft.getInstance().gui.screen() instanceof net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen));
         ClientPlayNetworking.registerGlobalReceiver(com.kadamitas.fabricatedbackpacks.network.ServerRules.TYPE, (packet, context) -> context.client().execute(() ->
                 com.kadamitas.fabricatedbackpacks.config.BackpackConfig.configure(com.kadamitas.fabricatedbackpacks.config.ConfigFile.decode(packet.json()))));
-        ClientPlayNetworking.registerGlobalReceiver(com.kadamitas.fabricatedbackpacks.network.OwnedEquipment.TYPE, (packet, context) -> context.client().execute(() ->
-                com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.set(context.player(), packet.stack())));
+        ClientPlayNetworking.registerGlobalReceiver(com.kadamitas.fabricatedbackpacks.network.OwnedEquipment.TYPE, (packet, context) -> context.client().execute(() -> {
+            // Apply the client snapshot as native attachment decoding did. The server-side
+            // equipment mutation API also invalidates its live menu/inventory cache and
+            // must not run for the client's replica (including integrated-server worlds).
+            context.player().setData(com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.EQUIPPED, packet.stack());
+        }));
         // Common configuration is loaded during registry bootstrap, after the
         // mod constructor. Capture it only once that bootstrap has completed.
         modBus.addListener((net.neoforged.fml.event.lifecycle.FMLClientSetupEvent setup) -> {
