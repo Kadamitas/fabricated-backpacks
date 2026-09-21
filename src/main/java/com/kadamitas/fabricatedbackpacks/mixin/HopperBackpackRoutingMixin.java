@@ -8,10 +8,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Only hopper routing changes: Fabric's existing fallback then uses the backpack's transactional sided API. */
+/** Only hopper routing changes: NeoForge's capability fallback then uses the backpack's transactional sided API. */
 @Mixin(HopperBlockEntity.class)
 public abstract class HopperBackpackRoutingMixin {
-    @Inject(method = {"getAttachedContainer", "getSourceContainer"}, at = @At("RETURN"), cancellable = true)
+    @Inject(method = {"getAttachedContainer", "getSourceContainer", "getBlockContainer"}, at = @At("RETURN"), cancellable = true)
     private static void fabricatedBackpacks$useSidedStorage(CallbackInfoReturnable<Container> result) {
         if (result.getReturnValue() instanceof BackpackBlockEntity) result.setReturnValue(null);
     }

@@ -2,10 +2,10 @@ package com.kadamitas.fabricatedbackpacks.browser;
 
 import com.kadamitas.fabricatedbackpacks.menu.WorkstationMenus;
 import io.netty.buffer.Unpooled;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerLifecycleEvents;
+import com.kadamitas.fabricatedbackpacks.platform.network.PayloadTypeRegistry;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerPlayConnectionEvents;
+import com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;

@@ -1,7 +1,5 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
@@ -13,11 +11,45 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** The separate test mod's actual Fabric entrypoint; no production registrations are added here. */
-public final class BackpackGameTests implements ModInitializer {
+/** The separate native test mod; no fixture registrations enter the production artifact. */
+@net.neoforged.fml.common.Mod("fabricated_backpacks_tests")
+public final class BackpackGameTests {
     private static final String STRUCTURE = "fabricated_backpacks_tests:platform";
 
-    @Override public void onInitialize() {
+    private boolean initialized;
+    public BackpackGameTests(net.neoforged.bus.api.IEventBus bus) {
+        if (net.neoforged.fml.loading.FMLEnvironment.getDist() == net.neoforged.api.distmarker.Dist.CLIENT)
+            com.kadamitas.fabricatedbackpacks.testplatform.impl.NativeClientGameTestImpl.register(bus);
+        bus.addListener((net.neoforged.neoforge.registries.RegisterEvent event) -> {
+            if (initialized) return;
+            initialized = true;
+            onInitialize();
+            for (Method method : getClass().getDeclaredMethods()) if (method.isAnnotationPresent(GameTest.class)) {
+                net.minecraft.core.Registry.register(net.minecraft.core.registries.BuiltInRegistries.TEST_FUNCTION, testId(method), helper -> invoke(method, helper));
+            }
+        });
+        bus.addListener((net.neoforged.neoforge.event.RegisterGameTestsEvent event) -> {
+            var environment = event.registerEnvironment(Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "default"), new net.minecraft.gametest.framework.TestEnvironmentDefinition.AllOf());
+            for (Method method : getClass().getDeclaredMethods()) {
+                GameTest definition = method.getAnnotation(GameTest.class);
+                if (definition == null) continue;
+                var data = new net.minecraft.gametest.framework.TestData<>(environment, net.minecraft.world.level.Level.OVERWORLD,
+                        Identifier.parse(definition.structure()), definition.maxTicks(), 0, true, net.minecraft.world.level.block.Rotation.NONE,
+                        false, 1, 1, false, definition.padding());
+                event.registerTest(testId(method), new net.minecraft.gametest.framework.FunctionGameTestInstance(
+                        net.minecraft.resources.ResourceKey.create(Registries.TEST_FUNCTION, testId(method)), data));
+            }
+        });
+    }
+    private void invoke(Method method, GameTestHelper helper) {
+        try { method.invoke(this, helper); }
+        catch (java.lang.reflect.InvocationTargetException failure) {
+            if (failure.getCause() instanceof RuntimeException runtime) throw runtime;
+            if (failure.getCause() instanceof Error error) throw error;
+            throw new IllegalStateException("GameTest failed: " + method.getName(), failure.getCause());
+        } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+    }
+    public void onInitialize() {
         ResourceGameTests.registerFixtures(); WorkstationGameTests.registerFixtures();
         SteamEngineGameTests.registerFixtures(); ConduitGameTests.registerFixtures();
     }

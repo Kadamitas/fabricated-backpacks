@@ -25,8 +25,8 @@ import com.kadamitas.fabricatedbackpacks.resource.BackpackTank;
 import com.kadamitas.fabricatedbackpacks.resource.BackpackBattery;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import com.kadamitas.fabricatedbackpacks.resource.FluidAmount;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
@@ -342,13 +342,13 @@ public final class ConfigGameTests {
             FluidVariant water = FluidVariant.of(Fluids.WATER);
             helper.assertValueEqual(tank.getCapacity(), FluidAmount.dropletsForMb(17_500), "The actual tank uses configured per-row capacity and stack ratio");
             helper.assertValueEqual(battery.getCapacity(), 10_000L, "Zero battery ratio ignores item multipliers");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(tank.insert(water, Long.MAX_VALUE, transaction), FluidAmount.dropletsForMb(875), "A real fluid transaction is limited by the configured transfer rate");
                 helper.assertValueEqual(battery.insert(Long.MAX_VALUE, transaction), 70L, "A real energy transaction is limited by the configured transfer rate");
             }
             helper.assertValueEqual(tank.getAmount(), 0L, "Aborting configured fluid transfer restores every droplet");
             helper.assertValueEqual(battery.getAmount(), 0L, "Aborting configured energy transfer restores every unit");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 new BackpackTank(storage, upgrade(storage, 0), false).insert(water, tank.getCapacity(), transaction);
                 battery.insert(Long.MAX_VALUE, transaction);
                 transaction.commit();
@@ -356,7 +356,7 @@ public final class ConfigGameTests {
             BackpackConfig.configure(ConfigFile.decode("{\"upgrades\":{\"tank\":{\"capacityPerRow\":500,\"stackRatio\":0,\"transferPerRow\":25,\"minimumTransfer\":10}}}"));
             helper.assertValueEqual(tank.getCapacity(), FluidAmount.dropletsForMb(5_000), "An existing handle observes the new server capacity");
             helper.assertValueEqual(tank.getAmount(), FluidAmount.dropletsForMb(17_500), "A smaller capacity never deletes existing fluid");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(tank.insert(water, 1, transaction), 0L, "Over-capacity tanks cannot accept new fluid");
                 helper.assertValueEqual(tank.extract(water, Long.MAX_VALUE, transaction), FluidAmount.dropletsForMb(250), "Existing overflow remains extractable at the current server rate");
                 transaction.commit();

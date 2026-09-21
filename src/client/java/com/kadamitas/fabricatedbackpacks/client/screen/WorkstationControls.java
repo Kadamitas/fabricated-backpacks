@@ -1,10 +1,10 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
 import com.kadamitas.fabricatedbackpacks.network.WorkstationState;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
-import net.fabricmc.fabric.api.client.screen.v1.Screens;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
+import com.kadamitas.fabricatedbackpacks.platform.network.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
@@ -37,24 +37,26 @@ public final class WorkstationControls {
             state = packet.settings().copyTag();
             update(context.client());
         }));
-        ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+        NeoForge.EVENT_BUS.addListener((ScreenEvent.Init.Post event) -> {
+            Screen screen = event.getScreen();
             if (!(screen instanceof AbstractContainerScreen<?> container)) return;
             var menu = container.getMenu();
             if (!(menu instanceof CraftingMenu || menu instanceof AnvilMenu || menu instanceof SmithingMenu || menu instanceof StonecutterMenu)) return;
             List<Control> controls = new ArrayList<>();
-            add(controls, screen, 10000, "Results: backpack", 8, 6, 112);
-            add(controls, screen, 10001, "Refill: off", 124, 6, 84);
-            add(controls, screen, 10002, "Recipe <", 8, 22, 64);
-            add(controls, screen, 10003, "Recipe >", 76, 22, 64);
-            add(controls, screen, -1, "Choose recipe", 144, 22, 88);
-            for (int index = 0; index < 4; index++) add(controls, screen, 10010 + index, "Recent " + (index + 1), 8 + 56 * index, 22, 52);
-            add(controls, screen, -2, "All recipes", 232, 22, 80);
+            add(controls, event, 10000, "Results: backpack", 8, 6, 112);
+            add(controls, event, 10001, "Refill: off", 124, 6, 84);
+            add(controls, event, 10002, "Recipe <", 8, 22, 64);
+            add(controls, event, 10003, "Recipe >", 76, 22, 64);
+            add(controls, event, -1, "Choose recipe", 144, 22, 88);
+            for (int index = 0; index < 4; index++) add(controls, event, 10010 + index, "Recent " + (index + 1), 8 + 56 * index, 22, 52);
+            add(controls, event, -2, "All recipes", 232, 22, 80);
             CONTROLS.put(screen, controls);
-            update(client);
+            update(Minecraft.getInstance());
         });
-        ClientTickEvents.END_CLIENT_TICK.register(WorkstationControls::update);
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> update(Minecraft.getInstance()));
     }
-    private static void add(List<Control> controls, Screen screen, int action, String label, int x, int y, int width) {
+    private static void add(List<Control> controls, ScreenEvent.Init.Post event, int action, String label, int x, int y, int width) {
+        Screen screen = event.getScreen();
         Button button = Button.builder(Component.literal(label), ignored -> {
             Minecraft client = Minecraft.getInstance();
             if (client.gameMode != null && client.player != null && client.player.containerMenu.containerId == containerId) {
@@ -64,7 +66,7 @@ public final class WorkstationControls {
         }).bounds(x, y, width, 14).build();
         button.visible = false;
         controls.add(new Control(action, button));
-        Screens.getWidgets(screen).add(button);
+        event.addListener(button);
     }
     private static void update(Minecraft client) {
         Screen screen = client.gui.screen();

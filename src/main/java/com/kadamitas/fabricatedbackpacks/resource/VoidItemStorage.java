@@ -5,12 +5,12 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeFilters;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SlottedStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StoragePreconditions;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageView;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SingleSlotStorage;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.Iterator;
 import java.util.List;

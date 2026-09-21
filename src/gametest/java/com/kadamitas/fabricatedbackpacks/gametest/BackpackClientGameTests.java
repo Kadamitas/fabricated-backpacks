@@ -19,16 +19,14 @@ import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
-import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
-import net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave;
-import net.fabricmc.fabric.api.client.rendering.v1.FabricRenderState;
-import net.fabricmc.fabric.api.client.rendering.v1.RenderStateDataKey;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.NativeClientGameTest;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestSingleplayerContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.world.TestWorldSave;
+import net.minecraft.util.context.ContextKey;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.client.event.ExtractLevelRenderStateEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -62,7 +60,7 @@ import java.util.List;
 import java.util.UUID;
 
 /** A real rendered client, a newly created world, actual mouse/key input, and save/reopen checks. */
-public final class BackpackClientGameTests implements FabricClientGameTest {
+public final class BackpackClientGameTests implements NativeClientGameTest {
     private static final List<String> RECORDS = List.of("13", "cat", "blocks", "chirp", "far", "mall", "mellohi", "stal", "strad", "ward", "11", "wait");
     private static final List<String> MOD_KEY_BINDINGS = List.of(
             "key.fabricated_backpacks.open", "key.fabricated_backpacks.equipment", "key.fabricated_backpacks.browser",
@@ -279,6 +277,14 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         // The search-entry scenario deliberately persisted "seedb". Clear it
         // before the following storage-transfer scenario needs unfiltered slots.
         searchBrowser(context, "");
+        context.waitFor(client -> !((BackpackScreen) client.gui.screen()).getMenu().filtering());
+        // Clearing text does not close a search field that the user opened.
+        // Exercise its real toggle and restore the collapsed state expected by
+        // the later reference-layout scenario.
+        clickButton(context, "Search");
+        check(context.computeOnClient(client -> client.gui.screen().children().stream()
+                        .filter(EditBox.class::isInstance).map(EditBox.class::cast).noneMatch(box -> box.visible)),
+                "The search icon collapses the cleared field without reopening it");
     }
 
     private static void checkUpgradeSettingTooltips(ClientGameTestContext context) {
@@ -669,7 +675,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                 var pack = BackpackEquipment.inventory(player(world)).orElseThrow();
                 return pack.getItem(0).is(Items.DIAMOND) && pack.getItem(0).getCount() == 17;
             }), "Worn rendering, dye, armor and crouch changes preserve the real display item's full stored count");
-            evidence.add("Worn appearance: real local player rear views with empty hands, default/dual-dyed leather, with/without diamond chest armor, and native crouch; native extracted avatar snapshots completed through END_MAIN and selected-item display. Fit and clipping still require visual review.");
+            evidence.add("Worn appearance: real local player rear views with empty hands, default/dual-dyed leather, with/without diamond chest armor, and native crouch; native extracted avatar snapshots completed through NeoForge AfterLevel and selected-item display. Fit and clipping still require visual review.");
             passed = true;
         } finally {
             context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT);
@@ -744,7 +750,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         private static boolean registered;
         private final ClientGameTestContext context;
         private final int entityId;
-        private final RenderStateDataKey<BackpackVisualState> key;
+        private final ContextKey<BackpackVisualState> key;
         private volatile WornFrame latest;
         private volatile PendingFrame pending;
         private volatile long extractedFrames;
@@ -760,27 +766,27 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                 // Read the production key by identity; do not expose it or replace the captured value.
                 var field = BackpackRendering.class.getDeclaredField("WORN");
                 field.setAccessible(true);
-                key = (RenderStateDataKey<BackpackVisualState>) field.get(null);
+                key = (ContextKey<BackpackVisualState>) field.get(null);
             } catch (ReflectiveOperationException failure) { throw new AssertionError("Cannot observe the production worn snapshot", failure); }
             context.runOnClient(client -> {
                 check(active == null, "Worn render observations must not overlap");
                 if (!registered) {
-                    LevelExtractionEvents.END_EXTRACTION.register(frame -> { var observer = active; if (observer != null) observer.observeExtraction(frame); });
-                    LevelRenderEvents.END_MAIN.register(frame -> { var observer = active; if (observer != null) observer.completeFrame(frame); });
+                    NeoForge.EVENT_BUS.addListener((ExtractLevelRenderStateEvent frame) -> { var observer = active; if (observer != null) observer.observeExtraction(frame); });
+                    NeoForge.EVENT_BUS.addListener((RenderLevelStageEvent.AfterLevel frame) -> { var observer = active; if (observer != null) observer.completeFrame(frame); });
                     registered = true;
                 }
                 active = this;
             });
         }
-        private void observeExtraction(LevelExtractionContext context) {
-            // 26.2 submitFeatures clears entityRenderStates before any main-pass render event.
+        private void observeExtraction(ExtractLevelRenderStateEvent context) {
+            // submitFeatures clears entityRenderStates before the completed-level event.
             // Copy only observed values here; publish nothing until this same native frame finishes.
             pending = null;
             long sequence = ++extractedFrames;
-            var state = context.levelState();
+            var state = context.getRenderState();
             lastEntityCount = state.entityRenderStates.size();
             for (var entity : state.entityRenderStates) if (entity instanceof AvatarRenderState avatar && avatar.id == entityId) {
-                var visual = ((FabricRenderState) avatar).getDataOrDefault(key, BackpackVisualState.EMPTY);
+                var visual = avatar.getRenderDataOrDefault(key, BackpackVisualState.EMPTY);
                 Vec3 camera = state.cameraRenderState.pos;
                 double dx = camera.x - avatar.x, dz = camera.z - avatar.z;
                 double distance = Math.sqrt(dx * dx + dz * dz);
@@ -794,12 +800,12 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                 break;
             }
         }
-        private void completeFrame(LevelRenderContext context) {
+        private void completeFrame(RenderLevelStageEvent.AfterLevel context) {
             completedFrames++;
             PendingFrame candidate = pending;
             pending = null;
-            if (candidate != null && candidate.state() == context.levelState()
-                    && candidate.frame().gameTime() == context.levelState().gameTime) latest = candidate.frame();
+            if (candidate != null && candidate.state() == context.getLevelRenderState()
+                    && candidate.frame().gameTime() == context.getLevelRenderState().gameTime) latest = candidate.frame();
         }
         long sequence() { WornFrame frame = latest; return frame == null ? 0 : frame.sequence(); }
         WornFrame after(long before) {
@@ -894,6 +900,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
     }
 
     static void searchBrowser(ClientGameTestContext context, String query) {
+        waitForScreenLayout(context);
         if (context.computeOnClient(client -> client.gui.screen() instanceof BackpackScreen
                 && client.gui.screen().children().stream().filter(EditBox.class::isInstance)
                 .map(EditBox.class::cast).noneMatch(box -> box.visible && box.active))) {
@@ -905,15 +912,21 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
                 .map(EditBox.class::cast).filter(box -> box.visible && box.active)
                 .map(box -> new double[]{box.getX() + 8, box.getY() + 8}).findFirst().orElseThrow());
         clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
-        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL);
+        int selectAllModifier = (net.minecraft.client.input.InputQuirks.EDIT_SHORTCUT_KEY_MODIFIER
+                & com.mojang.blaze3d.platform.InputConstants.MOD_SUPER) != 0
+                ? com.mojang.blaze3d.platform.InputConstants.KEY_LGUI : com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL;
+        context.getInput().holdKey(selectAllModifier);
         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_A);
-        context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL);
+        context.getInput().releaseKey(selectAllModifier);
+        String selection = context.computeOnClient(client -> client.gui.screen().children().stream().filter(EditBox.class::isInstance)
+                .map(EditBox.class::cast).filter(box -> box.visible && box.active).findFirst()
+                .map(box -> "value=" + box.getValue() + ", selected=" + box.getHighlighted() + ", focused=" + box.isFocused()).orElse("no edit box"));
         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_BACKSPACE);
         context.getInput().typeChars(query);
         context.waitTicks(4);
         check(context.computeOnClient(client -> client.gui.screen().children().stream().filter(EditBox.class::isInstance)
                 .map(EditBox.class::cast).findFirst().orElseThrow().getValue()).equals(query),
-                "Actual Ctrl+A / replacement input must leave the exact requested text: " + query);
+                "Actual select-all / replacement input must leave the exact requested text: " + query + "; before replacement: " + selection);
     }
 
     static void selectUpgrade(ClientGameTestContext context, int upgradeSlot) {
@@ -953,6 +966,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
 
     private static void clickBackpackRegion(ClientGameTestContext context,
             java.util.function.Function<BackpackScreen, net.minecraft.client.gui.navigation.ScreenRectangle> region) {
+        waitForScreenLayout(context);
         double[] position = context.computeOnClient(client -> {
             var screen = (BackpackScreen) client.gui.screen();
             var bounds = region.apply(screen);
@@ -963,7 +977,17 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
     }
 
+    private static void waitForScreenLayout(ClientGameTestContext context) {
+        // Opening a backpack negotiates its viewport rows with the server. The
+        // initial widgets exist before that reply, but move when it arrives.
+        context.waitFor(client -> !(client.gui.screen() instanceof BackpackScreen screen)
+                || screen.getMenu().visibleRows() == com.kadamitas.fabricatedbackpacks.domain.BackpackLayout.rowsForViewport(
+                        screen.getMenu().bag().rows(), screen.height, screen.getMenu().bag().upgrades().getContainerSize()));
+        context.waitTicks(2);
+    }
+
     static void clickButton(ClientGameTestContext context, String label) {
+        waitForScreenLayout(context);
         try {
             context.waitFor(client -> client.gui.screen() != null && client.gui.screen().children().stream()
                     .anyMatch(widget -> widget instanceof net.minecraft.client.gui.components.AbstractWidget button
@@ -1007,6 +1031,7 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         clickSlot(context, slot);
     }
     static void clickSlot(ClientGameTestContext context, int slotIndex) {
+        waitForScreenLayout(context);
         double[] position = context.computeOnClient(client -> {
             var screen = (AbstractContainerScreen<?>) client.gui.screen();
             var menu = client.player.containerMenu;

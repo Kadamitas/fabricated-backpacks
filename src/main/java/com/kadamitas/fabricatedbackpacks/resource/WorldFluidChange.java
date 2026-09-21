@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
@@ -32,6 +32,7 @@ final class WorldFluidChange extends SnapshotParticipant<BlockState> {
     @Override protected void onFinalCommit() {
         BlockState current = level.getBlockState(position);
         level.sendBlockUpdated(position, original, current, Block.UPDATE_ALL);
+        level.invalidateCapabilities(position);
         level.updateNeighborsAt(position, current.getBlock());
         var fluid = current.getFluidState();
         if (!fluid.isEmpty()) level.scheduleTick(position, fluid.getType(), fluid.getType().getTickDelay(level));

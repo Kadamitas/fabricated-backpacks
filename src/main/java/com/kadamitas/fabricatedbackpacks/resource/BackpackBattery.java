@@ -4,12 +4,14 @@ import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
-import team.reborn.energy.api.EnergyStorage;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.neoforge.NativeEnergyHandler;
+import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import java.util.Objects;
 
-/** Team Reborn Energy storage with rollback-safe item-component persistence. */
+/** Native NeoForge energy storage with rollback-safe item-component persistence. */
 public final class BackpackBattery extends SnapshotParticipant<ResourceSettingsSnapshot> implements EnergyStorage {
     private final BagInventory bag;
     private final InstalledUpgrade upgrade;
@@ -23,6 +25,8 @@ public final class BackpackBattery extends SnapshotParticipant<ResourceSettingsS
     }
 
     public BackpackBattery(BagInventory bag, InstalledUpgrade upgrade) { this(bag, upgrade, bag::save); }
+
+    public EnergyHandler nativeHandler() { return new NativeEnergyHandler(this); }
 
     private boolean attached() {
         return upgrade.slot() >= 0 && upgrade.slot() < bag.upgrades().getContainerSize()

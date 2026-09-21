@@ -1,6 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.config;
 
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,7 +14,7 @@ public final class BackpackConfig {
     private BackpackConfig() { }
     public static ServerConfig get() { return current; }
 
-    public static void initialize() { load(FabricLoader.getInstance().getConfigDir().resolve("fabricated_backpacks.json")); }
+    public static void initialize() { load(FMLPaths.CONFIGDIR.get().resolve("fabricated_backpacks.json")); }
 
     /** A failed load keeps the last complete configuration and leaves the administrator's file intact. */
     public static boolean load(Path file) {

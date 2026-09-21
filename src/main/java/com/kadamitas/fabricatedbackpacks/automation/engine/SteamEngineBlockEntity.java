@@ -4,14 +4,14 @@ import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitKind;
 import com.kadamitas.fabricatedbackpacks.config.AutomationConfig;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
-import net.fabricmc.fabric.api.menu.v1.ExtendedMenuProvider;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
+import com.kadamitas.fabricatedbackpacks.platform.menu.ExtendedMenuProvider;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidConstants;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -36,7 +36,7 @@ import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 /** A water boiler, vanilla fuel chamber and finite generator buffer in one persistent machine. */
 public final class SteamEngineBlockEntity extends BaseContainerBlockEntity implements WorldlyContainer, ExtendedMenuProvider<BlockPos> {
@@ -72,6 +72,7 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
     private void synchronizeSides() {
         if (!currentServer()) return;
         setChanged();
+        invalidateCapabilities();
         level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
         level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
     }
@@ -140,7 +141,7 @@ public final class SteamEngineBlockEntity extends BaseContainerBlockEntity imple
                 new SteamEngineCycle.Limits(droplets(config.waterCapacityMb()), config.energyCapacity(),
                         droplets(config.waterMbPerTick()), config.energyPerTick()), duration, remainderFits);
         if (!next.generated()) return false;
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             if (next.consumeFuel()) {
                 if (storage.internalSlot(FUEL).extract(ItemVariant.of(fuel), 1, transaction) != 1) return false;
                 if (!remainder.isEmpty() && storage.internalSlot(FUEL_REMAINDER)

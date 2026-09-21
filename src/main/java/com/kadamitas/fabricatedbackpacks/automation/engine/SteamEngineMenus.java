@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.automation.engine;
 
-import net.fabricmc.fabric.api.menu.v1.ExtendedMenuType;
-import net.fabricmc.fabric.api.menu.v1.ExtendedMenuProvider;
+import com.kadamitas.fabricatedbackpacks.platform.menu.ExtendedMenuType;
+import com.kadamitas.fabricatedbackpacks.platform.menu.ExtendedMenuProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
@@ -24,11 +24,11 @@ public final class SteamEngineMenus {
     private SteamEngineMenus() { }
     public static void initialize() { }
     public static boolean open(ServerPlayer player, SteamEngineBlockEntity engine) {
-        return engine.stillValid(player) && player.openMenu(engine).isPresent();
+        return engine.stillValid(player) && ExtendedMenuProvider.open(player, engine).isPresent();
     }
     public static boolean openSides(ServerPlayer player, SteamEngineBlockEntity engine, Direction face) {
         if (face == null || !engine.stillValid(player)) return false;
-        return player.openMenu(new ExtendedMenuProvider<BlockPos>() {
+        return ExtendedMenuProvider.open(player, new ExtendedMenuProvider<BlockPos>() {
             @Override public BlockPos getScreenOpeningData(ServerPlayer viewer) { return engine.getBlockPos(); }
             @Override public Component getDisplayName() {
                 return engine.hasCustomName() ? engine.getName() : Component.translatable("screen.fabricated_backpacks.steam_engine_sides");

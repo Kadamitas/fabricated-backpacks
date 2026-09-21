@@ -5,13 +5,16 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.StackedItemContents;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.OwnedContainer;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /** A live server inventory with a component snapshot written at each committed mutation. */
-class ComponentInventory extends SimpleContainer {
+class ComponentInventory extends SimpleContainer implements OwnedContainer {
     protected final ItemStack owner;
     private final DataComponentType<InventorySnapshot> component;
     private final Runnable changed;
@@ -89,6 +92,37 @@ class ComponentInventory extends SimpleContainer {
         refreshFromOwner();
         if (slot < 0 || slot >= getContainerSize()) return;
         super.getItems().set(slot, stack);
+        setChanged();
+    }
+
+    /**
+     * NeoForge's transactional container wrappers write the live list through this overload and
+     * restore it themselves on abort. {@link #onTransfer} then persists exactly as a direct
+     * mutation would (the change callback observes tentative writes), while its journal restores
+     * the persisted component on abort so no tentative snapshot survives.
+     */
+    @Override public void setItem(int slot, ItemStack stack, boolean insideTransaction) {
+        if (!insideTransaction) { setItem(slot, stack); return; }
+        refreshFromOwner();
+        if (slot < 0 || slot >= getContainerSize()) return;
+        super.getItems().set(slot, stack);
+    }
+
+    private final SnapshotJournal<InventorySnapshot> persistence = new SnapshotJournal<>() {
+        @Override protected InventorySnapshot createSnapshot() { return owner.getOrDefault(component, InventorySnapshot.EMPTY); }
+        @Override protected void revertToSnapshot(InventorySnapshot snapshot) {
+            // The wrapper has already restored the live list; restore the persisted component and
+            // let enclosing owners re-serialize this stack, as a direct restore would.
+            owner.set(component, snapshot);
+            observed = snapshot;
+            if (changed != null) changed.run();
+        }
+        @Override protected void onRootCommit(InventorySnapshot original) { setChanged(); }
+    };
+
+    @Override public void onTransfer(int slot, int amountChange, TransactionContext transaction) {
+        if (owner == null) return;
+        persistence.updateSnapshots(transaction);
         setChanged();
     }
 

@@ -7,13 +7,13 @@ import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal;
 import com.kadamitas.fabricatedbackpacks.gameplay.BackpackTraversal.Node;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -101,6 +101,7 @@ public final class PlacedEnergyTransfer {
         if (support != previousSupport) {
             previousSupport = support;
             // Energy API consumers cache whether a port can insert/extract independently of its current amount.
+            entity.invalidateCapabilities();
             level.updateNeighborsAt(position, entity.getBlockState().getBlock());
             entity.synchronize();
         }

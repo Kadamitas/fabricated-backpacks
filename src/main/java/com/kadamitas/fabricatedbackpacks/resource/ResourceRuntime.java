@@ -8,18 +8,18 @@ import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
-import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariantAttributes;
-import net.fabricmc.fabric.api.transfer.v1.fluid.base.EmptyItemFluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.base.FullItemFluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerItemContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariantAttributes;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EmptyItemFluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FullItemFluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageUtil;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -30,7 +30,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
@@ -197,7 +197,7 @@ public final class ResourceRuntime {
     }
 
     public static long offerExperience(BagInventory bag, long points) {
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             long accepted = insertExperience(bag, points, transaction);
             if (accepted > 0) transaction.commit();
             return accepted;
@@ -212,7 +212,7 @@ public final class ResourceRuntime {
         long accepted = StorageUtil.simulateInsert(storage, experience,
                 requested * FluidAmount.DROPLETS_PER_XP, transaction) / FluidAmount.DROPLETS_PER_XP;
         if (accepted == 0) return 0;
-        try (Transaction nested = transaction.openNested()) {
+        try (Transaction nested = Transaction.open(transaction)) {
             long exact = accepted * FluidAmount.DROPLETS_PER_XP;
             if (storage.insert(experience, exact, nested) != exact) return 0;
             nested.commit();
@@ -228,7 +228,7 @@ public final class ResourceRuntime {
         long available = StorageUtil.simulateExtract(storage, experience,
                 requested * FluidAmount.DROPLETS_PER_XP, transaction) / FluidAmount.DROPLETS_PER_XP;
         if (available == 0) return 0;
-        try (Transaction nested = transaction.openNested()) {
+        try (Transaction nested = Transaction.open(transaction)) {
             long exact = available * FluidAmount.DROPLETS_PER_XP;
             if (storage.extract(experience, exact, nested) != exact) return 0;
             nested.commit();

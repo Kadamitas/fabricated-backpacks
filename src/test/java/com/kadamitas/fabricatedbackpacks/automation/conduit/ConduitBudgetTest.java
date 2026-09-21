@@ -1,6 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.automation.conduit;
 
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -9,9 +9,9 @@ class ConduitBudgetTest {
     @Test
     void simulationAndNestedCommitsRestoreTheSamePhysicalAllowanceOnOuterAbort() {
         var budget = new ConduitBudget();
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             budget.charge(100, 3, 10, false, outer);
-            try (Transaction child = outer.openNested()) {
+            try (Transaction child = Transaction.open(outer)) {
                 budget.charge(100, 2, 10, true, child);
                 child.commit();
             }
@@ -25,13 +25,13 @@ class ConduitBudgetTest {
     @Test
     void committedWindowStartsAtTheActualTransferAndExpiresAtTheExactDeadline() {
         var budget = new ConduitBudget();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             budget.charge(103, 8, 10, false, transaction);
             transaction.commit();
         }
         assertEquals(0, budget.available(112, 8, 10));
         assertEquals(8, budget.available(113, 8, 10));
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             budget.charge(113, 1, 10, true, transaction);
             transaction.commit();
         }
@@ -43,7 +43,7 @@ class ConduitBudgetTest {
     @Test
     void configurationReductionCannotCreateNegativeAllowanceAndClockRollbackResetsWindow() {
         var budget = new ConduitBudget();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             budget.charge(50, 7, 10, false, transaction);
             transaction.commit();
         }

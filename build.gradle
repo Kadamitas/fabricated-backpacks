@@ -1,136 +1,157 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version '1.17.20'
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.147'
     id 'maven-publish'
 }
 
 version = project.mod_version
 group = 'com.kadamitas'
-base { archivesName = 'fabricated-backpacks' }
-
-repositories {
-    mavenCentral()
-    maven { url = 'https://maven.fabricmc.net/' }
-    maven {
-        url = 'https://maven.blamejared.com/'
-        content { includeGroup 'mezz.jei' }
-    }
-}
-
-configurations {
-    productionMods {
-        canBeConsumed = false
-        transitive = false
-    }
-}
-
-loom {
-    splitEnvironmentSourceSets()
-    mods {
-        fabricated_backpacks {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.client
-        }
-    }
-}
-
-fabricApi {
-    configureTests {
-        createSourceSet = true
-        modId = 'fabricated_backpacks_tests'
-        enableGameTests = true
-        enableClientGameTests = true
-        eula = true
-        // Multiplayer preparation must never clear another running client's directory.
-        clearRunDirectory = !providers.gradleProperty('multiplayerRunId').isPresent()
-    }
-}
-
-dependencies {
-    minecraft "com.mojang:minecraft:${minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
-    productionMods "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
-    implementation include('teamreborn:energy:5.0.0')
-    // Optional client integration. JEI is neither required nor embedded in the mod JAR.
-    clientCompileOnly "mezz.jei:jei-${minecraft_version}-fabric-api:${jei_version}"
-    gametestCompileOnly "mezz.jei:jei-${minecraft_version}-fabric-api:${jei_version}"
-    if (providers.gradleProperty('withJei').map { it.toBoolean() }.getOrElse(false)) {
-        clientRuntimeOnly "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
-        gametestRuntimeOnly "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
-        productionMods "mezz.jei:jei-${minecraft_version}-fabric:${jei_version}"
-    }
-    testImplementation "net.fabricmc:fabric-loader-junit:${loader_version}"
-    testImplementation platform('org.junit:junit-bom:6.1.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    testImplementation 'org.junit.platform:junit-platform-launcher'
-}
+base { archivesName = 'fabricated-backpacks-neoforge' }
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
     withSourcesJar()
 }
 
+// Keep every production class and copied test in the native build. Loader
+// adaptation failures must not be hidden by compiling only a feature subset.
+sourceSets {
+    // JUnit loads service listeners before FML creates its transforming loader.
+    // Keep this pure reporting adapter outside the mod/test-module outputs.
+    verificationListener {
+        java.srcDir 'src/test/java'
+        java.include 'com/kadamitas/fabricatedbackpacks/verification/**'
+        resources.srcDir 'src/test/resources'
+        resources.include 'META-INF/services/org.junit.platform.launcher.TestExecutionListener'
+        compileClasspath += sourceSets.main.compileClasspath
+    }
+    test {
+        java.exclude 'com/kadamitas/fabricatedbackpacks/verification/**'
+        resources.exclude 'META-INF/services/org.junit.platform.launcher.TestExecutionListener'
+    }
+    main.java.srcDir 'src/client/java'
+    main.resources.srcDir 'src/client/resources'
+    gametest {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+configurations {
+    gametestImplementation.extendsFrom implementation
+    gametestRuntimeOnly.extendsFrom runtimeOnly
+    gametestCompileOnly.extendsFrom compileOnly
+}
+repositories {
+    mavenCentral()
+    maven {
+        url = 'https://maven.blamejared.com/'
+        content { includeGroup 'mezz.jei' }
+    }
+}
+neoForge {
+    version = project.neoforge_version
+    // The copied client harness needs the same two public nested types as its
+    // upstream class tweaker. This file belongs only to the separate test mod.
+    accessTransformers.from 'src/gametest/resources/META-INF/accesstransformer.cfg'
+    runs {
+        configureEach {
+            gameDirectory = layout.projectDirectory.dir('run')
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'fabricated_backpacks_tests'
+        }
+        client { client() }
+        server { server(); programArgument '--nogui' }
+        gameTestServer {
+            type = 'gameTestServer'
+            // Vanilla's JUnit-like reporter; the evidence checker audits this exact file.
+            programArgument '--report'
+            programArgument layout.buildDirectory.file('gametest-results.xml').get().asFile.absolutePath
+            // Local iteration only; the release gate audits the complete unfiltered report.
+            providers.gradleProperty('gameTestFilter').orNull?.with { selector -> programArgument '--tests'; programArgument selector }
+        }
+        clientGameTest {
+            client()
+            gameDirectory = layout.buildDirectory.dir('run/clientGameTest')
+            systemProperty 'fabricated.backpacks.clientTests', 'true'
+            systemProperty 'fabricated.backpacks.clientScenario', providers.gradleProperty('clientScenario').getOrElse('full')
+            systemProperty 'fabricated.backpacks.evidenceRoot', layout.projectDirectory.dir('.codex-local/client-evidence').asFile.absolutePath
+            systemProperty 'fabric.client.gametest.testModResourcesPath', layout.projectDirectory.dir('src/gametest/resources').asFile.absolutePath
+            programArgument '--username'
+            programArgument 'BackpackClientTests'
+        }
+    }
+    mods {
+        fabricated_backpacks { sourceSet sourceSets.main }
+        fabricated_backpacks_tests { sourceSet sourceSets.gametest }
+    }
+    unitTest {
+        enable()
+        testedMod = mods.fabricated_backpacks
+    }
+}
+dependencies {
+    verificationListenerImplementation platform('org.junit:junit-bom:6.1.0')
+    verificationListenerImplementation 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly sourceSets.verificationListener.output
+    compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
+    compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
+    if (providers.gradleProperty('withJei').map { it.toBoolean() }.getOrElse(false)) {
+        runtimeOnly "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
+    }
+    testImplementation platform('org.junit:junit-bom:6.1.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.platform:junit-platform-launcher'
+}
 tasks.withType(JavaCompile).configureEach {
     options.release = 25
     options.encoding = 'UTF-8'
-    options.compilerArgs.addAll(['-Xlint:unchecked', '-Xlint:deprecation'])
+    options.compilerArgs.addAll(['-Xlint:unchecked', '-Xlint:deprecation', '-Xmaxerrs', '1000'])
 }
-
 tasks.named('processResources') {
     inputs.property 'version', project.version
-    filesMatching('fabric.mod.json') { expand version: project.version }
+    filesMatching('META-INF/neoforge.mods.toml') { expand version: project.version }
+    // Fabric entrypoints cannot describe a native NeoForge mod.
+    exclude 'fabric.mod.json'
+    exclude 'fabricated_backpacks.accesswidener'
 }
-
+tasks.named('processGametestResources') {
+    inputs.property 'version', project.version
+    filesMatching('META-INF/neoforge.mods.toml') { expand version: project.version }
+    exclude 'fabric.mod.json'
+}
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    systemProperty 'fabricated.backpacks.projectRoot', projectDir.absolutePath
     systemProperty 'fabricated.backpacks.unitEvidence', layout.buildDirectory.file('test-results/test/unit-execution.json').get().asFile.absolutePath
     testLogging { events 'failed', 'skipped' }
 }
-
-tasks.named('runGameTest') {
-    systemProperty 'fabric-api.gametest.report-file', layout.buildDirectory.file('gametest-results.xml').get().asFile.absolutePath
-    providers.gradleProperty('gameTestFilter').orNull?.with { selector ->
-        systemProperty 'fabric-api.gametest.filter', selector
+tasks.named('check') { dependsOn tasks.named('gametestClasses') }
+tasks.named('runClientGameTest') {
+    dependsOn tasks.named('gametestClasses')
+    doFirst {
+        // Same explicit project test-EULA acceptance as the Fabric/Quilt setup.
+        def testRun = layout.buildDirectory.dir('run/clientGameTest').get().asFile.toPath()
+        java.nio.file.Files.createDirectories(testRun)
+        java.nio.file.Files.writeString(testRun.resolve('eula.txt'), 'eula=true\n')
     }
 }
-
-tasks.named('runClientGameTest') {
-    systemProperty 'fabricated.backpacks.clientScenario', providers.gradleProperty('clientScenario').getOrElse('full')
-    systemProperty 'fabricated.backpacks.evidenceRoot', layout.projectDirectory.dir('.codex-local/client-evidence').asFile.absolutePath
-}
-
 apply from: 'tools/multiplayer.gradle'
-
-tasks.register('runProductionClient', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
-    group = 'verification'
-    description = 'Open an isolated real Minecraft instance using the built release JAR, without the test mod.'
-    mods.from(tasks.named('jar').flatMap { it.archiveFile }, configurations.productionMods)
-    runDir = layout.projectDirectory.dir('.codex-local/manual-client')
-    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-    useXVFB = false
-    jvmArgs.add('-Xmx3G')
-    programArgs.addAll('--username', 'BackpackQA', '--width', '1280', '--height', '800')
-}
 
 tasks.withType(AbstractArchiveTask).configureEach {
     preserveFileTimestamps = false
     reproducibleFileOrder = true
 }
-
 tasks.withType(Jar).configureEach {
     from('LICENSE') { into 'META-INF'; rename { 'LICENSE-fabricated-backpacks.txt' } }
 }
-
 tasks.register('verifyReleaseEvidence', Exec) {
     group = 'verification'
-    description = 'Require fresh build, server, real-client and manual evidence before bundling a release.'
+    description = 'Require fresh build, server and real-client automated evidence; manual testing is owner-waived.'
     dependsOn tasks.named('build')
-    commandLine 'python', 'tools/verify_evidence.py', 'check', '--release'
+    commandLine 'python', 'tools/verify_evidence.py', 'check', '--automated-release'
 }
-
 tasks.register('releaseBundle') {
     group = 'build'
-    description = 'Collect verified release jars and checksums.'
+    description = 'Collect verified release jars, checksums and the verification receipt.'
     dependsOn tasks.named('verifyReleaseEvidence')
     doLast {
         def destination = layout.projectDirectory.dir("release/${project.version}").asFile.toPath()
@@ -140,8 +161,10 @@ tasks.register('releaseBundle') {
             def target = destination.resolve(artifact.fileName)
             java.nio.file.Files.copy(artifact, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             def digest = java.security.MessageDigest.getInstance('SHA-256').digest(java.nio.file.Files.readAllBytes(target))
-            def checksum = java.util.HexFormat.of().formatHex(digest)
-            java.nio.file.Files.writeString(destination.resolve("${artifact.fileName}.sha256"), "${checksum}  ${artifact.fileName}\n")
+            java.nio.file.Files.writeString(destination.resolve("${artifact.fileName}.sha256"), "${java.util.HexFormat.of().formatHex(digest)}  ${artifact.fileName}\n")
         }
+        def mainName = tasks.named('jar').get().archiveFile.get().asFile.name
+        java.nio.file.Files.copy(layout.projectDirectory.file('build/verification/release.json').asFile.toPath(),
+                destination.resolve("${mainName}.release.json"), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
     }
 }

@@ -2,7 +2,7 @@ package com.kadamitas.fabricatedbackpacks.upgrade;
 
 import com.kadamitas.fabricatedbackpacks.FabricatedBackpacks;
 import com.kadamitas.fabricatedbackpacks.config.RuleMatchers;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerLifecycleEvents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.LivingEntity;

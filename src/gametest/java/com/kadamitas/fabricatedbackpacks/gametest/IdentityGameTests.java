@@ -17,8 +17,8 @@ import com.kadamitas.fabricatedbackpacks.resource.BackpackTank;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -97,7 +97,7 @@ public final class IdentityGameTests {
         });
         BackpackTank tank = new BackpackTank(smaller, upgrade(smaller, 0), false);
         BackpackBattery battery = new BackpackBattery(smaller, upgrade(smaller, 1));
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(tank.insert(FluidVariant.of(Fluids.WATER), 1234567, transaction), 1234567L, "Real tank fixture accepts fractional fluid units");
             helper.assertValueEqual(battery.insert(2345, transaction), 2345L, "Real battery fixture accepts energy");
             transaction.commit();

@@ -20,10 +20,10 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
 import com.mojang.blaze3d.platform.InputConstants;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestSingleplayerContext;
+import com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -51,7 +51,7 @@ import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -378,7 +378,7 @@ final class ConfiguredClientAcceptance {
             check(port != null && port.supportsInsertion() == input && port.supportsExtraction() == output,
                     label + ": the retained API handle reports the current synchronized capabilities");
             check(port.getAmount() == 0 && port.getCapacity() == 0, label + ": public capability flags reveal no quantities");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 check(port.insert(17, transaction) == 0 && port.extract(17, transaction) == 0,
                         label + ": client-side API insertion and extraction both return zero");
                 transaction.commit();
@@ -820,6 +820,29 @@ final class ConfiguredClientAcceptance {
             checkInventoryStrip(screen);
             checkHeadingRenderOutput(screen);
         });
+        // Contextual controls intentionally hide their help until Shift. Test
+        // both transitions on the actual widgets, in addition to their geometry.
+        context.getInput().holdShift();
+        try {
+            context.waitTicks(2);
+            checkContextualIconHelp(context);
+        } finally {
+            context.getInput().releaseShift();
+        }
+        context.waitTicks(2);
+        checkContextualIconHelp(context);
+    }
+
+    private static void checkContextualIconHelp(ClientGameTestContext context) {
+        context.runOnClient(client -> {
+            for (var child : client.gui.screen().children()) {
+                if (child instanceof BackpackIconButton button && button.visible
+                        && !((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestIconButtonAccess) (Object) button)
+                        .fabricatedBackpacksTests$automaticTooltip()) {
+                    checkIcon(button, false, button.getMessage().getString());
+                }
+            }
+        });
     }
 
     private static void checkInventoryStrip(BackpackScreen screen) {
@@ -853,9 +876,21 @@ final class ConfiguredClientAcceptance {
         check(!label.isBlank(), "Icon-only controls retain a complete accessible label");
         var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) button)
                 .fabricatedBackpacksTests$tooltip().get();
-        check(tooltip != null && tooltip.toCharSequence(client).stream().map(ConfiguredClientAcceptance::plain)
-                        .collect(java.util.stream.Collectors.joining()).replaceAll("\\s", "").contains(expectedTooltip.replaceAll("\\s", "")),
-                "The complete icon label or current-state explanation remains available on hover: " + label);
+        boolean contextual = button instanceof BackpackIconButton
+                && !((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestIconButtonAccess) (Object) button)
+                .fabricatedBackpacksTests$automaticTooltip();
+        if (contextual && !client.hasShiftDown()) {
+            check(tooltip == null, "Contextual icon help stays hidden without Shift: " + label);
+        } else if (contextual) {
+            String help = tooltip == null ? "" : tooltip.toCharSequence(client).stream().map(ConfiguredClientAcceptance::plain)
+                    .collect(java.util.stream.Collectors.joining(" ")).strip();
+            check(help.length() > label.length() + 12 && !help.equalsIgnoreCase(label),
+                    "Shift exposes an explanation, not just a repeated icon label: " + label + " -> " + help);
+        } else {
+            check(tooltip != null && tooltip.toCharSequence(client).stream().map(ConfiguredClientAcceptance::plain)
+                            .collect(java.util.stream.Collectors.joining()).replaceAll("\\s", "").contains(expectedTooltip.replaceAll("\\s", "")),
+                    "The complete icon label or current-state explanation remains available on hover: " + label);
+        }
         if (requireItem) {
             var items = new ArrayList<GuiItemRenderState>();
             state.forEachItem(items::add);

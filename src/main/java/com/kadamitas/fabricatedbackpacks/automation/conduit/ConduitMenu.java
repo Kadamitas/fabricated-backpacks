@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.automation.conduit;
 
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;

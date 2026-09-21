@@ -17,11 +17,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Asset-space checks, not a claim of successful Minecraft rendering. */
 class AutomationAssetAuditTest {
-    private static final Path ASSETS = Path.of("src/main/resources/assets/fabricated_backpacks");
+    private static final Path ROOT = Path.of(System.getProperty("fabricated.backpacks.projectRoot", System.getProperty("user.dir")));
+    private static final Path ASSETS = ROOT.resolve("src/main/resources/assets/fabricated_backpacks");
     private static final Set<String> FACES = Set.of("north", "south", "east", "west", "up", "down");
 
     @Test void bothMetalBlocksExtendTheNativePickaxeSpeedTag() throws Exception {
-        JsonObject tag = JsonParser.parseString(Files.readString(Path.of(
+        JsonObject tag = JsonParser.parseString(Files.readString(ROOT.resolve(
                 "src/main/resources/data/minecraft/tags/block/mineable/pickaxe.json"))).getAsJsonObject();
         assertFalse(tag.get("replace").getAsBoolean(), "Other blocks retain their vanilla pickaxe behavior");
         JsonArray values = tag.getAsJsonArray("values");

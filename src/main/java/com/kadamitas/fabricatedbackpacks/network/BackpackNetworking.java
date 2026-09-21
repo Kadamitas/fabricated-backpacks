@@ -7,8 +7,8 @@ import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import com.kadamitas.fabricatedbackpacks.upgrade.JukeboxRuntime;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import com.kadamitas.fabricatedbackpacks.platform.network.PayloadTypeRegistry;
+import com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -29,7 +29,7 @@ public final class BackpackNetworking {
         PayloadTypeRegistry.clientboundPlay().register(BagSettings.TYPE, BagSettings.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorkstationState.TYPE, WorkstationState.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ServerRules.TYPE, ServerRules.STREAM_CODEC);
-        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+        com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 sender.sendPacket(new ServerRules(com.kadamitas.fabricatedbackpacks.config.ConfigFile.encode(
                         com.kadamitas.fabricatedbackpacks.config.BackpackConfig.get()))));
         com.kadamitas.fabricatedbackpacks.menu.WorkstationMenus.setStateListener((player, state) ->

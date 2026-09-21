@@ -22,4 +22,10 @@ abstract class MobBackpackMixin {
     }
     @Inject(method = "tick", at = @At("TAIL"))
     private void fabricatedBackpacks$carrierTick(CallbackInfo callback) { WorldBackpacks.tick((Mob)(Object)this); }
+    @Inject(method = "convertTo(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob;", at = @At("RETURN"))
+    private <T extends Mob> void fabricatedBackpacks$conversion(net.minecraft.world.entity.EntityType<T> type,
+            net.minecraft.world.entity.ConversionParams params, EntitySpawnReason reason,
+            net.minecraft.world.entity.ConversionParams.AfterConversion<T> after, CallbackInfoReturnable<T> callback) {
+        if (callback.getReturnValue() != null) WorldBackpacks.converted((Mob)(Object)this, callback.getReturnValue(), params);
+    }
 }

@@ -4,14 +4,15 @@ import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitKind;
 import com.kadamitas.fabricatedbackpacks.client.automation.ConduitScreen;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import mezz.jei.api.IModPlugin;
-import mezz.jei.api.fabric.ingredients.fluids.IJeiFluidIngredient;
+import mezz.jei.api.JeiPlugin;
+import net.neoforged.neoforge.fluids.FluidStack;
 import mezz.jei.api.gui.handlers.IGhostIngredientHandler;
 import mezz.jei.api.gui.handlers.IGuiContainerHandler;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
-import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerItemContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.renderer.Rect2i;
@@ -23,7 +24,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-/** Loaded solely by JEI's optional Fabric entrypoint; no common or normal client code links its API. */
+/** Discovered only by optional JEI; normal client startup never links its API. */
+@JeiPlugin
 public final class FabricatedBackpacksJeiPlugin implements IModPlugin {
     @Override public Identifier getPluginUid() { return BackpackRegistry.id("conduit_filters"); }
 
@@ -66,7 +68,8 @@ public final class FabricatedBackpacksJeiPlugin implements IModPlugin {
         if (kind == ConduitKind.ITEM) return ingredient instanceof ItemStack stack && !stack.isEmpty()
                 ? Optional.of(BuiltInRegistries.ITEM.getKey(stack.getItem())) : Optional.empty();
         if (kind != ConduitKind.FLUID) return Optional.empty();
-        if (ingredient instanceof IJeiFluidIngredient fluid) return fluidId(fluid.getFluidVariant());
+        if (ingredient instanceof FluidStack fluid) return fluid.isEmpty() ? Optional.empty()
+                : fluidId(FluidVariant.of(fluid.getFluid(), fluid.getComponentsPatch()));
         if (!(ingredient instanceof ItemStack stack) || stack.isEmpty()) return Optional.empty();
         // Read a constant copy: a bucket is a convenient fluid selector, never a transferred item.
         var storage = ContainerItemContext.withConstant(stack.copyWithCount(1)).find(FluidStorage.ITEM);

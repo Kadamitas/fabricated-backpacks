@@ -6,12 +6,12 @@ import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.mixin.ExperienceOrbAccessor;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageUtil;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -83,7 +83,7 @@ final class ExperienceRuntime {
         PlayerExperience ledger = new PlayerExperience(player);
         long before = ledger.points();
         long limit = Math.min(Math.max(0, requested), intoTank ? before : Long.MAX_VALUE - before);
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             long moved = intoTank ? ResourceRuntime.insertExperience(bag, limit, transaction)
                     : ResourceRuntime.extractExperience(bag, limit, transaction);
             if (moved > 0 && ledger.setPoints(intoTank ? before - moved : before + moved, transaction)) {
@@ -103,7 +103,7 @@ final class ExperienceRuntime {
                 if (now % BackpackConfig.get().upgrades().cooking().retryMinimum() != 0) continue;
                 double stored = settings.getDoubleOr("experience", 0);
                 if (!Double.isFinite(stored) || stored < 1) continue;
-                try (Transaction transaction = Transaction.openOuter()) {
+                try (Transaction transaction = Transaction.openRoot()) {
                     long accepted = ResourceRuntime.insertExperience(bag, (long) Math.floor(stored), transaction);
                     if (accepted > 0) {
                         new CookingExperience(bag, upgrade).subtract(accepted, transaction);
@@ -121,7 +121,7 @@ final class ExperienceRuntime {
                     OrbExperience ledger = new OrbExperience(level, orb);
                     long available = ledger.points();
                     if (available <= 0) continue;
-                    try (Transaction transaction = Transaction.openOuter()) {
+                    try (Transaction transaction = Transaction.openRoot()) {
                         long accepted = ResourceRuntime.insertExperience(bag, available, transaction);
                         if (accepted > 0 && ledger.take(accepted, transaction)) { transaction.commit(); moved = true; }
                     }
@@ -139,7 +139,7 @@ final class ExperienceRuntime {
         ItemStack item = chosen.get().itemStack();
         Storage<FluidVariant> tanks = ResourceRuntime.fluids(bag, false);
         FluidVariant experience = ResourceComponents.experience();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             long available = StorageUtil.simulateExtract(tanks, experience,
                     pointBudget * FluidAmount.DROPLETS_PER_XP, transaction);
             if (available == 0) return;

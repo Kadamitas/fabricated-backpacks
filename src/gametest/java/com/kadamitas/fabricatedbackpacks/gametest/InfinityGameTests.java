@@ -7,12 +7,12 @@ import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.menu.BackpackMenus;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageUtil;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -179,29 +179,29 @@ public final class InfinityGameTests {
         BagInventory bag = placed.inventory();
         Storage<ItemVariant> storage = ItemStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH);
         ItemVariant diamond = ItemVariant.of(Items.DIAMOND);
-        try (Transaction outer = Transaction.openOuter()) {
-            try (Transaction nested = outer.openNested()) {
+        try (Transaction outer = Transaction.openRoot()) {
+            try (Transaction nested = Transaction.open(outer)) {
                 helper.assertValueEqual(storage.insert(diamond, 1, nested), 1L, "Survival automation can insert a finite seed");
                 nested.commit();
             }
         }
         helper.assertTrue(bag.getItem(0).isEmpty(), "Outer rollback removes the newly seeded slot despite ordinary seed immutability");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(storage.insert(diamond, 1, transaction), 1L, "Committed automated seeding consumes exactly one source item");
             transaction.commit();
         }
         var view = storage.iterator().next();
         helper.assertValueEqual(view.getAmount(), Long.MAX_VALUE, "Fabric views advertise an unbounded seeded supply");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(storage.extract(diamond, Long.MAX_VALUE, transaction), Long.MAX_VALUE, "Unbounded extraction honors a long-sized API request without integer overflow");
             helper.assertValueEqual(view.extract(ItemVariant.of(Items.EMERALD), 1, transaction), 0L, "The infinite view still enforces exact resource identity");
         }
         SimpleContainer destination = new SimpleContainer(1);
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(StorageUtil.move(storage, ContainerStorage.of(destination, null), item -> true, 100, transaction), 64L, "Actual destination capacity constrains infinite output");
         }
         helper.assertTrue(destination.isEmpty(), "Aborting a generated transfer rolls back its destination");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(StorageUtil.move(storage, ContainerStorage.of(destination, null), item -> true, 100, transaction), 64L, "Committed destination receives exactly its accepted quantity");
             transaction.commit();
         }
@@ -211,7 +211,7 @@ public final class InfinityGameTests {
         helper.getLevel().setBlockAndUpdate(adminPosition, BackpackRegistry.block(BackpackTier.NETHERITE).defaultBlockState());
         ((BackpackBlockEntity) helper.getLevel().getBlockEntity(adminPosition)).setStack(seededFixture(UpgradeKind.INFINITY).stack());
         Storage<ItemVariant> admin = ItemStorage.SIDED.find(helper.getLevel(), adminPosition, null);
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(admin.insert(diamond, 1, transaction), 0L, "An actorless API cannot bypass administrator seed permission");
         }
         BlockPos hopperPosition = position.below();
@@ -226,7 +226,7 @@ public final class InfinityGameTests {
             helper.getLevel().setBlockAndUpdate(hopperPosition, helper.getLevel().getBlockState(hopperPosition).setValue(HopperBlock.ENABLED, false));
             bag.upgrades().setItem(0, ItemStack.EMPTY);
             helper.assertValueEqual(view.getAmount(), 1L, "Existing API views notice infinity removal immediately");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(storage.extract(diamond, 100, transaction), 1L, "After removal, only the finite original seed can be extracted");
                 transaction.commit();
             }

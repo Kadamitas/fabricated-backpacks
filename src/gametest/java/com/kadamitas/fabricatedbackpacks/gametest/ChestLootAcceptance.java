@@ -41,7 +41,7 @@ final class ChestLootAcceptance {
             var resource = level.getServer().getResourceManager().getResource(Identifier.withDefaultNamespace("loot_table/" + id.getPath() + ".json")).orElseThrow();
             var table = registries.getLootTable(ResourceKey.create(Registries.LOOT_TABLE, id));
             JsonObject encoded = LootTable.DIRECT_CODEC.encodeStart(ops, table).getOrThrow().getAsJsonObject();
-            if (resource.getFabricPackSource() != PackSource.BUILT_IN) {
+            if (resource.source().location().source() != PackSource.BUILT_IN) {
                 check(!requireAllVanilla, "The default-world acceptance requires the vanilla source for " + id + "; actual=" + resource.sourcePackId());
                 try (var reader = resource.openAsReader()) {
                     LootTable supplied = LootTable.DIRECT_CODEC.parse(ops, JsonParser.parseReader(reader)).getOrThrow();

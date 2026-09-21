@@ -1,19 +1,19 @@
 package com.kadamitas.fabricatedbackpacks.automation.engine;
 
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitKind;
-import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerItemContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SlottedStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StoragePreconditions;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageUtil;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageView;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SingleSlotStorage;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -23,7 +23,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -33,7 +33,7 @@ import java.util.List;
 final class SteamEngineStorage {
     static final FluidVariant WATER = FluidVariant.of(Fluids.WATER);
     private final SteamEngineBlockEntity engine;
-    private final ContainerStorage internal;
+    private final SlottedStorage<ItemVariant> internal;
     private final List<SlottedStorage<ItemVariant>> itemPorts;
     private final List<SingleSlotStorage<FluidVariant>> waterPorts;
     private final List<EnergyStorage> energyPorts;
@@ -143,7 +143,7 @@ final class SteamEngineStorage {
         };
         Storage<FluidVariant> from = context.find(FluidStorage.ITEM);
         if (from == null) return;
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             long moved = StorageUtil.move(from, internalWater, WATER::equals,
                     SteamEngineBlockEntity.droplets(SteamEngineBlockEntity.rules().containerTransferMbPerTick()), transaction);
             if (moved > 0) transaction.commit();
@@ -167,9 +167,9 @@ final class SteamEngineStorage {
             if (targetState.hasBlockEntity() && targetEntity == null) continue;
             EnergyStorage target = EnergyStorage.SIDED.find(level, neighbor, targetState, targetEntity, direction.getOpposite());
             if (target == null || target == energy || !target.supportsInsertion()) continue;
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 long available;
-                try (Transaction simulation = transaction.openNested()) {
+                try (Transaction simulation = Transaction.open(transaction)) {
                     available = energy.extract(engine.outputRemaining(), simulation);
                 }
                 long inserted = target.insert(available, transaction);

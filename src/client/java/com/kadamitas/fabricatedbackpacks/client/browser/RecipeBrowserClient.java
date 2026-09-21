@@ -10,17 +10,18 @@ import com.kadamitas.fabricatedbackpacks.browser.BrowserTransferResult;
 import com.kadamitas.fabricatedbackpacks.browser.BrowserWorkstation;
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.event.lifecycle.v1.CommonLifecycleEvents;
-import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
-import net.fabricmc.fabric.api.resource.v1.reloader.ResourceReloaderKeys;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+import net.neoforged.neoforge.client.resources.VanillaClientListeners;
+import net.neoforged.neoforge.event.TagsUpdatedEvent;
+import com.kadamitas.fabricatedbackpacks.platform.network.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 
 import java.util.function.BooleanSupplier;
@@ -47,7 +48,7 @@ public final class RecipeBrowserClient {
 
     private RecipeBrowserClient() {}
 
-    public static void initialize() {
+    public static void initialize(IEventBus modBus) {
         if (initialized) return;
         initialized = true;
         ClientPlayNetworking.registerGlobalReceiver(BrowserCatalogPage.TYPE, (page, context) -> receive(page));
@@ -64,16 +65,16 @@ public final class RecipeBrowserClient {
             }
         });
         BrowserScreenHooks.initialize();
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> refresh());
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> { refresh(); recipeBookCollections = null; });
-        ClientTickEvents.END_CLIENT_TICK.register(RecipeBrowserClient::tick);
-        Identifier reload = BackpackRegistry.id("recipe_browser_cache");
-        ResourceLoader resources = ResourceLoader.get(PackType.CLIENT_RESOURCES);
-        resources.registerReloadListener(reload, (ResourceManagerReloadListener) manager -> refresh());
-        resources.addListenerOrdering(ResourceReloaderKeys.Client.LANGUAGES, reload);
-        CommonLifecycleEvents.TAGS_LOADED.register((registries, client) -> {
-            if (client) Minecraft.getInstance().execute(RecipeBrowserClient::refresh);
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> refresh());
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> { refresh(); recipeBookCollections = null; });
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick(Minecraft.getInstance()));
+        modBus.addListener((AddClientReloadListenersEvent event) -> {
+            Identifier reload = BackpackRegistry.id("recipe_browser_cache");
+            event.addListener(reload, (ResourceManagerReloadListener) manager -> refresh());
+            event.addDependency(VanillaClientListeners.LANGUAGE, reload);
         });
+        NeoForge.EVENT_BUS.addListener((TagsUpdatedEvent.ClientPacketReceived event) ->
+                Minecraft.getInstance().execute(RecipeBrowserClient::refresh));
     }
 
     public static void open(Screen previous) { openForGhost(previous, -1); }

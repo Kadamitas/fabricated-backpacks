@@ -3,25 +3,26 @@ package com.kadamitas.fabricatedbackpacks.resource;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
-import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerItemContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidConstants;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SlottedStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageUtil;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SingleSlotStorage;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 import java.util.List;
 
 final class ResourceContainers {
     private ResourceContainers() {}
 
     static void tank(BagInventory bag, InstalledUpgrade upgrade) {
-        ContainerStorage inventory = ContainerStorage.of(bag.upgradeInventory(upgrade), null);
+        SlottedStorage<ItemVariant> inventory = ContainerStorage.of(bag.upgradeInventory(upgrade), null);
         Storage<FluidVariant> tank = ResourceRuntime.tankStorage(bag, upgrade.slot(), false);
         ContainerItemContext drain = outputContext(inventory.getSlot(0), inventory.getSlot(2));
         ContainerItemContext fill = outputContext(inventory.getSlot(1), inventory.getSlot(3));
@@ -30,7 +31,7 @@ final class ResourceContainers {
     }
 
     static void battery(BagInventory bag, InstalledUpgrade upgrade) {
-        ContainerStorage inventory = ContainerStorage.of(bag.upgradeInventory(upgrade), null);
+        SlottedStorage<ItemVariant> inventory = ContainerStorage.of(bag.upgradeInventory(upgrade), null);
         BackpackBattery battery = new BackpackBattery(bag, upgrade);
         long rate = BackpackConfig.get().upgrades().battery().transfer(bag.rows(), bag.multiplier());
         ContainerItemContext discharge = ContainerItemContext.ofSingleSlot(inventory.getSlot(0));
@@ -54,7 +55,7 @@ final class ResourceContainers {
 
     static long moveFluid(Storage<FluidVariant> from, Storage<FluidVariant> to) {
         if (from == null || to == null || from == to) return 0;
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             long moved = StorageUtil.move(from, to, fluid -> true, FluidConstants.BUCKET, transaction);
             if (moved > 0) transaction.commit();
             return moved;
@@ -64,9 +65,9 @@ final class ResourceContainers {
     static long moveEnergy(EnergyStorage from, EnergyStorage to, long maximum) {
         if (maximum < 0) throw new IllegalArgumentException("Negative energy transfer");
         if (from == null || to == null || from == to || maximum == 0) return 0;
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             long available;
-            try (Transaction simulation = transaction.openNested()) {
+            try (Transaction simulation = Transaction.open(transaction)) {
                 available = from.extract(maximum, simulation);
             }
             long inserted = to.insert(available, transaction);

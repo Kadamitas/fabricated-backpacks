@@ -1,6 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.SoundEventListener;

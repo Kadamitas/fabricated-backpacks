@@ -4,13 +4,13 @@
 
 Modular backpacks for **Minecraft Java Edition 26.3 on Fabric**.
 
-**0.5.3-alpha is a development build.** Back up worlds before testing it.
+**1.0.0 is the planned release version; this working tree is not yet release-verified.** Back up worlds before testing it.
 The feature list describes the current implementation, not a claim that every
 interaction or multiplayer scenario has passed acceptance testing. Release
 evidence must be collected for this version. The [0.5.2 verification record](docs/VERIFICATION_0.5.2.md)
 is historical and does not verify the 26.3 port.
 
-This alpha also contains the interface, worn-model and automation revision.
+This version also contains the interface, worn-model and automation revision.
 See the [UI revision record](docs/UI_REVISION.md) and
 [automation verification record](docs/AUTOMATION_VERIFICATION.md) for their separate
 test scope.
@@ -36,7 +36,7 @@ test scope.
   templates that never copy physical inventory.
 
 See [Features and current limits](docs/FEATURES.md) for the full catalog,
-workstation behavior and remaining alpha work.
+workstation behavior and remaining work.
 
 ## Requirements
 

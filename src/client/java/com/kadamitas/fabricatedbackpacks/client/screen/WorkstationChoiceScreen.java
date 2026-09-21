@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.client.screen;
 
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import com.kadamitas.fabricatedbackpacks.platform.network.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.Button;

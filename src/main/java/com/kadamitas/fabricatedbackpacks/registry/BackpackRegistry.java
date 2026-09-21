@@ -6,7 +6,6 @@ import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.item.BackpackItem;
 import com.kadamitas.fabricatedbackpacks.item.UpgradeItem;
-import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -56,7 +55,7 @@ public final class BackpackRegistry {
             }
         }
         BLOCK_ENTITY = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, id("backpack"),
-                FabricBlockEntityTypeBuilder.create(BackpackBlockEntity::new, BLOCKS.values().toArray(Block[]::new)).build());
+                new BlockEntityType<>(BackpackBlockEntity::new, java.util.Set.copyOf(BLOCKS.values())));
     }
 
     private static Item.Properties properties(String path) {

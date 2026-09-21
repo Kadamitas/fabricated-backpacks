@@ -3,8 +3,8 @@ package com.kadamitas.fabricatedbackpacks.world;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
-import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
+import net.neoforged.neoforge.attachment.AttachmentType;
+import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -24,10 +24,10 @@ public final class WorldComponents {
     }
     public static final DataComponentType<DeferredLoot> DEFERRED_LOOT = component("deferred_loot", DeferredLoot.CODEC);
     public static final DataComponentType<InventorySnapshot> EXTRA_ITEMS = component("extra_items", InventorySnapshot.CODEC);
-    public static final AttachmentType<Boolean> SPAWN_CHECKED = AttachmentRegistry.create(id("spawn_checked"),
-            builder -> builder.persistent(Codec.BOOL));
-    public static final AttachmentType<Float> PENDING_DIFFICULTY = AttachmentRegistry.create(id("pending_spawn_difficulty"),
-            builder -> builder.persistent(Codec.floatRange(0, 100)));
+    public static final AttachmentType<Boolean> SPAWN_CHECKED = Registry.register(NeoForgeRegistries.ATTACHMENT_TYPES, id("spawn_checked"),
+            AttachmentType.builder(() -> false).serialize(Codec.BOOL.fieldOf("value")).build());
+    public static final AttachmentType<Float> PENDING_DIFFICULTY = Registry.register(NeoForgeRegistries.ATTACHMENT_TYPES, id("pending_spawn_difficulty"),
+            AttachmentType.builder(() -> 0F).serialize(Codec.floatRange(0, 100).fieldOf("value")).build());
     private WorldComponents() { }
     public static void initialize() { }
     private static Identifier id(String path) { return Identifier.fromNamespaceAndPath("fabricated_backpacks", path); }

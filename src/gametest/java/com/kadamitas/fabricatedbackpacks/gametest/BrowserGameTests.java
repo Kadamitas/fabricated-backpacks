@@ -24,8 +24,8 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.embedded.EmbeddedChannel;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.fabric.impl.networking.RegistrationPayload;
+import com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking;
+import net.neoforged.neoforge.network.payload.MinecraftRegisterPayload;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -711,9 +711,10 @@ public final class BrowserGameTests {
     private static ClientFixture client(GameTestHelper helper) {
         UUID id = UUID.randomUUID();
         var cookie = CommonListenerCookie.createInitial(new GameProfile(id, "fb_browse_" + id.toString().substring(0, 6)), false);
-        ServerPlayer player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(), cookie.gameProfile(), cookie.clientInformation());
+        ServerPlayer player = BackpackTestSupport.mockPlayer(helper, cookie);
         Connection connection = new Connection(PacketFlow.SERVERBOUND);
         EmbeddedChannel channel = new EmbeddedChannel(connection);
+        BackpackTestSupport.negotiate(connection);
         ClientFixture fixture = new ClientFixture(player, connection, channel);
         channel.pipeline().addLast(new ChannelOutboundHandlerAdapter() {
             @Override public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) throws Exception {
@@ -729,8 +730,8 @@ public final class BrowserGameTests {
     }
 
     private static void ready(GameTestHelper helper, ClientFixture fixture, Runnable action) {
-        // This is the actual Fabric channel-registration payload, only in the test mod.
-        fixture.send(new RegistrationPayload(RegistrationPayload.REGISTER, List.of(BrowserCatalogPage.TYPE.id(), BrowserContext.TYPE.id(),
+        // Exercise NeoForge's real ad-hoc channel registration path, only in the test mod.
+        fixture.send(new MinecraftRegisterPayload(java.util.Set.of(BrowserCatalogPage.TYPE.id(), BrowserContext.TYPE.id(),
                 BrowserCatalogInvalidated.TYPE.id(), BrowserTransferResult.TYPE.id())));
         later(helper, fixture, () -> {
             helper.assertTrue(ServerPlayNetworking.canSend(fixture.player, BrowserCatalogPage.TYPE), "The fixture advertises real browser payload channels");

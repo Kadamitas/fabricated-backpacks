@@ -6,7 +6,7 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceComponents;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;

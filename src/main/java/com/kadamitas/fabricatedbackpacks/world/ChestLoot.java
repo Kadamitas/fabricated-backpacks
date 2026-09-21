@@ -4,7 +4,6 @@ import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
-import net.fabricmc.fabric.api.loot.v3.LootTableEvents;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.entries.EmptyLootItem;
@@ -41,20 +40,34 @@ public final class ChestLoot {
             "end_city_treasure", new Roll(90, List.of(outcome("diamond_backpack", 3), outcome("gold_backpack", 5), outcome("advanced_magnet_upgrade", 2))));
 
     private ChestLoot() { }
+    /** Resource origins observed while the registry loads; NeoForge's loot event does not expose them. */
+    private static final java.util.Map<net.minecraft.resources.ResourceKey<?>, net.minecraft.server.packs.resources.Resource> SOURCES = new java.util.concurrent.ConcurrentHashMap<>();
     public static void initialize() {
-        LootTableEvents.MODIFY.register((key, builder, source, registries) -> {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.LootTableLoadEvent event) -> {
+            var source = SOURCES.remove(event.getKey());
+            if (source != null) addBuiltinPool(event.getKey(), event.getTable(), source);
+        });
+    }
+    public static void observeSource(net.minecraft.resources.ResourceKey<?> key, net.minecraft.server.packs.resources.Resource source) {
+        if (key.isFor(net.minecraft.core.registries.Registries.LOOT_TABLE)) SOURCES.put(key, source);
+    }
+    static void addBuiltinPool(net.minecraft.resources.ResourceKey<?> key, net.minecraft.world.level.storage.loot.LootTable table,
+            net.minecraft.server.packs.resources.Resource source) {
             if (!key.identifier().getNamespace().equals("minecraft")) return;
             String path = key.identifier().getPath();
             if (!path.startsWith("chests/")) return;
             Roll roll = ROLLS.get(path.substring("chests/".length()));
             if (roll == null) return;
             // External and experimental datapack replacements keep control of their own tables.
-            if (!BackpackConfig.get().chestLoot() || !source.isBuiltin()) return;
+            var packSource = source.source().location().source();
+            boolean builtin = packSource == net.minecraft.server.packs.repository.PackSource.BUILT_IN
+                    || packSource == net.minecraft.server.packs.repository.PackSource.DEFAULT
+                    && source.knownPackInfo().map(pack -> pack.namespace().equals("neoforge")).orElse(false);
+            if (!BackpackConfig.get().chestLoot() || !builtin) return;
             LootPool.Builder pool = LootPool.lootPool().setRolls(net.minecraft.core.Holder.direct(new ConstantValue(1)));
             if (roll.emptyWeight() > 0) pool.add(EmptyLootItem.emptyItem().setWeight(roll.emptyWeight()));
             for (Outcome outcome : roll.outcomes()) pool.add(LootItem.lootTableItem(item(outcome.item())).setWeight(outcome.weight()));
-            builder.withPool(pool);
-        });
+            table.addPool(pool.build());
     }
     private static Item item(String id) {
         return BackpackTier.byId(id).map(BackpackRegistry::item)

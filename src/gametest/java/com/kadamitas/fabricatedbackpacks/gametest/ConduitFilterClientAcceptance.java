@@ -13,10 +13,10 @@ import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestSingleplayerContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
@@ -248,7 +248,7 @@ final class ConduitFilterClientAcceptance {
         iron.set(DataComponents.CUSTOM_NAME, Component.literal("Filter test iron"));
         source.setItem(0, iron); source.setItem(1, new ItemStack(Items.COBBLESTONE, 24));
         fill(level, 0, LAVA, INITIAL_LAVA); fill(level, 1, WATER, INITIAL_WATER);
-        try (var tx = Transaction.openOuter()) {
+        try (var tx = Transaction.openRoot()) {
             var battery = ResourceRuntime.energyStorage(source);
             for (long inserted = 0; inserted < 1_000; ) {
                 long accepted = battery.insert(1_000 - inserted, tx);
@@ -259,7 +259,7 @@ final class ConduitFilterClientAcceptance {
         }
     }
     private static void fill(ServerLevel level, int slot, FluidVariant fluid, long amount) {
-        try (var tx = Transaction.openOuter()) {
+        try (var tx = Transaction.openRoot()) {
             check(ResourceRuntime.tankStorage(bag(level, SOURCE).inventory(), slot, false).insert(fluid, amount, tx) == amount,
                     "The actual source tank accepts the exact fixture droplet amount");
             tx.commit();

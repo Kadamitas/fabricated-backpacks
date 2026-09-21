@@ -2,9 +2,9 @@ package com.kadamitas.fabricatedbackpacks.automation.conduit;
 
 import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
 import com.mojang.serialization.Codec;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.TransferVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.TransferVariant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -35,6 +35,7 @@ public final class ConduitBundleBlockEntity extends BlockEntity {
     private final ConduitRedstone[][] redstone = new ConduitRedstone[3][6];
     private final ConduitFilter[][] filters = new ConduitFilter[2][6];
     private final long[] laneGeneration = new long[3];
+    public static final net.neoforged.neoforge.model.data.ModelProperty<ConduitVisualState> VISUAL_MODEL = new net.neoforged.neoforge.model.data.ModelProperty<>();
     private volatile ConduitVisualState visual = ConduitVisualState.EMPTY;
 
     public ConduitBundleBlockEntity(BlockPos position, BlockState state) {
@@ -77,6 +78,9 @@ public final class ConduitBundleBlockEntity extends BlockEntity {
     }
     public long laneGeneration(ConduitKind kind) { return laneGeneration[kind.ordinal()]; }
     public ConduitVisualState visualState() { return visual; }
+    @Override public net.neoforged.neoforge.model.data.ModelData getModelData() {
+        return net.neoforged.neoforge.model.data.ModelData.builder().with(VISUAL_MODEL, visual).build();
+    }
     public int connectionMask(ConduitKind kind) { return visual.connectionMask(kind); }
 
     public boolean install(ConduitKind kind) {
@@ -152,6 +156,7 @@ public final class ConduitBundleBlockEntity extends BlockEntity {
         if (level instanceof ServerLevel server) {
             ConduitNetworks.changed(this, kind);
             setChanged();
+            invalidateCapabilities();
             refreshVisual();
             level.updateNeighborsAt(worldPosition, getBlockState().getBlock());
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
@@ -172,6 +177,12 @@ public final class ConduitBundleBlockEntity extends BlockEntity {
             ConduitNetworks.register(entity);
             if (Math.floorMod(level.getGameTime() + position.asLong(), 20) == 0) entity.refreshVisual();
         }
+    }
+
+    /** NeoForge's own block-entity lifecycle hook; foreign endpoints are observed generically. */
+    @Override public void onLoad() {
+        super.onLoad();
+        if (level instanceof ServerLevel server) ConduitNetworks.loaded(this, server);
     }
 
     @Override public void setRemoved() {
@@ -228,8 +239,10 @@ public final class ConduitBundleBlockEntity extends BlockEntity {
                 input.getIntOr("endpoints", 0), input.getIntOr("extract", 0), input.getIntOr("insert", 0), input.getIntOr("neighbors", 0));
         if (!next.equals(visual)) {
             visual = next;
-            if (level != null && level.isClientSide() && !isRemoved())
+            if (level != null && level.isClientSide() && !isRemoved()) {
+                requestModelDataUpdate();
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+            }
         }
         if (level instanceof ServerLevel) for (ConduitKind kind : ConduitKind.values()) ConduitNetworks.changed(this, kind);
     }

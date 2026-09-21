@@ -23,21 +23,20 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
-import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
-import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
-import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerItemContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidConstants;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageView;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StoragePreconditions;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageUtil;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SingleSlotStorage;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
@@ -71,9 +70,9 @@ import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import team.reborn.energy.api.EnergyStorage;
-import team.reborn.energy.api.base.SimpleEnergyItem;
-import team.reborn.energy.api.base.SimpleEnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.gametest.fixture.SimpleEnergyItem;
+import com.kadamitas.fabricatedbackpacks.gametest.fixture.SimpleEnergyStorage;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -94,11 +93,13 @@ public final class ResourceGameTests {
 
     public static void registerFixtures() {
         if (energyCell != null) return;
+        SimpleEnergyItem.initialize();
         Identifier id = Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "energy_cell");
         // Item.Properties derives ITEM_MODEL from the registry ID after component initialization.
         // The test resource pack supplies its item definition; no fixture art enters the release jar.
         energyCell = Registry.register(BuiltInRegistries.ITEM, id,
                 new TestEnergyCell(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id)).stacksTo(1)));
+        EnergyStorage.ITEM.registerForItems((stack, context) -> SimpleEnergyItem.storage((SimpleEnergyItem)stack.getItem(), context), energyCell);
         Identifier receiverId = Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "energy_receiver");
         energyReceiver = Registry.register(BuiltInRegistries.BLOCK, receiverId,
                 new Block(Block.Properties.of().setId(ResourceKey.create(Registries.BLOCK, receiverId))) {
@@ -114,7 +115,7 @@ public final class ResourceGameTests {
             receiver.queried.add(direction);
             return direction == receiver.face ? receiver.storage : null;
         }, energyReceiver);
-        PlayerBlockBreakEvents.BEFORE.register((level, player, position, state, entity) -> !PROTECTED_POSITIONS.contains(position));
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.block.BreakBlockEvent event) -> { if (PROTECTED_POSITIONS.contains(event.getPos())) event.setCanceled(true); });
     }
 
     private static final class TestEnergyCell extends Item implements SimpleEnergyItem {
@@ -168,7 +169,7 @@ public final class ResourceGameTests {
         return ContainerItemContext.ofSingleSlot(ContainerStorage.of(container, null).getSlot(slot));
     }
     private static void fill(BackpackTank tank, FluidVariant resource, long droplets) {
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             if (tank.insert(resource, droplets, transaction) != droplets) throw new IllegalArgumentException("Test fill does not fit");
             transaction.commit();
         }
@@ -195,9 +196,9 @@ public final class ResourceGameTests {
         ItemStack initial = bag.stack().copy();
         long capacity = 40_000L * FluidAmount.DROPLETS_PER_MB;
         helper.assertValueEqual(first.getCapacity(), capacity, "Netherite tank has ten rows of capacity");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(first.insert(WATER, 100, outer), 100L, "First alias accepts individual droplets");
-            try (Transaction nested = outer.openNested()) {
+            try (Transaction nested = Transaction.open(outer)) {
                 second.insert(WATER, 200, nested);
                 nested.commit();
             }
@@ -206,13 +207,13 @@ public final class ResourceGameTests {
         helper.assertValueEqual(second.getAmount(), 0L, "Outer rollback also undoes committed nested aliases");
         helper.assertTrue(first.isResourceBlank(), "Rolled-back empty tank has no phantom fluid");
         assertExactItem(helper, bag.stack(), initial, "Tank rollback preserves absent resource settings, not just a zero quantity");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             first.insert(WATER, 500, outer);
-            try (Transaction nested = outer.openNested()) { second.extract(WATER, 123, nested); }
+            try (Transaction nested = Transaction.open(outer)) { second.extract(WATER, 123, nested); }
             helper.assertValueEqual(first.getAmount(), 500L, "Nested abort restores only its own debit");
             outer.commit();
         }
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(second.insert(FluidVariant.of(Fluids.LAVA), 1, transaction), 0L, "A tank cannot mix fluid identities");
             helper.assertValueEqual(second.insert(WATER, Long.MAX_VALUE, transaction), capacity - 500, "Insertion stops at exact capacity");
             transaction.commit();
@@ -220,7 +221,7 @@ public final class ResourceGameTests {
         helper.assertValueEqual(first.getAmount(), capacity, "Saturating request does not overflow");
         InstalledUpgrade detached = upgrade(bag, 0);
         bag.upgrades().setItem(0, new ItemStack(BackpackRegistry.item(UpgradeKind.TANK)));
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(first.extract(WATER, 1, transaction), 0L, "A stale API cannot access a replaced upgrade");
         }
         helper.assertTrue(detached.stack().get(ResourceComponents.TANK_FLUID).equals(WATER), "Detached upgrade still owns its resource");
@@ -238,7 +239,7 @@ public final class ResourceGameTests {
         helper.assertValueEqual(tank(restored).getAmount(), base + 1, "Item codec retains sub-millibucket quantities");
         helper.assertTrue(tank(restored).getResource().equals(namedWater), "Fluid component data survives the real item codec");
         helper.assertFalse(restored.canRemoveUpgrade(1), "Reloading cannot bypass capacity constraints");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(tank(restored).extract(WATER, 1, transaction), 0L, "Unnamed fluid does not match a named fluid variant");
             helper.assertValueEqual(tank(restored).extract(namedWater, 1, transaction), 1L, "Exact component variant can be drained");
             transaction.commit();
@@ -258,15 +259,15 @@ public final class ResourceGameTests {
         Storage<FluidVariant> fluid = context.find(FluidStorage.ITEM);
         EnergyStorage energy = context.find(EnergyStorage.ITEM);
         helper.assertTrue(fluid != null && energy != null, "Backpack items expose both real item APIs");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(fluid.insert(WATER, 17, outer), 17L, "Fluid API writes its real context");
-            try (Transaction nested = outer.openNested()) {
+            try (Transaction nested = Transaction.open(outer)) {
                 helper.assertValueEqual(energy.insert(37, nested), 37L, "Energy API sees the current context variant");
                 nested.commit();
             }
         }
         helper.assertTrue(ItemStack.matches(original, inventory.getItem(0)), "Aborting both item APIs restores the original item components");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             fluid.insert(WATER, 12345, transaction);
             energy.insert(75, transaction);
             transaction.commit();
@@ -276,7 +277,7 @@ public final class ResourceGameTests {
         helper.assertValueEqual(ResourceRuntime.batteryStored(saved, 1), 75L, "Energy item API persists alongside fluid components");
         var retainedView = fluid.iterator().next();
         inventory.setItem(0, new ItemStack(Items.STONE));
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(retainedView.extract(WATER, 1, transaction), 0L, "Old item views cannot mutate a replacement item");
             helper.assertValueEqual(energy.insert(1, transaction), 0L, "Old energy lookups also reject a replacement item");
         }
@@ -303,13 +304,13 @@ public final class ResourceGameTests {
         bag.updateSettings(tankUpgrade, state -> { state.putInt("amount", 0); state.putByte("amount_droplets", (byte) 0); });
         bag.updateSettings(batteryUpgrade, state -> state.putInt("amount", 0));
         ItemStack before = bag.stack().copy();
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             tank.insert(WATER, 31, outer);
             battery.insert(47, outer);
         }
         assertExactItem(helper, bag.stack(), before, "Resource rollback preserves explicit empty components and original numeric tag types");
         // A preference edited independently is not a field owned by either resource adapter.
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             tank.insert(WATER, 31, outer);
             battery.insert(47, outer);
             bag.updateSettings(tankUpgrade, state -> state.putBoolean("separate_preference", true));
@@ -334,9 +335,9 @@ public final class ResourceGameTests {
         StorageView<FluidVariant> tank = fluid.iterator().next();
         ItemStack before = holder.getItem(0).copy();
         for (boolean commit : new boolean[]{false, true}) {
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIAMOND), 3, outer), 3L, "A pristine item accepts content through ItemStorage.ITEM");
-                try (Transaction nested = outer.openNested()) {
+                try (Transaction nested = Transaction.open(outer)) {
                     helper.assertValueEqual(fluid.insert(WATER, 17, nested), 17L, "Other cached lookups follow this bag's first identity initialization");
                     helper.assertValueEqual(energy.insert(29, nested), 29L, "Energy shares the transactional context binding");
                     nested.commit();
@@ -351,7 +352,7 @@ public final class ResourceGameTests {
                 helper.assertValueEqual(tank.getAmount(), 0L, "Aborted initialization restores the retained fluid view");
             }
         }
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(cell.extract(ItemVariant.of(Items.DIAMOND), 1, outer), 1L, "A retained pristine view remains usable after commit");
             helper.assertValueEqual(tank.extract(WATER, 1, outer), 1L, "A retained pristine tank remains usable after commit");
             outer.commit();
@@ -362,7 +363,7 @@ public final class ResourceGameTests {
         helper.assertValueEqual(ResourceRuntime.batteryStored(saved, 1), 29L, "Unrelated energy stays exact");
         ItemStack replacement = bag(UpgradeKind.TANK, UpgradeKind.BATTERY).stack();
         holder.setItem(0, replacement);
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIRT), 1, outer), 0L, "A cached item lookup cannot address another backpack in the same context");
             helper.assertValueEqual(fluid.insert(WATER, 1, outer), 0L, "A cached fluid lookup cannot address another backpack");
             helper.assertValueEqual(energy.insert(1, outer), 0L, "A cached energy lookup cannot address another backpack");
@@ -371,7 +372,7 @@ public final class ResourceGameTests {
         }
         helper.assertTrue(!energy.supportsInsertion() && !energy.supportsExtraction(), "Stale energy support flags are inert too");
         BackpackTestSupport.assertStack(helper, holder.getItem(0), replacement, "Rejected stale calls cannot rewrite the replacement's components");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(context.find(ItemStorage.ITEM).insert(ItemVariant.of(Items.DIRT), 1, outer), 1L,
                     "A fresh lookup on the same context can address its newly placed backpack");
             outer.commit();
@@ -386,7 +387,7 @@ public final class ResourceGameTests {
         // Fabric 8.0.12 deliberately reports successful extraction/overflow without changing its
         // fixed main variant. This is a virtual exchange, not a writable reference to constantItem.
         for (boolean commit : new boolean[]{false, true}) {
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(constantItems.insert(ItemVariant.of(Items.DIRT), 1, outer), 1L, "A constant context permits virtual item replacement");
                 helper.assertValueEqual(constantFluids.insert(WATER, 1, outer), 1L, "A cached constant fluid probe remains reusable after a virtual exchange");
                 helper.assertValueEqual(constantEnergy.insert(1, outer), 1L, "A cached constant energy probe does not adopt an unpersisted identity");
@@ -430,10 +431,10 @@ public final class ResourceGameTests {
         Storage<ItemVariant> items = context.find(ItemStorage.ITEM);
         Storage<FluidVariant> fluids = context.find(FluidStorage.ITEM);
         EnergyStorage energy = context.find(EnergyStorage.ITEM);
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIRT), 1, outer), 0L, "A read-only slot rejects item content replacement");
             helper.assertValueEqual(items.extract(ItemVariant.of(Items.DIAMOND), 1, outer), 0L, "A read-only slot cannot debit its owned items");
-            try (Transaction nested = outer.openNested()) {
+            try (Transaction nested = Transaction.open(outer)) {
                 helper.assertValueEqual(fluids.insert(WATER, 1, nested), 0L, "Read-only replacement rejects fluid insertion");
                 helper.assertValueEqual(fluids.extract(WATER, 1, nested), 0L, "Read-only replacement rejects fluid extraction");
                 helper.assertValueEqual(energy.insert(1, nested), 0L, "Read-only replacement rejects energy insertion");
@@ -443,7 +444,7 @@ public final class ResourceGameTests {
             outer.commit();
         }
         SimpleContainer source = new SimpleContainer(new ItemStack(Items.DIRT, 4));
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(StorageUtil.move(ContainerStorage.of(source, null), items, item -> true, 4, outer), 0L,
                     "The actual Fabric transfer helper rolls back a refused destination exchange");
             outer.commit();
@@ -477,7 +478,7 @@ public final class ResourceGameTests {
         helper.assertTrue(cell.getResource().getItem() == Items.EMERALD, "The ordered item API starts with the actual nested child's cell");
         ItemStack before = holder.getItem(0).copy();
         for (boolean commit : new boolean[]{false, true}) {
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIRT), 1, outer), 0L, "Root and child input filters apply to item-context access");
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.EMERALD), 3, outer), 3L, "Permitted insertion reaches the ordered child inventory");
                 helper.assertValueEqual(fluid.insert(WATER, 19, outer), 19L, "Nested tanks transact through the ordinary item context");
@@ -495,7 +496,7 @@ public final class ResourceGameTests {
         helper.assertValueEqual(ResourceRuntime.batteryStored(savedChild, 1), 23L, "Nested energy survives the parent codec");
         BagInventory live = BagInventory.of(holder.getItem(0));
         live.setItem(0, bag(UpgradeKind.TANK, UpgradeKind.BATTERY).stack());
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(cell.extract(ItemVariant.of(Items.EMERALD), 1, outer), 0L, "A retained nested item view cannot adopt a different child in its old slot");
             helper.assertValueEqual(tank.extract(WATER, 1, outer), 0L, "A retained nested tank cannot adopt that replacement child");
         }
@@ -518,13 +519,13 @@ public final class ResourceGameTests {
             EnergyStorage energy = context.find(EnergyStorage.ITEM);
             helper.assertTrue(menu.bag() == warm, "The opened menu retains the warm physical backpack handle");
             ItemStack before = warm.stack().copy();
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 items.insert(ItemVariant.of(Items.DIAMOND), 7, outer);
                 fluid.insert(WATER, 73, outer);
                 energy.insert(91, outer);
             }
             BackpackTestSupport.assertStack(helper, warm.stack(), before, "Aborted real hand-context transfers preserve a warm menu and auxiliary contents");
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIAMOND), 7, outer), 7L, "The actual held-item context commits inventory resources");
                 helper.assertValueEqual(fluid.insert(WATER, 73, outer), 73L, "The same hand context commits fluid");
                 helper.assertValueEqual(energy.insert(91, outer), 91L, "The same hand context commits energy");
@@ -539,7 +540,7 @@ public final class ResourceGameTests {
             BackpackTestSupport.assertStack(helper, menu.getSlot(menu.auxiliaryStart() + 2).getItem(), Items.BUCKET, 3, "The selected menu's tank output survives resource exchange");
             tankSlots.setItem(3, new ItemStack(Items.WATER_BUCKET));
             ItemStack cell = new ItemStack(energyCell);
-            cell.set(EnergyStorage.ENERGY_COMPONENT, 1_000L);
+            cell.set(SimpleEnergyItem.ENERGY_COMPONENT, 1_000L);
             batterySlots.setItem(1, cell);
             // The full output cell cannot consume the battery's separately asserted 91 units.
             ResourceRuntime.tick(warm, helper.getLevel(), player.blockPosition(), player);
@@ -555,7 +556,7 @@ public final class ResourceGameTests {
         } finally { player.closeContainer(); }
         player.containerMenu.setCarried(warm.stack().copy());
         ContainerItemContext cursor = ContainerItemContext.ofPlayerCursor(player, player.containerMenu);
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(cursor.find(ItemStorage.ITEM).extract(ItemVariant.of(Items.DIAMOND), 2, outer), 2L, "The actual menu cursor is also a writable item context");
             outer.commit();
         }
@@ -576,10 +577,10 @@ public final class ResourceGameTests {
         EnergyStorage energy = context.find(EnergyStorage.ITEM);
         ItemStack before = BackpackEquipment.get(player).copy();
         for (boolean commit : new boolean[]{false, true}) {
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(context.getMainSlot().extract(context.getItemVariant(), 1, outer), 0L, "The explicit equipment context does not expose the physical backpack as an extractable item");
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.IRON_INGOT), 9, outer), 9L, "Equipment item access writes canonical owned slots");
-                try (Transaction nested = outer.openNested()) {
+                try (Transaction nested = Transaction.open(outer)) {
                     helper.assertValueEqual(fluid.insert(WATER, 31, nested), 31L, "Equipment fluid participates in the same transaction");
                     helper.assertValueEqual(energy.insert(47, nested), 47L, "Equipment energy participates in the same transaction");
                     nested.commit();
@@ -598,14 +599,14 @@ public final class ResourceGameTests {
         helper.assertValueEqual(tank(saved).getAmount(), 31L, "Equipped fluid persists in the attachment codec");
         helper.assertValueEqual(ResourceRuntime.batteryStored(saved, 1), 47L, "Equipped energy persists in the attachment codec");
         player.setGameMode(GameType.SPECTATOR);
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIRT), 1, outer), 0L, "Spectators have no equipped item mutation capability");
             helper.assertValueEqual(fluid.extract(WATER, 1, outer), 0L, "Spectators have no equipped fluid mutation capability");
             helper.assertValueEqual(energy.extract(1, outer), 0L, "Spectators have no equipped energy mutation capability");
         }
         player.setGameMode(GameType.SURVIVAL);
         BackpackEquipment.set(player, BackpackEquipment.get(player).copy());
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertTrue(context.getItemVariant().isBlank(), "Replaced equipment has a blank old context variant");
             helper.assertValueEqual(context.getMainSlot().getAmount(), 0L, "Even a same-UUID physical equipment replacement invalidates the old context");
             helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIRT), 1, outer), 0L, "Old equipment item lookup is lifetime-bound");
@@ -663,9 +664,9 @@ public final class ResourceGameTests {
         BackpackBattery alias = new BackpackBattery(bag, upgrade);
         ItemStack initial = bag.stack().copy();
         helper.assertValueEqual(battery.getCapacity(), 100_000L, "Battery capacity follows ten rows");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(battery.insert(1_000, outer), 200L, "Battery limits each operation to the row-scaled rate");
-            try (Transaction nested = outer.openNested()) {
+            try (Transaction nested = Transaction.open(outer)) {
                 alias.extract(70, nested);
                 nested.commit();
             }
@@ -675,9 +676,9 @@ public final class ResourceGameTests {
         bag.updateSettings(upgrade, state -> state.putLong("amount", 100));
         Container slots = bag.upgradeInventory(upgrade);
         ItemStack source = new ItemStack(energyCell);
-        source.set(EnergyStorage.ENERGY_COMPONENT, 500L);
+        source.set(SimpleEnergyItem.ENERGY_COMPONENT, 500L);
         ItemStack destination = new ItemStack(energyCell);
-        destination.set(EnergyStorage.ENERGY_COMPONENT, 950L);
+        destination.set(SimpleEnergyItem.ENERGY_COMPONENT, 950L);
         slots.setItem(0, source);
         slots.setItem(1, destination);
         ResourceRuntime.tick(bag, helper.getLevel(), helper.absolutePos(new BlockPos(2, 2, 2)), null);
@@ -699,7 +700,7 @@ public final class ResourceGameTests {
         placed.inventory().updateSettings(upgrade(placed.inventory(), 0), state -> state.putBoolean("external_output", true));
         EnergyStorage sided = EnergyStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH);
         helper.assertTrue(sided != null, "Placed backpacks expose the actual Team Reborn sided API");
-        try (Transaction transaction = Transaction.openOuter()) { sided.extract(100, transaction); }
+        try (Transaction transaction = Transaction.openRoot()) { sided.extract(100, transaction); }
         helper.assertValueEqual(sided.getAmount(), battery.getAmount(), "Aborted sided extraction restores block entity contents");
         helper.succeed();
     }
@@ -726,11 +727,11 @@ public final class ResourceGameTests {
             EnergyStorage power = EnergyStorage.SIDED.find(helper.getLevel(), position, side);
             helper.assertTrue(item != null && fluid != null && power != null, "Every face exposes the shared item/fluid/energy interfaces: " + side);
             items.add(item); fluids.add(fluid); energy.add(power);
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(item.insert(ItemVariant.of(Items.DIRT), 4, outer), 4L, "Sided item insertion reaches permitted storage");
                 helper.assertValueEqual(fluid.insert(WATER, 31, outer), 31L, "Sided fluid insertion reaches the installed tank");
                 helper.assertValueEqual(power.insert(17, outer), 17L, "Sided energy insertion reaches the installed battery");
-                try (Transaction nested = outer.openNested()) {
+                try (Transaction nested = Transaction.open(outer)) {
                     helper.assertValueEqual(item.extract(ItemVariant.of(Items.DIRT), 1, nested), 1L, "Sided item extraction shares its transaction");
                     helper.assertValueEqual(fluid.extract(WATER, 1, nested), 1L, "Sided fluid extraction shares its transaction");
                     helper.assertValueEqual(power.extract(1, nested), 1L, "Sided energy extraction shares its transaction");
@@ -742,7 +743,7 @@ public final class ResourceGameTests {
             }
             BackpackTestSupport.assertStack(helper, bag.stack(), before, "Outer rollback restores all resource types and nested changes on " + side);
         }
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             for (int index = 0; index < 6; index++) {
                 items.get(index).insert(ItemVariant.of(Items.DIRT), 1, outer);
                 fluids.get(index).insert(WATER, 2, outer);
@@ -754,16 +755,16 @@ public final class ResourceGameTests {
         helper.assertTrue(bag.getItem(1).isEmpty(), "External items respect the remembered emerald-only cell");
         helper.assertValueEqual(tank(bag).getAmount(), 93L, "All sided fluid handles share one exact tank amount");
         helper.assertValueEqual(ResourceRuntime.batteryStored(bag, 1), 518L, "All sided energy handles share one battery amount");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(energy.get(0).extract(125, outer), 125L, "One face can consume part of this tick's allowance");
-            try (Transaction nested = outer.openNested()) {
+            try (Transaction nested = Transaction.open(outer)) {
                 helper.assertValueEqual(energy.get(1).extract(100, nested), 75L, "Another face sees only the shared remaining allowance");
                 nested.commit();
             }
             helper.assertValueEqual(energy.get(2).extract(1, outer), 0L, "A third alias cannot multiply the output rate");
         }
         helper.assertValueEqual(energy.get(0).getAmount(), 518L, "Aborted extraction restores physical energy");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(energy.get(5).extract(200, outer), 200L, "Aborted extraction also restores the shared output allowance");
             helper.assertValueEqual(energy.get(0).extract(1, outer), 0L, "A committed allowance cannot be reset by switching sides");
             outer.commit();
@@ -774,7 +775,7 @@ public final class ResourceGameTests {
         helper.assertTrue(UpgradeEngine.action(bag, 1, "external_output", player), "The server action switches the battery to input-only");
         for (EnergyStorage power : energy) helper.assertTrue(power.supportsInsertion() && !power.supportsExtraction(), "Cached handles advertise changed extraction support immediately");
         helper.assertValueEqual(energy.get(0).getAmount(), 318L, "Disabling output never erases stored energy");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(energy.get(0).insert(7, outer), 7L, "An input-only port still accepts compatible power");
             outer.commit();
         }
@@ -787,7 +788,7 @@ public final class ResourceGameTests {
         var rules = BackpackConfig.get();
         try {
             BackpackConfig.configure(ConfigFile.decode("{\"storage\":{\"disableConnections\":true}}"));
-            for (int index = 0; index < 6; index++) try (Transaction outer = Transaction.openOuter()) {
+            for (int index = 0; index < 6; index++) try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(items.get(index).insert(ItemVariant.of(Items.DIRT), 1, outer), 0L, "Cached items recheck the connection gate");
                 helper.assertValueEqual(fluids.get(index).insert(WATER, 1, outer), 0L, "Cached fluids recheck the connection gate");
                 helper.assertFalse(fluids.get(index).supportsInsertion() || fluids.get(index).supportsExtraction(),
@@ -799,13 +800,13 @@ public final class ResourceGameTests {
             helper.getLevel().setBlock(position.north(), Blocks.STONE.defaultBlockState(), 3);
             helper.assertTrue(EnergyStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH) == null
                     && FluidStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH) == null, "Neighbor block rules deny the affected face");
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(energy.get(Direction.NORTH.ordinal()).insert(1, outer), 0L, "Previously cached north port sees the new blocked neighbor");
                 helper.assertValueEqual(energy.get(Direction.SOUTH.ordinal()).insert(1, outer), 1L, "An unrelated face remains usable");
             }
         } finally { BackpackConfig.configure(rules); }
         entity.setStack(bag(UpgradeKind.TANK, UpgradeKind.BATTERY).stack());
-        for (int index = 0; index < 6; index++) try (Transaction outer = Transaction.openOuter()) {
+        for (int index = 0; index < 6; index++) try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(items.get(index).insert(ItemVariant.of(Items.DIRT), 1, outer), 0L, "Replaced placed bag invalidates cached item handles");
             helper.assertValueEqual(fluids.get(index).insert(WATER, 1, outer), 0L, "Replaced placed bag invalidates cached fluid handles");
             helper.assertFalse(fluids.get(index).supportsInsertion() || fluids.get(index).supportsExtraction(),
@@ -825,7 +826,7 @@ public final class ResourceGameTests {
             Storage<FluidVariant> port = FluidStorage.SIDED.find(helper.getLevel(), position, side);
             helper.assertTrue(port != null, "The dynamic fluid lookup remains available for later upgrade changes: " + side);
             helper.assertFalse(port.supportsInsertion() || port.supportsExtraction(), "A battery-only bag advertises no fluid endpoint: " + side);
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(port.insert(WATER, 1, transaction), 0L, "A bag without a tank or void policy cannot accept fluid");
                 helper.assertValueEqual(port.extract(WATER, 1, transaction), 0L, "A bag without a tank cannot supply fluid");
             }
@@ -847,7 +848,7 @@ public final class ResourceGameTests {
         pipe.refreshVisual(); // The same production refresh runs periodically and on neighbor changes.
         helper.assertTrue(pipe.visualState().endpoint(ConduitKind.FLUID, Direction.NORTH), "Installing a tank produces a real fluid interface plate");
         ItemStack empty = inventory.stack().copy();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(ports.getFirst().insert(WATER, 29, transaction), 29L, "The newly admitted endpoint supports real transactions");
         }
         assertExactItem(helper, inventory.stack(), empty, "Capability discovery does not change exact rollback semantics");
@@ -902,7 +903,7 @@ public final class ResourceGameTests {
             for (Receiver receiver : receivers) helper.assertTrue(receiver.queried.equals(Set.of(receiver.face)), "Each adjacent receiver is queried on its opposite face");
             tickPlaced(helper, entity);
             helper.assertValueEqual(receivers.stream().mapToLong(value -> value.storage.amount).sum(), 200L, "Repeated same-tick calls do not mint another output budget");
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(retained.extract(1, outer), 0L, "Automatic pushing and cached sided extraction share the same budget");
             }
             ServerPlayer player = BackpackTestSupport.player(helper);
@@ -929,7 +930,7 @@ public final class ResourceGameTests {
             root.setItem(0, child.stack());
             BackpackBlockEntity nested = place(helper, nestedPosition, root);
             EnergyStorage nestedPort = EnergyStorage.SIDED.find(helper.getLevel(), nestedPosition, Direction.SOUTH);
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(nestedPort.extract(Long.MAX_VALUE, outer), 260L, "Ordered nested/root batteries each contribute their own configured output rate");
                 helper.assertValueEqual(EnergyStorage.SIDED.find(helper.getLevel(), nestedPosition, Direction.WEST).extract(1, outer), 0L,
                         "A second aggregate handle cannot spend either battery's allowance again");
@@ -995,7 +996,7 @@ public final class ResourceGameTests {
         BagInventory pumping = bag(UpgradeKind.TANK, UpgradeKind.PUMP);
         helper.assertTrue(FluidStorage.SIDED.find(helper.getLevel(), neighbor, Direction.WEST) != null, "Neighbor exposes real Fabric fluid storage");
         Storage<ItemVariant> itemStorage = ItemStorage.SIDED.find(helper.getLevel(), neighbor, Direction.WEST);
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(itemStorage.insert(ItemVariant.of(Items.DIRT), 4, transaction), 4L, "The placed backpack also exposes its owned item container");
             transaction.commit();
         }
@@ -1053,7 +1054,7 @@ public final class ResourceGameTests {
         ResourceRuntime.tick(bag, helper.getLevel(), position, player);
         helper.assertTrue(helper.getLevel().getFluidState(source).isSource(), "Insufficient capacity does not destroy a source block");
         helper.assertValueEqual(tank(bag).getAmount(), FluidAmount.dropletsForMb(39_500), "Partial source insertion rolls back entirely");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             tank(bag).extract(WATER, Long.MAX_VALUE, transaction);
             transaction.commit();
         }

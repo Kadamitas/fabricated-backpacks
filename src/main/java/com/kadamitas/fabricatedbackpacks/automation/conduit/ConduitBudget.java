@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.automation.conduit;
 
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
 
 /** One allowance per physical endpoint, shared by its faces, network components and API callers. */
 final class ConduitBudget extends SnapshotParticipant<ConduitBudget.State> {

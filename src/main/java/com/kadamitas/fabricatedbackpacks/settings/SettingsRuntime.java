@@ -2,8 +2,9 @@ package com.kadamitas.fabricatedbackpacks.settings;
 
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
-import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
+import net.neoforged.neoforge.attachment.AttachmentType;
+import net.neoforged.neoforge.registries.NeoForgeRegistries;
+import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
@@ -31,8 +32,8 @@ import java.util.WeakHashMap;
 
 /** Private per-player settings and bounded, permission-checked settings-pack export. */
 public final class SettingsRuntime {
-    public static final AttachmentType<CustomData> PLAYER_SETTINGS = AttachmentRegistry.create(BackpackRegistry.id("player_settings"),
-            builder -> builder.initializer(() -> CustomData.EMPTY).persistent(CustomData.CODEC).copyOnDeath());
+    public static final AttachmentType<CustomData> PLAYER_SETTINGS = Registry.register(NeoForgeRegistries.ATTACHMENT_TYPES, BackpackRegistry.id("player_settings"),
+            AttachmentType.builder(() -> CustomData.EMPTY).serialize(CustomData.CODEC.fieldOf("value")).copyOnDeath().build());
     private static final Set<String> PREFERENCES = Set.of("memory_components", "keep_tab", "keep_search", "shift_into_tab", "share_access", "sort_order");
     private static final int MAX_TEMPLATES = 32;
     private static final int MAX_BYTES = 128 * 1024;
@@ -42,7 +43,7 @@ public final class SettingsRuntime {
     public static void initialize() {}
 
     public static boolean validName(String name) { return name != null && name.matches("[A-Za-z0-9][A-Za-z0-9 _-]{0,47}"); }
-    private static CompoundTag playerData(ServerPlayer player) { return player.getAttachedOrElse(PLAYER_SETTINGS, CustomData.EMPTY).copyTag(); }
+    private static CompoundTag playerData(ServerPlayer player) { return player.getData(PLAYER_SETTINGS).copyTag(); }
 
     public static CompoundTag effective(BagInventory bag, ServerPlayer player) {
         CompoundTag result = playerData(player).getCompoundOrEmpty("defaults").copy();
@@ -94,7 +95,7 @@ public final class SettingsRuntime {
                 case "defaults_save" -> {
                     CompoundTag data = playerData(player);
                     data.put("defaults", SettingsTemplate.select(effective(bag, player), PREFERENCES));
-                    player.setAttached(PLAYER_SETTINGS, CustomData.of(data));
+                    player.setData(PLAYER_SETTINGS, CustomData.of(data));
                     tell(player, "Saved your backpack defaults.");
                 }
                 case "defaults_use" -> bag.updateSettings(tag -> PREFERENCES.forEach(tag::remove));
@@ -105,7 +106,7 @@ public final class SettingsRuntime {
                     var encoded = SettingsTemplate.CODEC.encodeStart(RegistryOps.create(NbtOps.INSTANCE, player.registryAccess()), SettingsTemplate.capture(bag)).getOrThrow();
                     if (encoded.sizeInBytes() > MAX_BYTES) { tell(player, "Template is too large."); return false; }
                     templates.put(text, encoded); data.put("templates", templates);
-                    player.setAttached(PLAYER_SETTINGS, CustomData.of(data));
+                    player.setData(PLAYER_SETTINGS, CustomData.of(data));
                     tell(player, "Saved settings template: " + text);
                 }
                 case "template_load" -> {
@@ -123,7 +124,7 @@ public final class SettingsRuntime {
                     if (!validName(text)) return false;
                     CompoundTag data = playerData(player), templates = data.getCompoundOrEmpty("templates");
                     templates.remove(text); data.put("templates", templates);
-                    player.setAttached(PLAYER_SETTINGS, CustomData.of(data));
+                    player.setData(PLAYER_SETTINGS, CustomData.of(data));
                     tell(player, "Removed personal template: " + text);
                 }
                 case "template_export" -> {

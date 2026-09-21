@@ -1,7 +1,7 @@
 package com.kadamitas.fabricatedbackpacks.resource;
 
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;

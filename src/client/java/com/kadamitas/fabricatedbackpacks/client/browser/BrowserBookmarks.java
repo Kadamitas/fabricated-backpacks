@@ -3,7 +3,7 @@ package com.kadamitas.fabricatedbackpacks.client.browser;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.fml.loading.FMLPaths;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +23,7 @@ final class BrowserBookmarks {
     private static final int LIMIT = 512;
     private final Set<Identifier> items = new LinkedHashSet<>();
     private final Set<Identifier> recipes = new LinkedHashSet<>();
-    private final Path path = FabricLoader.getInstance().getConfigDir().resolve("fabricated-backpacks-browser.json");
+    private final Path path = FMLPaths.CONFIGDIR.get().resolve("fabricated-backpacks-browser.json");
     private long revision;
 
     BrowserBookmarks() {

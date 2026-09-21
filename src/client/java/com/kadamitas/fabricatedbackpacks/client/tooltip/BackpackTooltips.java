@@ -1,7 +1,8 @@
 package com.kadamitas.fabricatedbackpacks.client.tooltip;
 
 import com.kadamitas.fabricatedbackpacks.item.BackpackTooltip;
-import net.fabricmc.fabric.api.client.rendering.v1.ClientTooltipComponentCallback;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
 
 /** Installs the client half without introducing client classes into common item code. */
 public final class BackpackTooltips {
@@ -9,10 +10,10 @@ public final class BackpackTooltips {
 
     private BackpackTooltips() {}
 
-    public static void initialize() {
+    public static void initialize(IEventBus modBus) {
         if (initialized) return;
         initialized = true;
-        ClientTooltipComponentCallback.EVENT.register(component ->
-                component instanceof BackpackTooltip backpack ? new BackpackContentsTooltip(backpack) : null);
+        modBus.addListener((RegisterClientTooltipComponentFactoriesEvent event) ->
+                event.register(BackpackTooltip.class, BackpackContentsTooltip::new));
     }
 }

@@ -4,8 +4,8 @@ import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.menu.v1.ExtendedMenuProvider;
-import net.fabricmc.fabric.api.menu.v1.ExtendedMenuType;
+import com.kadamitas.fabricatedbackpacks.platform.menu.ExtendedMenuProvider;
+import com.kadamitas.fabricatedbackpacks.platform.menu.ExtendedMenuType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -25,11 +25,13 @@ public final class BackpackMenus {
             BackpackRegistry.id("equipment"), new ExtendedMenuType<>((id, inventory, ignored) -> new EquipmentMenu(id, inventory), ByteBufCodecs.BOOL));
     private BackpackMenus() {}
     public static void initialize() {
-        net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.EntityInteract event) -> {
+            var player = event.getEntity(); var hand = event.getHand(); var entity = event.getTarget();
             if (hand == InteractionHand.MAIN_HAND && player.isShiftKeyDown() && player instanceof ServerPlayer viewer
-                    && entity instanceof ServerPlayer wearer && viewer != wearer && openShared(viewer, wearer))
-                return net.minecraft.world.InteractionResult.SUCCESS;
-            return net.minecraft.world.InteractionResult.PASS;
+                    && entity instanceof ServerPlayer wearer && viewer != wearer && openShared(viewer, wearer)) {
+                event.setCanceled(true);
+                event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+            }
         });
     }
 
@@ -65,7 +67,7 @@ public final class BackpackMenus {
         if (player.isSpectator()) return;
         com.kadamitas.fabricatedbackpacks.world.MobLoot.materialize(bag, player.level(), placed == null ? player.blockPosition() : placed.getBlockPos(), player);
         com.kadamitas.fabricatedbackpacks.admin.BackpackArchives.record(player.level(), bag, player);
-        player.openMenu(new ExtendedMenuProvider<BagOpeningData>() {
+        ExtendedMenuProvider.open(player, new ExtendedMenuProvider<BagOpeningData>() {
             @Override public BagOpeningData getScreenOpeningData(ServerPlayer viewer) { return data; }
             @Override public Component getDisplayName() { return bag.stack().getHoverName(); }
             @Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player viewer) {
@@ -111,7 +113,7 @@ public final class BackpackMenus {
     }
     public static void openEquipment(ServerPlayer player) {
         if (player.isSpectator()) return;
-        player.openMenu(new ExtendedMenuProvider<Boolean>() {
+        ExtendedMenuProvider.open(player, new ExtendedMenuProvider<Boolean>() {
             @Override public Boolean getScreenOpeningData(ServerPlayer viewer) { return false; }
             @Override public Component getDisplayName() { return Component.translatable("screen.fabricated_backpacks.equipment"); }
             @Override public AbstractContainerMenu createMenu(int id, Inventory inventory, Player viewer) { return new EquipmentMenu(id, inventory); }

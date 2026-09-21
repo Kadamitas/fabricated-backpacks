@@ -13,7 +13,6 @@ import com.kadamitas.fabricatedbackpacks.automation.engine.SteamEngineComponents
 import com.kadamitas.fabricatedbackpacks.automation.engine.SteamEngineMenus;
 import com.kadamitas.fabricatedbackpacks.automation.engine.SteamEngineRuntime;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
-import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -45,9 +44,9 @@ public final class AutomationRegistry {
         STEAM_ENGINE = Registry.register(BuiltInRegistries.BLOCK, BackpackRegistry.id("steam_engine"),
                 new SteamEngineBlock(blockProperties("steam_engine").strength(3.5F)));
         CONDUIT_BUNDLE_ENTITY = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, BackpackRegistry.id("conduit_bundle"),
-                FabricBlockEntityTypeBuilder.create(ConduitBundleBlockEntity::new, CONDUIT_BUNDLE).build());
+                new BlockEntityType<>(ConduitBundleBlockEntity::new, java.util.Set.of(CONDUIT_BUNDLE)));
         STEAM_ENGINE_ENTITY = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, BackpackRegistry.id("steam_engine"),
-                FabricBlockEntityTypeBuilder.create(SteamEngineBlockEntity::new, STEAM_ENGINE).build());
+                new BlockEntityType<>(SteamEngineBlockEntity::new, java.util.Set.of(STEAM_ENGINE)));
         ITEM_CONDUIT = register("item_conduit", new ConduitItem(CONDUIT_BUNDLE, itemProperties("item_conduit"), ConduitKind.ITEM));
         FLUID_CONDUIT = register("fluid_conduit", new ConduitItem(CONDUIT_BUNDLE, itemProperties("fluid_conduit"), ConduitKind.FLUID));
         ENERGY_CONDUIT = register("energy_conduit", new ConduitItem(CONDUIT_BUNDLE, itemProperties("energy_conduit"), ConduitKind.ENERGY));

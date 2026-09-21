@@ -4,7 +4,7 @@ import com.kadamitas.fabricatedbackpacks.domain.Playlist;
 import com.kadamitas.fabricatedbackpacks.network.JukeboxAudio;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
-import net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.EntityTrackingEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -230,9 +230,9 @@ public final class JukeboxRuntime {
         Set<ServerPlayer> candidates = new HashSet<>();
         var carrier = entityId < 0 ? null : level.getEntity(entityId);
         if (carrier != null) {
-            candidates.addAll(net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(carrier));
+            candidates.addAll(com.kadamitas.fabricatedbackpacks.platform.network.PlayerLookup.tracking(carrier));
             if (carrier instanceof ServerPlayer owner) candidates.add(owner);
-        } else if (entityId < 0) candidates.addAll(net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(level, position));
+        } else if (entityId < 0) candidates.addAll(com.kadamitas.fabricatedbackpacks.platform.network.PlayerLookup.tracking(level, position));
         return candidates.stream().filter(player -> player.level() == level
                 && player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(position)) <= 128 * 128).toList();
     }

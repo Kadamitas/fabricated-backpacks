@@ -58,7 +58,7 @@ public final class SteamEngineBlock extends BaseEntityBlock {
     }
     @Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos position, Player player, BlockHitResult hit) {
         if (!(level.getBlockEntity(position) instanceof SteamEngineBlockEntity engine)) return InteractionResult.PASS;
-        if (player instanceof ServerPlayer server && !server.isSpectator() && engine.stillValid(server)) server.openMenu(engine);
+        if (player instanceof ServerPlayer server && !server.isSpectator() && engine.stillValid(server)) com.kadamitas.fabricatedbackpacks.platform.menu.ExtendedMenuProvider.open(server, engine);
         return InteractionResult.SUCCESS;
     }
     @Override protected List<ItemStack> getDrops(BlockState state, LootParams.Builder parameters) {

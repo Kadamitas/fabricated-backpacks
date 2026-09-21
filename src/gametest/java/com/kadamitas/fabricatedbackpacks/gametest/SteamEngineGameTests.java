@@ -22,16 +22,16 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.embedded.EmbeddedChannel;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidConstants;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SlottedStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageUtil;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
@@ -70,8 +70,8 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import team.reborn.energy.api.EnergyStorage;
-import team.reborn.energy.api.base.SimpleEnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.gametest.fixture.SimpleEnergyStorage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -237,16 +237,16 @@ public final class SteamEngineGameTests {
             helper.assertTrue(items != null && water != null && energy != null, "All six faces and unsided lookups expose the standard APIs");
             helper.assertFalse(energy.supportsInsertion(), "The engine is an energy source, never a battery sink");
             var before = engine.dropStack();
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.COAL), 2, outer), 2L, "Fuel insertion uses transactional item storage");
                 helper.assertValueEqual(water.insert(WATER, 83, outer), 83L, "Water storage preserves non-millibucket fractions");
-                try (Transaction inner = outer.openNested()) {
+                try (Transaction inner = Transaction.open(outer)) {
                     helper.assertValueEqual(energy.extract(17, inner), 17L, "A nested transaction can reserve energy output");
                     inner.commit();
                 }
             }
             assertStack(helper, engine.dropStack(), before, "Outer abort restores all three resources and output allowance on face " + side);
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIAMOND), 1, transaction), 0L, "External item insertion cannot bypass fuel filters");
                 helper.assertValueEqual(water.insert(FluidVariant.of(Fluids.LAVA), 81, transaction), 0L, "External fluid insertion rejects lava");
                 var decoratedWater = FluidVariant.of(Fluids.WATER, DataComponentPatch.builder()
@@ -270,27 +270,27 @@ public final class SteamEngineGameTests {
         var water = FluidStorage.SIDED.find(level, engine.getBlockPos(), null);
         var energy = EnergyStorage.SIDED.find(level, engine.getBlockPos(), null);
         var beforeTransfer = engine.dropStack();
-        var fluidReceiver = new net.fabricmc.fabric.api.transfer.v1.storage.base.SingleVariantStorage<FluidVariant>() {
+        var fluidReceiver = new com.kadamitas.fabricatedbackpacks.platform.transfer.SingleVariantStorage<FluidVariant>() {
             @Override protected FluidVariant getBlankVariant() { return FluidVariant.blank(); }
             @Override protected long getCapacity(FluidVariant variant) { return FluidConstants.BUCKET; }
         };
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(StorageUtil.move(water, fluidReceiver, WATER::equals, 42, outer), 42L,
                     "An independent standard fluid endpoint receives an exact partial transfer");
-            try (Transaction nested = outer.openNested()) {
+            try (Transaction nested = Transaction.open(outer)) {
                 helper.assertValueEqual(energy.extract(17, nested), 17L, "Another resource may commit inside that open transaction");
                 nested.commit();
             }
         }
         assertStack(helper, engine.dropStack(), beforeTransfer, "Outer abort restores source quantities after cross-endpoint and nested resource transfers");
         helper.assertValueEqual(fluidReceiver.amount, 0L, "The same abort restores the independent destination");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(energy.extract(Long.MAX_VALUE, transaction),
                     BackpackConfig.get().automation().engine().energyOutputPerTick() - committed * 11L,
                     "All side handles and aborted operations share one exact remaining output allowance");
         }
         engine.setItem(2, new ItemStack(Items.BUCKET, 3));
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(items.extract(ItemVariant.of(Items.BUCKET), 2, transaction), 2L, "A real remainder can be extracted");
             transaction.commit();
         }
@@ -310,7 +310,7 @@ public final class SteamEngineGameTests {
             helper.assertFalse(engine.isRemoved(), "The registration gap exercises identity rather than the removed flag");
             helper.assertFalse(items.supportsInsertion() || water.supportsInsertion() || energy.supportsExtraction(),
                     "Unregistered physical ownership immediately invalidates all cached capabilities");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.COAL), 1, transaction), 0L, "An unregistered engine rejects fuel admission");
                 helper.assertValueEqual(water.insert(WATER, 81, transaction), 0L, "An unregistered engine rejects water admission");
                 helper.assertValueEqual(energy.extract(1, transaction), 0L, "An unregistered engine rejects energy output");
@@ -326,7 +326,7 @@ public final class SteamEngineGameTests {
         helper.assertValueEqual(retainedItemView.getAmount(), 0L, "An already-held item view becomes inert after block replacement");
         helper.assertValueEqual(retainedWaterView.getAmount(), 0L, "An already-held fluid view becomes inert after block replacement");
         helper.assertValueEqual(energy.getAmount(), 0L, "An already-held energy port becomes inert after block replacement");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(items.insert(ItemVariant.of(Items.COAL), 1, transaction), 0L, "A stale item adapter cannot mutate a replaced machine");
             helper.assertValueEqual(water.insert(WATER, 81, transaction), 0L, "A stale fluid adapter cannot mutate a replaced machine");
             helper.assertValueEqual(energy.extract(1, transaction), 0L, "A stale energy adapter cannot mutate a replaced machine");
@@ -364,7 +364,7 @@ public final class SteamEngineGameTests {
         long rate = BackpackConfig.get().automation().engine().energyOutputPerTick();
         helper.assertValueEqual(total, rate, "A source pushes energy through public neighbor APIs without requiring a machine to pull");
         helper.assertValueEqual(engine.snapshot().energy() + total, 10_000L, "Six neighbor transfers conserve source plus destinations");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             for (Direction side : Direction.values()) helper.assertValueEqual(EnergyStorage.SIDED.find(level, engine.getBlockPos(), side)
                     .extract(1, transaction), 0L, "Every face shares the same spent output allowance");
         }
@@ -515,7 +515,7 @@ public final class SteamEngineGameTests {
             player.setGameMode(GameType.SURVIVAL);
             var beforeShrink = engine.dropStack();
             BackpackConfig.configure(previous);
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(engine.fluidStorage(null).insert(WATER, 1, transaction), 0L,
                         "A smaller configured tank does not accept more water above its new bound");
                 transaction.commit();
@@ -560,7 +560,7 @@ public final class SteamEngineGameTests {
                     "Disabled retained views report no accessible capacity");
             helper.assertValueEqual(engine.getSlotsForFace(side).length, 0, "Vanilla hopper slot discovery also respects disabled faces");
             var closed = engine.dropStack();
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.COAL), 1, transaction), 0L, "Disabled items cannot insert");
                 helper.assertValueEqual(outputView.extract(ItemVariant.of(Items.BUCKET), 1, transaction), 0L, "Disabled retained item views cannot extract");
                 helper.assertValueEqual(water.insert(WATER, 1, transaction), 0L, "Disabled water cannot insert");
@@ -581,11 +581,11 @@ public final class SteamEngineGameTests {
                     && !engine.canTakeItemThroughFace(2, new ItemStack(Items.BUCKET), side),
                     "The native hopper contract matches input-only API permissions");
             var beforeAbort = engine.dropStack();
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(fuelView.insert(ItemVariant.of(Items.COAL), 1, outer), 1L, "The retained input slot admits valid fuel");
                 helper.assertValueEqual(water.insert(WATER, 7, outer), 7L, "Input water retains exact droplets");
                 helper.assertValueEqual(waterView.extract(WATER, 1, outer), 0L, "An input-only fluid view cannot bypass its extraction gate");
-                try (Transaction nested = outer.openNested()) {
+                try (Transaction nested = Transaction.open(outer)) {
                     helper.assertValueEqual(energy.extract(11, nested), 11L, "A reopened output face participates in nested resource transactions");
                     nested.commit();
                 }
@@ -600,7 +600,7 @@ public final class SteamEngineGameTests {
             helper.assertTrue(!engine.canPlaceItemThroughFace(0, new ItemStack(Items.COAL), side)
                     && engine.canTakeItemThroughFace(2, new ItemStack(Items.BUCKET), side),
                     "The native hopper contract matches output-only permissions");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(fuelView.insert(ItemVariant.of(Items.COAL), 1, transaction), 0L, "Retained input views cannot bypass output-only mode");
                 helper.assertValueEqual(water.insert(WATER, 1, transaction), 0L, "Output-only water rejects insertion");
                 helper.assertValueEqual(outputView.extract(ItemVariant.of(Items.BUCKET), 1, transaction), 1L, "The same output view can extract after reopening");
@@ -629,7 +629,7 @@ public final class SteamEngineGameTests {
         helper.assertValueEqual(unsidedOutput.getAmount() + unsidedWaterView.getAmount() + unsidedEnergy.getAmount(), 0L,
                 "Previously retained unsided views become inert too");
         var allClosed = engine.dropStack();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(unsidedItems.insert(ItemVariant.of(Items.COAL), 1, transaction), 0L, "Closed unsided items reject insertion");
             helper.assertValueEqual(unsidedOutput.extract(ItemVariant.of(Items.BUCKET), 1, transaction), 0L, "Closed unsided output rejects extraction");
             helper.assertValueEqual(unsidedWater.insert(WATER, 1, transaction), 0L, "Closed unsided water rejects insertion");
@@ -815,13 +815,18 @@ public final class SteamEngineGameTests {
     private static Peer peer(GameTestHelper helper) {
         UUID id = UUID.randomUUID();
         var cookie = CommonListenerCookie.createInitial(new GameProfile(id, "steam_" + id.toString().substring(0, 8)), false);
-        var player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(), cookie.gameProfile(), cookie.clientInformation());
+        var player = BackpackTestSupport.mockPlayer(helper, cookie);
         var connection = new Connection(PacketFlow.SERVERBOUND);
         var channel = new EmbeddedChannel(connection);
+        BackpackTestSupport.negotiate(connection);
         var peer = new Peer(player, connection, channel);
         channel.pipeline().addLast(new ChannelOutboundHandlerAdapter() {
             @Override public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) throws Exception {
                 if (message instanceof ClientboundContainerSetDataPacket data) peer.data.add(data);
+                // A negotiated NeoForge client receives full-width container data through this payload instead.
+                if (message instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket custom
+                        && custom.payload() instanceof net.neoforged.neoforge.network.payload.AdvancedContainerSetDataPayload advanced)
+                    peer.data.add(advanced.toVanillaPacket());
                 super.write(context, message, promise);
             }
         });

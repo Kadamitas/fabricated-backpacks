@@ -15,7 +15,7 @@ import com.kadamitas.fabricatedbackpacks.client.automation.ConduitScreen;
 import com.kadamitas.fabricatedbackpacks.client.automation.SteamEngineScreen;
 import com.kadamitas.fabricatedbackpacks.client.automation.SteamEngineSideScreen;
 import com.kadamitas.fabricatedbackpacks.client.browser.RegistryPickerScreen;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -32,9 +32,11 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.upgrade.JukeboxRuntime;
 import io.netty.channel.ChannelFuture;
-import net.fabricmc.fabric.api.event.player.UseEntityCallback;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestDedicatedServerContext;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -50,7 +52,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerConnectionListener;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -112,7 +113,16 @@ public final class MultiplayerClientAcceptance {
             properties.setProperty("allow-flight", "true");
             try (var server = context.worldBuilder().createServer(properties)) {
                 int port = server.computeOnServer(MultiplayerClientAcceptance::boundPort);
-                server.runOnServer(value -> value.setPort(port));
+                server.runOnServer(value -> {
+                    value.setPort(port);
+                    // The dedicated-test server allows only its owning
+                    // client by default. Keep that whitelist and add only the
+                    // second offline profile selected by both launchers.
+                    var guest = net.minecraft.server.players.NameAndId.createOffline("BackpackGuest");
+                    value.getPlayerList().getWhiteList().add(new net.minecraft.server.players.UserWhiteListEntry(guest));
+                    check(value.getPlayerList().getWhiteList().isWhiteListed(guest),
+                            "The dedicated test server explicitly admits the second test profile");
+                });
                 try (var connection = server.connect()) {
                     connection.waitForChunksRender();
                     UUID hostId = server.computeOnServer(value -> connection.getServerPlayer().getUUID());
@@ -356,7 +366,11 @@ public final class MultiplayerClientAcceptance {
         String address = "127.0.0.1:" + port;
         context.runOnClient(client -> ConnectScreen.startConnecting(client.gui.screen(), client, ServerAddress.parseString(address),
                 new ServerData("Fabricated Backpacks acceptance", address, ServerData.Type.OTHER), false, null));
-        context.waitFor(client -> client.level != null && client.player != null && client.gui.screen() == null, 2400);
+        context.waitFor(client -> {
+            if (client.gui.screen() instanceof net.minecraft.client.gui.screens.DisconnectedScreen disconnected)
+                throw new AssertionError("Guest connection rejected: " + disconnected.getNarrationMessage().getString());
+            return client.level != null && client.player != null && client.gui.screen() == null;
+        }, 2400);
         verifyTcp(context);
         UUID guestId = context.computeOnClient(client -> client.player.getUUID());
         check(!guestId.equals(hostId), "Guest launch must use a distinct --username");
@@ -980,15 +994,18 @@ public final class MultiplayerClientAcceptance {
 
         ReopenInteractionFence(MinecraftServer server, UUID guestId, UUID hostId) {
             this.guestId = guestId;
-            // Registered after normal callbacks: an incorrectly accepted backpack interaction
-            // short-circuits before this observer and cannot produce a denial acknowledgment.
-            UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
+            // Observe only uncanceled interactions after normal handlers: an
+            // incorrectly accepted/opened backpack cancels the event and cannot
+            // produce this denial acknowledgment.
+            NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, (PlayerInteractEvent.EntityInteract event) -> {
+                var player = event.getEntity();
+                var entity = event.getTarget();
+                var hand = event.getHand();
                 if (active.get() && player instanceof ServerPlayer visitor && visitor.level().getServer() == server
                         && visitor.getUUID().equals(guestId) && entity instanceof ServerPlayer wearer
                         && wearer.getUUID().equals(hostId) && visitor.isShiftKeyDown() && hand == InteractionHand.MAIN_HAND) {
                     observedTick.compareAndSet(-1, server.getTickCount());
                 }
-                return InteractionResult.PASS;
             });
         }
 
@@ -1039,7 +1056,7 @@ public final class MultiplayerClientAcceptance {
         context.waitFor(client -> client.level.getPlayerByUUID(host) != null && !BackpackEquipment.visual(client.level.getPlayerByUUID(host)).isEmpty(), 1200);
         context.runOnClient(client -> {
             var remote = client.level.getPlayerByUUID(host);
-            check(remote.getAttachedOrElse(BackpackEquipment.EQUIPPED, ItemStack.EMPTY).isEmpty(), "Another player's full private equipment attachment must never synchronize");
+            check(remote.getData(BackpackEquipment.EQUIPPED).isEmpty(), "Another player's full private equipment attachment must never synchronize");
             ItemStack visual = BackpackEquipment.visual(remote);
             check(!visual.isEmpty() && !visual.has(BagComponents.IDENTITY) && !visual.has(BagComponents.CONTENTS)
                     && !visual.has(BagComponents.UPGRADES) && !visual.has(BagComponents.SETTINGS), "Public appearance includes no private identity, storage, upgrades or settings");
@@ -1118,7 +1135,7 @@ public final class MultiplayerClientAcceptance {
     @SuppressWarnings("unchecked")
     private static int boundPort(MinecraftServer server) throws ReflectiveOperationException {
         // The verified 26.2 listener retains getPort()==0 after binding. Read the actual socket,
-        // then update that advertised value before Fabric's public connect() helper uses it.
+        // then update that advertised value before the relocated connect() helper uses it.
         var field = ServerConnectionListener.class.getDeclaredField("channels");
         field.setAccessible(true);
         List<ChannelFuture> channels = (List<ChannelFuture>)field.get(server.getConnection());

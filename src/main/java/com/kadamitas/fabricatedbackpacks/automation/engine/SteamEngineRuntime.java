@@ -1,9 +1,9 @@
 package com.kadamitas.fabricatedbackpacks.automation.engine;
 
 import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 public final class SteamEngineRuntime {
     private static boolean initialized;

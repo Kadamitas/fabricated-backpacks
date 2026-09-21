@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class BackpackAssetAuditTest {
     private static final double GEOMETRY_EPSILON = 1e-6;
     private static final String NAMESPACE = "fabricated_backpacks";
-    private static final Path ROOT = Path.of(System.getProperty("user.dir"));
+    private static final Path ROOT = Path.of(System.getProperty("fabricated.backpacks.projectRoot", System.getProperty("user.dir")));
     private static final Path RESOURCES = ROOT.resolve("src/main/resources");
     private static final Path ASSETS = RESOURCES.resolve("assets/" + NAMESPACE);
     private static final Path DATA = RESOURCES.resolve("data/" + NAMESPACE);

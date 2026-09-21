@@ -9,15 +9,15 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InstalledUpgrade;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
 import com.mojang.authlib.GameProfile;
-import net.fabricmc.fabric.api.entity.FakePlayer;
-import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
-import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import net.neoforged.neoforge.common.util.FakePlayer;
+import net.neoforged.neoforge.common.util.FakePlayerFactory;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerItemContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidConstants;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageUtil;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
@@ -69,7 +69,7 @@ final class PumpRuntime {
         } else if (settings.getBooleanOr("handlers", true) && handlers(bag, level, position, output, filter)) {
             cooldown = rules.handlerTicks();
         } else if (advanced && settings.getBooleanOr("world", false)) {
-            ServerPlayer actor = carrier instanceof ServerPlayer player ? player : FakePlayer.get(level, PROFILE);
+            ServerPlayer actor = carrier instanceof ServerPlayer player ? player : FakePlayerFactory.get(level, PROFILE);
             if (actor instanceof FakePlayer) actor.setPos(net.minecraft.world.phys.Vec3.atCenterOf(position));
             int distance = output ? worldOutput(bag, level, position, actor, filter)
                     : worldInput(bag, level, position, actor, filter);
@@ -109,7 +109,7 @@ final class PumpRuntime {
             if (!ResourceRuntime.connectionAllowed(level, position, side)) continue;
             Storage<FluidVariant> external = FluidStorage.SIDED.find(level, target, side.getOpposite());
             if (external == null) continue;
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 long moved = StorageUtil.move(output ? internal : external, output ? external : internal,
                         filter, FluidConstants.BUCKET, transaction);
                 if (moved > 0) {
@@ -133,7 +133,7 @@ final class PumpRuntime {
                 Storage<FluidVariant> external = ContainerItemContext.ofPlayerHand(player, hand).find(FluidStorage.ITEM);
                 if (external == null) continue;
                 Storage<FluidVariant> internal = ResourceRuntime.fluidStorage(bag);
-                try (Transaction transaction = Transaction.openOuter()) {
+                try (Transaction transaction = Transaction.openRoot()) {
                     long moved = StorageUtil.move(output ? internal : external, output ? external : internal,
                             filter, FluidConstants.BUCKET, transaction);
                     if (moved > 0) {
@@ -162,7 +162,7 @@ final class PumpRuntime {
             if (!filter.test(fluid)) continue;
             if (state.getBlock() instanceof LiquidBlock && fluidState.isSource() && permitted(bag, level, actor, target)) {
                 Storage<FluidVariant> tanks = ResourceRuntime.fluids(bag, false);
-                try (Transaction transaction = Transaction.openOuter()) {
+                try (Transaction transaction = Transaction.openRoot()) {
                     if (tanks.insert(fluid, FluidConstants.BUCKET, transaction) == FluidConstants.BUCKET
                             && new WorldFluidChange(level, target).set(Blocks.AIR.defaultBlockState(), transaction)) {
                         transaction.commit();
@@ -193,7 +193,7 @@ final class PumpRuntime {
             if (!state.isAir() && (!(state.getBlock() instanceof LiquidBlock) || state.getFluidState().isSource())) continue;
             boolean evaporates = level.environmentAttributes().getValue(EnvironmentAttributes.WATER_EVAPORATES, target)
                     && fluid.getFluid().is(FluidTags.WATER);
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 if (tanks.extract(fluid, FluidConstants.BUCKET, transaction) != FluidConstants.BUCKET) continue;
                 if (!evaporates && !new WorldFluidChange(level, target)
                         .set(fluid.getFluid().defaultFluidState().createLegacyBlock(), transaction)) continue;
@@ -212,8 +212,8 @@ final class PumpRuntime {
     private static boolean permitted(BagInventory bag, ServerLevel level, ServerPlayer actor, BlockPos target) {
         return actor.isAlive() && !actor.isSpectator() && level.mayInteract(actor, target)
                 && actor.mayUseItemAt(target, Direction.UP, bag.stack())
-                && PlayerBlockBreakEvents.BEFORE.invoker().beforeBlockBreak(
-                        level, actor, target, level.getBlockState(target), level.getBlockEntity(target));
+                && !net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(
+                        new net.neoforged.neoforge.event.level.block.BreakBlockEvent(level, target, level.getBlockState(target), actor)).isCanceled();
     }
 
     static boolean sameBag(BagInventory bag, ItemStack item) {

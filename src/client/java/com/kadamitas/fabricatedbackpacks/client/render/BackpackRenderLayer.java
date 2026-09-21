@@ -2,7 +2,6 @@ package com.kadamitas.fabricatedbackpacks.client.render;
 
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.fabricmc.fabric.api.client.rendering.v1.FabricRenderState;
 import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
@@ -27,7 +26,7 @@ final class BackpackRenderLayer extends RenderLayer<AvatarRenderState, PlayerMod
     @Override
     public void submit(PoseStack poses, SubmitNodeCollector collector, int light, AvatarRenderState state,
                        float headYaw, float headPitch) {
-        BackpackVisualState backpack = ((FabricRenderState) state).getDataOrDefault(BackpackRendering.WORN, BackpackVisualState.EMPTY);
+        BackpackVisualState backpack = state.getRenderDataOrDefault(BackpackRendering.WORN, BackpackVisualState.EMPTY);
         if (!backpack.present() || state.isSpectator || state.isInvisible) return;
         NativeBackpackModel model = models.get(backpack.tier());
         if (model == null) return;
@@ -44,7 +43,7 @@ final class BackpackRenderLayer extends RenderLayer<AvatarRenderState, PlayerMod
                 collector.submitModel(group.model(), Unit.INSTANCE, poses, RenderTypes.entityCutout(group.texture()),
                         light, overlay, group.color(backpack), null, state.outlineColor);
             }
-            BackpackDisplayState display = ((FabricRenderState) state).getData(BackpackRendering.DISPLAY);
+            BackpackDisplayState display = state.getRenderData(BackpackRendering.DISPLAY);
             if (display != null) display.submitWorn(poses, collector, light, overlay, state.outlineColor);
         } finally {
             poses.popPose();

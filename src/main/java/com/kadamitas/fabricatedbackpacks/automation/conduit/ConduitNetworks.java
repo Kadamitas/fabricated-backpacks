@@ -3,24 +3,24 @@ package com.kadamitas.fabricatedbackpacks.automation.conduit;
 import com.kadamitas.fabricatedbackpacks.automation.AutomationRegistry;
 import com.kadamitas.fabricatedbackpacks.config.AutomationConfig;
 import com.kadamitas.fabricatedbackpacks.config.BackpackConfig;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerBlockEntityEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.lookup.v1.block.BlockApiCache;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
-import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.TransferVariant;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
-import net.fabricmc.fabric.api.transfer.v1.transaction.base.SnapshotParticipant;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerBlockEntityEvents;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerChunkEvents;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerLevelEvents;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerTickEvents;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.BlockApiCache;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidConstants;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StoragePreconditions;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageView;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SlottedStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.TransferVariant;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SnapshotParticipant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -29,7 +29,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,19 +56,12 @@ public final class ConduitNetworks {
     public static void initialize() {
         if (initialized) return;
         initialized = true;
+        // Bundles register through their own native onLoad/setRemoved; only foreign endpoints are observed here.
         ServerBlockEntityEvents.BLOCK_ENTITY_LOAD.register((entity, level) -> {
-            if (entity instanceof ConduitBundleBlockEntity bundle) {
-                // Fabric supplies the actual entity after inserting it into the chunk's map,
-                // but before that chunk's FULL future necessarily completes. Record only the
-                // supplied identity here; present()/current() defer all routing until it is ready.
-                WorldNetworks world = world(level);
-                if (world != null) world.track(bundle);
-            }
-            else if (WORLDS.containsKey(level)) WORLDS.get(level).endpointChanged(entity.getBlockPos());
+            if (!(entity instanceof ConduitBundleBlockEntity) && WORLDS.containsKey(level)) WORLDS.get(level).endpointChanged(entity.getBlockPos());
         });
         ServerBlockEntityEvents.BLOCK_ENTITY_UNLOAD.register((entity, level) -> {
-            if (entity instanceof ConduitBundleBlockEntity bundle) unregister(bundle);
-            else if (WORLDS.containsKey(level)) WORLDS.get(level).endpointChanged(entity.getBlockPos());
+            if (!(entity instanceof ConduitBundleBlockEntity) && WORLDS.containsKey(level)) WORLDS.get(level).endpointChanged(entity.getBlockPos());
         });
         ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> {
             WorldNetworks world = WORLDS.get(level);
@@ -99,6 +92,16 @@ public final class ConduitNetworks {
         WorldNetworks world = world(level);
         if (world != null) world.track(bundle);
     }
+    /**
+     * The native block-entity load hook runs after the chunk map holds the entity but before its
+     * FULL future necessarily completes; only the identity is recorded, and present()/current()
+     * defer all routing until the chunk is ready.
+     */
+    public static void loaded(ConduitBundleBlockEntity bundle, ServerLevel level) {
+        WorldNetworks world = world(level);
+        if (world != null) world.track(bundle);
+    }
+
     public static void unregister(ConduitBundleBlockEntity bundle) {
         if (!(bundle.getLevel() instanceof ServerLevel level)) return;
         WorldNetworks world = WORLDS.get(level);
@@ -579,7 +582,7 @@ public final class ConduitNetworks {
                 long maximum = sourceBudget.available(now, limit(lane.kind), interval(lane.kind));
                 if (maximum == 0 || sourceBudget.receivedThisTick(now)) continue;
                 routing = true;
-                try (Transaction transaction = Transaction.openOuter()) {
+                try (Transaction transaction = Transaction.openRoot()) {
                     if (lane.kind == ConduitKind.ENERGY && located.storage instanceof EnergyStorage energy)
                         energy(located, energy, maximum, transaction);
                     else if (located.storage instanceof Storage<?> storage)
@@ -726,7 +729,7 @@ public final class ConduitNetworks {
             long offered = allowance(component, source, maximum);
             if (offered == 0) return 0;
             component.routing = true;
-            try (Transaction transaction = parent.openNested()) {
+            try (Transaction transaction = Transaction.open(parent)) {
                 long inserted = 0;
                 List<Located> acceptedTargets = new ArrayList<>();
                 for (int attempt = 0; attempt < component.destinations.size() && inserted < offered && component.lane.world.takeWork(); attempt++) {
@@ -775,7 +778,7 @@ public final class ConduitNetworks {
             boolean automaticStorage = entity.mode(kind, side) == ConduitMode.BOTH
                     && component.lane.world.automaticEnergyStorage(source);
             component.routing = true;
-            try (Transaction transaction = parent.openNested()) {
+            try (Transaction transaction = Transaction.open(parent)) {
                 long inserted = 0;
                 for (int attempt = 0; attempt < component.destinations.size() && inserted < offered && component.lane.world.takeWork(); attempt++) {
                     Located target = component.target(source, transaction);

@@ -23,9 +23,13 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 public final class BackpackBlockEntity extends BlockEntity implements WorldlyContainer {
+    public record Colors(int body, int trim) {
+        public int get(int index) { return index == 0 ? body : trim; }
+    }
+    public static final net.neoforged.neoforge.model.data.ModelProperty<Colors> COLOR_MODEL = new net.neoforged.neoforge.model.data.ModelProperty<>();
     private ItemStack stack;
     private BagInventory inventory;
     private int viewers;
@@ -39,15 +43,25 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
         stack = new ItemStack(state.getBlock());
     }
     public ItemStack stack() { return stack; }
+    @Override public net.neoforged.neoforge.model.data.ModelData getModelData() {
+        return net.neoforged.neoforge.model.data.ModelData.builder().with(COLOR_MODEL, new Colors(meshTint(stack, 0), meshTint(stack, 1))).build();
+    }
     public EnergyStorage energyStorage(Direction side) { return energyTransfer.storage(side); }
     public int clientEnergySupport() { return clientEnergySupport; }
     public BagInventory inventory() {
         if (inventory == null) {
             inventory = BagInventory.of(stack);
-            inventory.onChange(this::setChanged);
+            inventory.onChange(this::inventoryChanged);
             if (level instanceof ServerLevel serverLevel) com.kadamitas.fabricatedbackpacks.world.MobLoot.materialize(inventory, serverLevel, worldPosition, null);
         }
         return inventory;
+    }
+    private int exposureSignature = -1;
+    /** Upgrade changes alter which item, fluid and energy handlers this block exposes. */
+    private void inventoryChanged() {
+        setChanged();
+        int signature = inventory == null ? -1 : inventory.installedUpgrades().hashCode();
+        if (signature != exposureSignature) { exposureSignature = signature; if (level != null) invalidateCapabilities(); }
     }
     public void setStack(ItemStack newStack) {
         if (!BackpackRegistry.isBackpack(newStack)) throw new IllegalArgumentException("Not a backpack");
@@ -55,6 +69,7 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
         inventory = null;
         energyTransfer.contentsReplaced();
         setChanged();
+        if (level != null) invalidateCapabilities();
         synchronize();
     }
     public int viewers() { return viewers; }
@@ -65,7 +80,10 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
         if (level != null && !level.isClientSide() && !isRemoved()) level.setBlock(worldPosition, getBlockState().setValue(BackpackBlock.OPEN, viewers > 0), 3);
     }
     public void synchronize() {
-        if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        if (level != null) {
+            if (level.isClientSide()) requestModelDataUpdate();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
     }
     @Override protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
@@ -86,6 +104,7 @@ public final class BackpackBlockEntity extends BlockEntity implements WorldlyCon
             // BE data updates the live lid immediately, but the tinted body lives in the chunk mesh.
             // An equal block state does not otherwise invalidate that mesh after a dye update.
             BlockState state = getBlockState();
+            requestModelDataUpdate();
             level.sendBlockUpdated(worldPosition, state, state, Block.UPDATE_CLIENTS);
         }
     }
