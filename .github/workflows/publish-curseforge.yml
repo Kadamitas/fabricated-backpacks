@@ -11,6 +11,12 @@ on:
         required: true
         type: choice
         options: [fabric, quilt, forge, neoforge]
+      verification_policy:
+        description: Verified by default; owner-waived-client is limited to the explicitly approved Forge 1.0.0 MC26.3 release
+        required: true
+        type: choice
+        default: verified
+        options: [verified, owner-waived-client]
 
 permissions:
   contents: read
@@ -26,6 +32,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       LOADER: ${{ inputs.loader }}
+      VERIFICATION_POLICY: ${{ inputs.verification_policy }}
     steps:
       # No checkout, build script, third-party action, or downloaded executable
       # runs in the publishing job. The token is exposed only to the upload step.
@@ -37,6 +44,10 @@ jobs:
           set -euo pipefail
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\+mc(26\.3|1\.21\.1)$ ]] || { echo "A stable, Minecraft-qualified release tag is required"; exit 1; }
           case "$LOADER" in fabric|quilt|forge|neoforge) ;; *) exit 1;; esac
+          case "$VERIFICATION_POLICY" in verified|owner-waived-client) ;; *) exit 1;; esac
+          if [[ "$VERIFICATION_POLICY" == owner-waived-client ]]; then
+            [[ "$LOADER" == forge && "$RELEASE_TAG" == v1.0.0+mc26.3 ]] || { echo 'This owner waiver is limited to Forge 1.0.0 for Minecraft 26.3'; exit 1; }
+          fi
           version="${RELEASE_TAG#v}"
           prefix="fabricated-backpacks"
           if [[ "$LOADER" != fabric ]]; then prefix="$prefix-$LOADER"; fi
@@ -51,7 +62,19 @@ jobs:
           # by a downloaded checksum file as paths or command-line options.
           digest="$(sha256sum "$artifact" | cut -d ' ' -f 1)"
           [[ "$(cat "$artifact.sha256")" == "$digest  $artifact" ]]
-          if [[ "$version" == 1.0.0+mc1.21.1 && "$LOADER" == fabric ]]; then
+          if [[ "$VERIFICATION_POLICY" == owner-waived-client ]]; then
+            # The owner explicitly requested publication without further tests.
+            # This is an incomplete-verification manifest, never a passing receipt.
+            jq -e --arg digest "$digest" --arg version "$version" \
+              '.schema == 1 and .scope == "owner-waived-client" and .passed == false
+               and .owner_waiver == true and .unit_tests == 515 and .server_tests == 173
+               and .client.full.passed == false and .client.full.status == "failed"
+               and .client.restart.status == "not_run" and .client.multiplayer.status == "not_run"
+               and .artifact.sha256 == $digest and .artifact.version == $version
+               and .artifact.minecraft == "26.3"' "$artifact.release.json" > /dev/null
+            [[ "$digest" == 91f4cd6114b4923a00085265de95521a27acd4a78958ef69f630412bea8e3bc0 ]] || { echo 'Artifact differs from the specifically approved owner-waived build'; exit 1; }
+            echo 'Owner-requested release: final client/restart/multiplayer verification is incomplete.' >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$version" == 1.0.0+mc1.21.1 && "$LOADER" == fabric ]]; then
             # This legacy target has no Fabric client GameTest API. Preserve
             # its honest unit/server scope and require both tested profiles.
             gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir . --pattern "$artifact.cobblemon.json"
