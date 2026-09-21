@@ -21,8 +21,7 @@ final class UiInspection {
     static ContainerView container(Screen screen) {
         if (!(screen instanceof AbstractContainerScreen<?>))
             throw new AssertionError("Expected a real container screen, found " + screen);
-        return new ContainerView((Integer) read(LEFT, screen), (Integer) read(TOP, screen),
-                (Slot) read(HOVERED, screen));
+        return new ContainerView(screen);
     }
 
     static Tooltip tooltip(AbstractWidget widget) {
@@ -47,5 +46,12 @@ final class UiInspection {
         }
     }
 
-    record ContainerView(int left, int top, Slot hoveredSlot) {}
+    /** A live read-only view: rendering inside an assertion can change the hovered slot. */
+    static final class ContainerView {
+        private final Screen screen;
+        private ContainerView(Screen screen) { this.screen = screen; }
+        int left() { return (Integer) read(LEFT, screen); }
+        int top() { return (Integer) read(TOP, screen); }
+        Slot hoveredSlot() { return (Slot) read(HOVERED, screen); }
+    }
 }
