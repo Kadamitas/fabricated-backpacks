@@ -820,6 +820,29 @@ final class ConfiguredClientAcceptance {
             checkInventoryStrip(screen);
             checkHeadingRenderOutput(screen);
         });
+        // Contextual controls intentionally hide their help until Shift. Test
+        // both transitions on the actual widgets, in addition to their geometry.
+        context.getInput().holdShift();
+        try {
+            context.waitTicks(2);
+            checkContextualIconHelp(context);
+        } finally {
+            context.getInput().releaseShift();
+        }
+        context.waitTicks(2);
+        checkContextualIconHelp(context);
+    }
+
+    private static void checkContextualIconHelp(ClientGameTestContext context) {
+        context.runOnClient(client -> {
+            for (var child : client.gui.screen().children()) {
+                if (child instanceof BackpackIconButton button && button.visible
+                        && !((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestIconButtonAccess) (Object) button)
+                        .fabricatedBackpacksTests$automaticTooltip()) {
+                    checkIcon(button, false, button.getMessage().getString());
+                }
+            }
+        });
     }
 
     private static void checkInventoryStrip(BackpackScreen screen) {
@@ -853,9 +876,21 @@ final class ConfiguredClientAcceptance {
         check(!label.isBlank(), "Icon-only controls retain a complete accessible label");
         var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) button)
                 .fabricatedBackpacksTests$tooltip().get();
-        check(tooltip != null && tooltip.toCharSequence(client).stream().map(ConfiguredClientAcceptance::plain)
-                        .collect(java.util.stream.Collectors.joining()).replaceAll("\\s", "").contains(expectedTooltip.replaceAll("\\s", "")),
-                "The complete icon label or current-state explanation remains available on hover: " + label);
+        boolean contextual = button instanceof BackpackIconButton
+                && !((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestIconButtonAccess) (Object) button)
+                .fabricatedBackpacksTests$automaticTooltip();
+        if (contextual && !client.hasShiftDown()) {
+            check(tooltip == null, "Contextual icon help stays hidden without Shift: " + label);
+        } else if (contextual) {
+            String help = tooltip == null ? "" : tooltip.toCharSequence(client).stream().map(ConfiguredClientAcceptance::plain)
+                    .collect(java.util.stream.Collectors.joining(" ")).strip();
+            check(help.length() > label.length() + 12 && !help.equalsIgnoreCase(label),
+                    "Shift exposes an explanation, not just a repeated icon label: " + label + " -> " + help);
+        } else {
+            check(tooltip != null && tooltip.toCharSequence(client).stream().map(ConfiguredClientAcceptance::plain)
+                            .collect(java.util.stream.Collectors.joining()).replaceAll("\\s", "").contains(expectedTooltip.replaceAll("\\s", "")),
+                    "The complete icon label or current-state explanation remains available on hover: " + label);
+        }
         if (requireItem) {
             var items = new ArrayList<GuiItemRenderState>();
             state.forEachItem(items::add);
