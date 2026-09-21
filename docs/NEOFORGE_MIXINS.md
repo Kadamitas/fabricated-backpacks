@@ -37,3 +37,7 @@ The native test harness uses an ordinary configuration-task event to isolate tha
 The same embedded-host boundary restores file-backed native server configs through `ConfigTracker.loadConfigs` after the host has received them normally. Native client config synchronization otherwise replaces the shared server config object with a pathless client copy, breaking the next real guest's file sync. The harness captures the original files and loaded values and asserts both remain identical after restoration. It does not alter config values, skip a payload, or modify the independent guest.
 
 Release verification still requires the real unit, server, rendered-client, separate-JVM restart, and two-client multiplayer checks. A compile-only result is not a claim that those runtime gates passed.
+
+## Private equipment synchronization
+
+NeoForge 26.3.0.7-beta's initial attachment synchronization omits its recipient predicate even though incremental synchronization honors it. The private `EQUIPPED` attachment therefore has no native sync handler. An owned payload is sent directly to the owning player on login, respawn, dimension change, and equipment updates; its client handler can update only that client's own slot. Public, sanitized `VISUAL` attachments retain native tracking sync. The real two-client tests check both the owner's full data and the other client's absence of private data, including late join and tracking re-entry. No mixin patches the loader.

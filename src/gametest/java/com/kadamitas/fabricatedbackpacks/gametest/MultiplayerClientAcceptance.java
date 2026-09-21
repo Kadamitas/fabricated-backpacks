@@ -151,6 +151,7 @@ public final class MultiplayerClientAcceptance {
                         server.runOnServer(value -> setupHost(value, hostId));
                         connection.waitForClientboundPackets();
                         verifyTcp(context);
+                        verifyOwnerEquipment(context, server.computeOnServer(value -> worn(value, hostId).identity()), 0, true);
                         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_B);
                         context.waitForScreen(BackpackScreen.class);
                         selectUpgrade(context, 0);
@@ -197,6 +198,7 @@ public final class MultiplayerClientAcceptance {
         server.waitFor(value -> worn(value, hostId).getItem(0).is(Items.EMERALD) && worn(value, hostId).getItem(0).getCount() == 19);
         context.waitFor(client -> client.gui.screen() instanceof BackpackScreen screen && screen.getMenu().bag().getItem(0).is(Items.EMERALD)
                 && screen.getMenu().bag().getItem(0).getCount() == 19);
+        verifyOwnerEquipment(context, server.computeOnServer(value -> worn(value, hostId).identity()), 19, true);
         files.screenshot(context, "host-sees-shared-19");
         files.write("host-observed", new JsonObject());
         server.runOnServer(value -> {
@@ -204,6 +206,7 @@ public final class MultiplayerClientAcceptance {
             bag.updateSettings(tag -> tag.putBoolean("share_access", false));
             BackpackEquipment.setFromInventory(value.getPlayerList().getPlayer(hostId), bag);
         });
+        verifyOwnerEquipment(context, server.computeOnServer(value -> worn(value, hostId).identity()), 19, false);
         server.waitFor(value -> !(value.getPlayerList().getPlayer(guestId).containerMenu instanceof BackpackMenu));
         try (var fence = server.computeOnServer(value -> new ReopenInteractionFence(value, guestId, hostId))) {
             files.write("access-revoked", new JsonObject());
@@ -1056,11 +1059,29 @@ public final class MultiplayerClientAcceptance {
         context.waitFor(client -> client.level.getPlayerByUUID(host) != null && !BackpackEquipment.visual(client.level.getPlayerByUUID(host)).isEmpty(), 1200);
         context.runOnClient(client -> {
             var remote = client.level.getPlayerByUUID(host);
+            check(remote != client.player && !remote.getUUID().equals(client.player.getUUID()),
+                    "Equipment privacy is observed on the distinct remote player, not the owner");
             check(remote.getData(BackpackEquipment.EQUIPPED).isEmpty(), "Another player's full private equipment attachment must never synchronize");
             ItemStack visual = BackpackEquipment.visual(remote);
             check(!visual.isEmpty() && !visual.has(BagComponents.IDENTITY) && !visual.has(BagComponents.CONTENTS)
                     && !visual.has(BagComponents.UPGRADES) && !visual.has(BagComponents.SETTINGS), "Public appearance includes no private identity, storage, upgrades or settings");
         });
+    }
+
+    private static void verifyOwnerEquipment(ClientGameTestContext context, String expectedIdentity,
+                                             int expectedEmeralds, boolean sharing) {
+        check(!expectedIdentity.isEmpty(), "The owner fixture has an actual server backpack identity");
+        context.waitFor(client -> {
+            ItemStack equipped = BackpackEquipment.get(client.player);
+            if (!BackpackRegistry.isBackpack(equipped)
+                    || !expectedIdentity.equals(equipped.get(BagComponents.IDENTITY))
+                    || !equipped.has(BagComponents.UPGRADES)) return false;
+            BagInventory bag = BagInventory.of(equipped);
+            ItemStack contents = bag.getItem(0);
+            return bag.settings().getBooleanOr("share_access", false) == sharing
+                    && (expectedEmeralds == 0 ? contents.isEmpty()
+                    : contents.is(Items.EMERALD) && contents.getCount() == expectedEmeralds);
+        }, 1200);
     }
 
     private static List<BackpackClientGameTests.WornFrame> captureRemoteWorn(ClientGameTestContext context, UUID host, Session files) throws IOException {

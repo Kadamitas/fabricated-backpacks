@@ -16,8 +16,9 @@ public final class BackpackEquipment {
     private record Live(ItemStack attachment, BagInventory inventory) {}
     private static final java.util.Map<Player, Live> LIVE = new java.util.WeakHashMap<>();
     public static final AttachmentType<ItemStack> EQUIPPED = Registry.register(NeoForgeRegistries.ATTACHMENT_TYPES, BackpackRegistry.id("equipped_backpack"),
-            AttachmentType.builder(() -> ItemStack.EMPTY).serialize(ItemStack.OPTIONAL_CODEC.fieldOf("value")).copyOnDeath()
-                    .sync((holder, recipient) -> holder == recipient, ItemStack.OPTIONAL_STREAM_CODEC).build());
+            // NeoForge 26.3.0.7-beta does not consult sendToPlayer during initial
+            // attachment tracking. Never expose private contents to that path.
+            AttachmentType.builder(() -> ItemStack.EMPTY).serialize(ItemStack.OPTIONAL_CODEC.fieldOf("value")).copyOnDeath().build());
     // Visuals contain no inventory data and are rebuilt on login/respawn. They do
     // not need serialization merely to satisfy NeoForge's copy-on-death contract.
     public static final AttachmentType<ItemStack> VISUAL = Registry.register(NeoForgeRegistries.ATTACHMENT_TYPES, BackpackRegistry.id("equipped_visual"),
@@ -28,6 +29,15 @@ public final class BackpackEquipment {
     private static void synchronizeVisual(Player player) {
         ItemStack visual = com.kadamitas.fabricatedbackpacks.item.BackpackVisuals.snapshot(get(player));
         if (!ItemStack.matches(visual(player), visual)) player.setData(VISUAL, visual);
+    }
+    private static void synchronize(Player player) {
+        synchronizeVisual(player);
+        if (player instanceof ServerPlayer owner && owner.connection != null
+                && com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking.canSend(owner,
+                        com.kadamitas.fabricatedbackpacks.network.OwnedEquipment.TYPE)) {
+            com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking.send(owner,
+                    new com.kadamitas.fabricatedbackpacks.network.OwnedEquipment(get(owner)));
+        }
     }
     public static java.util.Optional<BagInventory> inventory(Player player) {
         ItemStack attached = get(player);
@@ -48,18 +58,20 @@ public final class BackpackEquipment {
         ItemStack published = inventory.stack().copy();
         player.setData(EQUIPPED, published);
         LIVE.put(player, new Live(published, inventory));
-        synchronizeVisual(player);
+        synchronize(player);
         return true;
     }
     public static void set(Player player, ItemStack stack) {
         if (!stack.isEmpty() && (!BackpackRegistry.isBackpack(stack) || stack.getCount() != 1)) throw new IllegalArgumentException("Invalid backpack equipment");
         player.setData(EQUIPPED, stack.copy());
         LIVE.remove(player);
-        synchronizeVisual(player);
+        synchronize(player);
     }
     public static void initialize() {
-        com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> synchronizeVisual(handler.player));
-        com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> synchronizeVisual(newPlayer));
+        com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> synchronize(handler.player));
+        com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> synchronize(newPlayer));
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) -> synchronize(event.getEntity()));
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
             if (!(entity instanceof ServerPlayer player) || player.level().getGameRules().get(GameRules.KEEP_INVENTORY)) return;
             ItemStack equipped = get(player);

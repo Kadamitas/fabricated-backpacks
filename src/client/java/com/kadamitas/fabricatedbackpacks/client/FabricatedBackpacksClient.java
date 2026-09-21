@@ -29,6 +29,8 @@ public final class FabricatedBackpacksClient {
                 !(net.minecraft.client.Minecraft.getInstance().gui.screen() instanceof net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen));
         ClientPlayNetworking.registerGlobalReceiver(com.kadamitas.fabricatedbackpacks.network.ServerRules.TYPE, (packet, context) -> context.client().execute(() ->
                 com.kadamitas.fabricatedbackpacks.config.BackpackConfig.configure(com.kadamitas.fabricatedbackpacks.config.ConfigFile.decode(packet.json()))));
+        ClientPlayNetworking.registerGlobalReceiver(com.kadamitas.fabricatedbackpacks.network.OwnedEquipment.TYPE, (packet, context) -> context.client().execute(() ->
+                com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment.set(context.player(), packet.stack())));
         // Common configuration is loaded during registry bootstrap, after the
         // mod constructor. Capture it only once that bootstrap has completed.
         modBus.addListener((net.neoforged.fml.event.lifecycle.FMLClientSetupEvent setup) -> {
