@@ -324,9 +324,9 @@ class BackpackAssetAuditTest {
         assertEquals(expected, craftable);
         JsonObject netherite = json(DATA.resolve("recipe/netherite_backpack.json"));
         assertEquals(NAMESPACE + ":backpack_smithing", netherite.get("type").getAsString());
-        assertEquals("minecraft:netherite_upgrade_smithing_template", netherite.get("template").getAsString());
-        assertEquals(NAMESPACE + ":diamond_backpack", netherite.get("base").getAsString());
-        assertEquals("minecraft:netherite_ingot", netherite.get("addition").getAsString());
+        assertEquals("minecraft:netherite_upgrade_smithing_template", netherite.getAsJsonObject("template").get("item").getAsString());
+        assertEquals(NAMESPACE + ":diamond_backpack", netherite.getAsJsonObject("base").get("item").getAsString());
+        assertEquals("minecraft:netherite_ingot", netherite.getAsJsonObject("addition").get("item").getAsString());
     }
 
     @Test
