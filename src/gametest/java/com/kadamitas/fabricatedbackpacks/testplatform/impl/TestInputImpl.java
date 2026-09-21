@@ -40,7 +40,6 @@ import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.TestInput;
 import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
 import com.kadamitas.fabricatedbackpacks.testplatform.impl.threading.ThreadingImpl;
 import com.kadamitas.fabricatedbackpacks.testplatform.impl.util.WindowHooks;
-import com.kadamitas.fabricatedbackpacks.testplatform.mixin.input.KeyMappingAccessor;
 import com.kadamitas.fabricatedbackpacks.testplatform.mixin.input.KeyboardHandlerAccessor;
 import com.kadamitas.fabricatedbackpacks.testplatform.mixin.input.MouseHandlerAccessor;
 
@@ -367,7 +366,8 @@ public final class TestInputImpl implements TestInput {
 	}
 
 	private static InputConstants.Key getBoundKey(KeyMapping keyMapping, String action) {
-		InputConstants.Key boundKey = ((KeyMappingAccessor) keyMapping).getKey();
+		// NeoForge exposes the bound key directly; an accessor of the same name cannot be applied.
+		InputConstants.Key boundKey = keyMapping.getKey();
 
 		if (boundKey == InputConstants.UNKNOWN) {
 			throw new AssertionError("Cannot %s binding '%s' because it isn't bound to a key".formatted(action, keyMapping.getName()));
