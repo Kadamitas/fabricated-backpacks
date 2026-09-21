@@ -482,16 +482,18 @@ public final class ConduitGameTests {
         source.items.setItem(0, new ItemStack(Items.DIAMOND, 32)); fill(source.tank, mb(1_000)); source.energy.amount = 1_000;
         var bundle = conduit(helper, new BlockPos(3, 2, 3), ConduitKind.values());
         port(bundle, Direction.WEST, ConduitMode.EXTRACT); port(bundle, Direction.EAST, ConduitMode.INSERT);
-        helper.runAfterDelay(6, () -> {
-            // Vanilla runs this callback after END_LEVEL_TICK. Empty/non-exporting sources must leave useful work for later API callers.
+        helper.startSequence().thenIdle(6).thenWaitUntil(() -> {
+            // Other GameTests share this world's bounded topology/endpoint work.
+            // Await a usable route within the test timeout rather than assuming
+            // it is ready on tick six. The late-producer and abort assertions
+            // still run after END_LEVEL_TICK, before any subsequent transfer.
             EnergyStorage late = EnergyStorage.SIDED.find(helper.getLevel(), bundle.getBlockPos(), Direction.WEST);
             helper.assertTrue(late != null, "A late producer finds the loaded forwarding receiver");
             try (Transaction transaction = Transaction.openOuter()) {
                 helper.assertValueEqual(late.insert(1, transaction), 1L, "A scheduler pass with nothing transferable preserves work for a later producer");
             }
             helper.assertValueEqual(target.energy.amount, 0L, "The late probe still obeys outer abort");
-        });
-        helper.runAfterDelay(8, () -> onMachineTick(helper, source, () -> {
+        }).thenExecuteAfter(2, () -> onMachineTick(helper, source, () -> {
             var items = ItemStorage.SIDED.find(helper.getLevel(), bundle.getBlockPos(), Direction.WEST);
             var fluids = FluidStorage.SIDED.find(helper.getLevel(), bundle.getBlockPos(), Direction.WEST);
             var energy = EnergyStorage.SIDED.find(helper.getLevel(), bundle.getBlockPos(), Direction.WEST);

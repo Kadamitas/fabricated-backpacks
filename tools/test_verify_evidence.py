@@ -44,7 +44,8 @@ class EvidenceGateTest(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        # Match the verifier's canonical ROOT, including macOS /var -> /private/var.
+        self.root = Path(temporary.name).resolve()
         self.output = self.root / "build/verification"
         self.client = self.root / ".codex-local/client-evidence"
         replacement = patch.multiple(gate, ROOT=self.root, OUTPUT=self.output, CLIENT=self.client)
