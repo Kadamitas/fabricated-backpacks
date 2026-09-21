@@ -51,11 +51,25 @@ jobs:
           # by a downloaded checksum file as paths or command-line options.
           digest="$(sha256sum "$artifact" | cut -d ' ' -f 1)"
           [[ "$(cat "$artifact.sha256")" == "$digest  $artifact" ]]
-          jq -e --arg digest "$digest" --arg version "$version" --arg minecraft "${version##*+mc}" \
+          if [[ "$version" == 1.0.0+mc1.21.1 && "$LOADER" == fabric ]]; then
+            # This legacy target has no Fabric client GameTest API. Preserve
+            # its honest unit/server scope and require both tested profiles.
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir . --pattern "$artifact.cobblemon.json"
+            for receipt in "$artifact.release.json" "$artifact.cobblemon.json"; do
+              jq -e --arg digest "$digest" \
+                '.schema == 1 and .passed == true and .scope == "unit-and-server/compatibility"
+                 and .minecraft_version == "1.21.1" and .artifact.sha256 == $digest
+                 and .unit_tests > 0 and .server_tests > 0' "$receipt" > /dev/null
+            done
+            jq -e '.with_cobblemon == false' "$artifact.release.json" > /dev/null
+            jq -e '.with_cobblemon == true and .cobblemon_tests == 2' "$artifact.cobblemon.json" > /dev/null
+          else
+            jq -e --arg digest "$digest" --arg version "$version" --arg minecraft "${version##*+mc}" \
             '.schema == 1 and .passed == true and (.scope == "release" or .scope == "release-automated")
               and .client.full.passed == true and .client.restart.passed == true and .client.multiplayer.passed == true
              and .artifact.sha256 == $digest and .artifact.version == $version and .artifact.minecraft == $minecraft' \
             "$artifact.release.json" > /dev/null
+          fi
           echo "ARTIFACT=$artifact" >> "$GITHUB_ENV"
           echo "MOD_VERSION=$version" >> "$GITHUB_ENV"
 
