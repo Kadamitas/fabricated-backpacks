@@ -32,6 +32,7 @@ import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
 import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
+import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
 import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
 import net.fabricmc.fabric.api.transfer.v1.storage.StoragePreconditions;
 import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
@@ -280,7 +281,46 @@ public final class ResourceGameTests {
             helper.assertValueEqual(retainedView.extract(WATER, 1, transaction), 0L, "Old item views cannot mutate a replacement item");
             helper.assertValueEqual(energy.insert(1, transaction), 0L, "Old energy lookups also reject a replacement item");
         }
+        indexedVoidAdmission(helper);
         helper.succeed();
+    }
+
+    private static void indexedVoidAdmission(GameTestHelper helper) {
+        BlockPos position = helper.absolutePos(new BlockPos(4, 2, 2));
+        BagInventory seed = BackpackTestSupport.bag(BackpackTier.LEATHER, UpgradeKind.VOID);
+        var upgrade = BackpackTestSupport.upgrade(seed, 0);
+        seed.setFilter(upgrade, 0, new ItemStack(Items.DIRT));
+        seed.updateSettings(upgrade, state -> state.putString("void_mode", "ALWAYS"));
+        BackpackBlockEntity entity = place(helper, position, seed);
+        BagInventory bag = entity.inventory();
+        Storage<ItemVariant> lookup = ItemStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH);
+        helper.assertTrue(lookup instanceof SlottedStorage<?>, "The placed backpack exposes the real slotted item API");
+        SlottedStorage<ItemVariant> handler = (SlottedStorage<ItemVariant>) lookup;
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(handler.getSlot(0).insert(ItemVariant.of(Items.DIRT), 7, transaction), 7L,
+                    "Indexed item insertion honors ALWAYS void admission");
+            transaction.commit();
+        }
+        helper.assertValueEqual(BackpackTestSupport.count(bag, Items.DIRT), 0,
+                "ALWAYS void does not leak the discarded item into the selected physical slot");
+        bag.updateSettings(BackpackTestSupport.upgrade(bag, 0), state -> state.putString("void_mode", "STORAGE_OVERFLOW"));
+        bag.setItem(0, new ItemStack(Items.STONE, 64));
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(handler.getSlot(0).insert(ItemVariant.of(Items.DIRT), 7, transaction), 0L,
+                    "A blocked indexed slot cannot void items while another physical slot has room");
+            helper.assertValueEqual(handler.getSlots().get(1).insert(ItemVariant.of(Items.DIRT), 7, transaction), 7L,
+                    "The requested empty slot accepts overflow-mode input normally");
+        }
+        helper.assertValueEqual(BackpackTestSupport.count(bag, Items.DIRT), 0,
+                "Aborted indexed admission and capacity probes leave all physical slots unchanged");
+        try (Transaction transaction = Transaction.openOuter()) {
+            helper.assertValueEqual(handler.getSlot(1).insert(ItemVariant.of(Items.DIRT), 7, transaction), 7L,
+                    "The empty physical slot accepts all seven items");
+            transaction.commit();
+        }
+        helper.assertTrue(bag.getItem(1).is(Items.DIRT), "Committed indexed insertion keeps its physical slot identity");
+        helper.assertValueEqual(bag.getItem(1).getCount(), 7, "Committed indexed insertion conserves the accepted count");
+        helper.assertValueEqual(bag.getItem(0).getCount(), 64, "Indexed admission never rewrites the unrelated full slot");
     }
 
     public static void sharedItemAndEquipmentApis(GameTestHelper helper) {
