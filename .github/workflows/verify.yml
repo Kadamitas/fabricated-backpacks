@@ -16,7 +16,10 @@ jobs:
   unit-server-and-artifact:
     name: Java 25 unit, server, assets and artifact checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
+    env:
+      LIBGL_ALWAYS_SOFTWARE: 'true'
+      ALSOFT_DRIVERS: 'null'
     steps:
       - name: Check out sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,6 +62,26 @@ jobs:
           PY
       - name: Require exact discovery, fresh passing reports and a clean production JAR
         run: python tools/verify_evidence.py check
+      - name: Install virtual display for non-invasive automated acceptance
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libglx-mesa0 libopengl0 libopenal1 mesa-utils mesa-vulkan-drivers
+      - name: Run full client and separate-JVM restart acceptance
+        run: |
+          xvfb-run -a -s '-screen 0 1280x800x24' ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest
+          xvfb-run -a -s '-screen 0 1280x800x24' ./gradlew --no-daemon --max-workers=2 --console=plain runClientGameTest -PclientScenario=restart
+          mkdir -p .codex-local/client-evidence/restart-screenshots
+          cp -p build/run/clientGameTest/screenshots/*.png .codex-local/client-evidence/restart-screenshots/
+      - name: Run actual two-JVM multiplayer acceptance
+        run: xvfb-run -a -s '-screen 0 1280x800x24' python tools/run_multiplayer.py
+      - name: Bundle stable release with explicitly automated-only verification
+        run: ./gradlew --no-daemon --max-workers=2 --console=plain releaseBundle
+      - name: Upload verified release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-bundle-${{ github.run_id }}
+          if-no-files-found: error
+          path: release/
       - name: Upload diagnostics and automated evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -66,6 +89,7 @@ jobs:
           name: verification-java25-${{ github.run_id }}
           retention-days: 14
           if-no-files-found: warn
+          include-hidden-files: true
           path: |
             build/libs/*.jar
             build/reports/tests/
@@ -73,6 +97,10 @@ jobs:
             build/gametest-results.xml
             build/verification/start.json
             build/verification/automated.json
+            build/verification/release.json
+            build/verification/multiplayer.json
+            .codex-local/client-evidence/
+            build/run/clientGameTest/logs/
 
   rendered-client:
     name: Rendered client and separate-JVM restart
@@ -118,6 +146,5 @@ jobs:
             .codex-local/client-evidence/restart-pass.json
             .codex-local/client-evidence/full-screenshots/
 
-# This workflow does not produce a manual or release receipt. Real two-client
-# audio and installed-JAR manual checks remain mandatory inputs to
-# `verify_evidence.py check --release` before releaseBundle.
+# Release receipts explicitly omit owner-waived manual testing. Software audio
+# checks decoding and real client channel behavior, not human-audible output.
