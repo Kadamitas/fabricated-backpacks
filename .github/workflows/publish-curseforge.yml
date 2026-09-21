@@ -81,12 +81,24 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$CURSEFORGE_API_TOKEN" || { echo "Missing CurseForge upload token"; exit 1; }
+          report_api_error() {
+            python3 - "$1" <<'PY'
+          import json, os, pathlib, sys
+          try:
+              data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+              safe = {key: data[key] for key in ('error', 'errorMessage', 'message', 'errors') if key in data} if isinstance(data, dict) else {}
+              print('CurseForge error: ' + json.dumps(safe).replace(os.environ['CURSEFORGE_API_TOKEN'], '[REDACTED]')[:2000])
+          except Exception:
+              print('CurseForge returned a non-JSON error; response omitted.')
+          PY
+          }
           [[ "$CURSEFORGE_PROJECT_ID" == 1672591 ]] || { echo "Unexpected CurseForge project ID"; exit 1; }
           # The endpoint returns 401 without valid credentials. No response body
           # or token is printed; a failed authentication stops before any upload.
-          curl --silent --show-error --fail --proto '=https' \
+          curl --silent --show-error --fail-with-body --proto '=https' \
             --header "X-Api-Token: $CURSEFORGE_API_TOKEN" \
-            --output versions.json https://minecraft.curseforge.com/api/game/versions
+            --output versions.json https://minecraft.curseforge.com/api/game/versions || { report_api_error versions.json; exit 1; }
+          echo 'CurseForge game-version lookup succeeded.'
           minecraft="${MOD_VERSION##*+mc}"
           case "$LOADER" in fabric) loader_name=Fabric;; quilt) loader_name=Quilt;; forge) loader_name=Forge;; neoforge) loader_name=NeoForge;; esac
           jq -e --arg game "$minecraft" --arg loader "$loader_name" \
@@ -99,10 +111,10 @@ jobs:
             --arg game "$minecraft" --arg loader "$loader_name" --argjson dependencies "$dependencies" \
             '{displayName:$display,changelog:.body,changelogType:"markdown",releaseType:"release",
               gameVersionNames:[$game,$loader],relations:{projects:$dependencies}}' release.json > metadata.json
-          curl --silent --show-error --fail --proto '=https' \
+          curl --silent --show-error --fail-with-body --proto '=https' \
             --header "X-Api-Token: $CURSEFORGE_API_TOKEN" \
             --form "metadata=<metadata.json" --form "file=@artifacts/$ARTIFACT" \
             --output response.json \
-            "https://minecraft.curseforge.com/api/projects/${CURSEFORGE_PROJECT_ID}/upload-file"
+            "https://minecraft.curseforge.com/api/projects/${CURSEFORGE_PROJECT_ID}/upload-file" || { report_api_error response.json; exit 1; }
           file_id="$(jq -er '.id | select(type == "number" and . > 0)' response.json)"
           echo "Uploaded CurseForge file $file_id ($LOADER). CurseForge moderation may still be pending." >> "$GITHUB_STEP_SUMMARY"
