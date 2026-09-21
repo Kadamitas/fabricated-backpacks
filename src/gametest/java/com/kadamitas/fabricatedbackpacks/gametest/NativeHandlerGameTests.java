@@ -83,7 +83,8 @@ final class NativeHandlerGameTests {
         }
         helper.assertValueEqual(ResourceRuntime.batteryStored(entity.inventory(), 0), 970L, "Native insertion is persisted in the battery upgrade");
         try (Transaction transaction = Transaction.openRoot()) {
-            helper.assertValueEqual(handler.extract(100, transaction), 100, "A native transaction can extract again");
+            // A placed battery shares one 200-unit per-tick output budget with its automatic pushing; 150 are spent.
+            helper.assertValueEqual(handler.extract(100, transaction), 50, "Native extraction is bounded by the remaining per-tick output budget");
         }
         helper.assertValueEqual(ResourceRuntime.batteryStored(entity.inventory(), 0), 970L, "An aborted native extraction changes nothing");
         helper.succeed();
