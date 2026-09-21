@@ -112,7 +112,16 @@ public final class MultiplayerClientAcceptance {
             properties.setProperty("allow-flight", "true");
             try (var server = context.worldBuilder().createServer(properties)) {
                 int port = server.computeOnServer(MultiplayerClientAcceptance::boundPort);
-                server.runOnServer(value -> value.setPort(port));
+                server.runOnServer(value -> {
+                    value.setPort(port);
+                    // Fabric's dedicated-test server allows only its owning
+                    // client by default. Keep that whitelist and add only the
+                    // second offline profile selected by both launchers.
+                    var guest = net.minecraft.server.players.NameAndId.createOffline("BackpackGuest");
+                    value.getPlayerList().getWhiteList().add(new net.minecraft.server.players.UserWhiteListEntry(guest));
+                    check(value.getPlayerList().getWhiteList().isWhiteListed(guest),
+                            "The dedicated test server explicitly admits the second test profile");
+                });
                 try (var connection = server.connect()) {
                     connection.waitForChunksRender();
                     UUID hostId = server.computeOnServer(value -> connection.getServerPlayer().getUUID());
@@ -356,7 +365,11 @@ public final class MultiplayerClientAcceptance {
         String address = "127.0.0.1:" + port;
         context.runOnClient(client -> ConnectScreen.startConnecting(client.gui.screen(), client, ServerAddress.parseString(address),
                 new ServerData("Fabricated Backpacks acceptance", address, ServerData.Type.OTHER), false, null));
-        context.waitFor(client -> client.level != null && client.player != null && client.gui.screen() == null, 2400);
+        context.waitFor(client -> {
+            if (client.gui.screen() instanceof net.minecraft.client.gui.screens.DisconnectedScreen disconnected)
+                throw new AssertionError("Guest connection rejected: " + disconnected.getNarrationMessage().getString());
+            return client.level != null && client.player != null && client.gui.screen() == null;
+        }, 2400);
         verifyTcp(context);
         UUID guestId = context.computeOnClient(client -> client.player.getUUID());
         check(!guestId.equals(hostId), "Guest launch must use a distinct --username");
