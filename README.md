@@ -2,15 +2,15 @@
 
 <img src="docs/media/project-icon.png" alt="Original gold backpack model" width="144" height="144">
 
-Modular backpacks for **Minecraft Java Edition 26.3 on Fabric**.
+Modular backpacks for **Minecraft Java Edition 26.3 on Quilt**.
 
-**0.5.3-alpha is a development build.** Back up worlds before testing it.
+**1.0.0 is the planned release version; this working tree is not yet release-verified.** Back up worlds before testing it.
 The feature list describes the current implementation, not a claim that every
 interaction or multiplayer scenario has passed acceptance testing. Release
 evidence must be collected for this version. The [0.5.2 verification record](docs/VERIFICATION_0.5.2.md)
 is historical and does not verify the 26.3 port.
 
-This alpha also contains the interface, worn-model and automation revision.
+This version also contains the interface, worn-model and automation revision.
 See the [UI revision record](docs/UI_REVISION.md) and
 [automation verification record](docs/AUTOMATION_VERIFICATION.md) for their separate
 test scope.
@@ -36,7 +36,9 @@ test scope.
   templates that never copy physical inventory.
 
 See [Features and current limits](docs/FEATURES.md) for the full catalog,
-workstation behavior and remaining alpha work.
+workstation behavior and remaining work.
+
+See [Quilt development](docs/QUILT.md) for this branch's loader and test setup.
 
 ## Requirements
 
@@ -44,7 +46,7 @@ workstation behavior and remaining alpha work.
 | --- | --- |
 | Minecraft Java Edition | 26.3 |
 | Java | 25 |
-| Fabric Loader | 0.19.5 or newer |
+| Quilt Loader | 0.30.1 |
 | Fabric API | 0.161.0+26.3 or newer compatible 26.3 build |
 | Team Reborn Energy API | 5.0.0, included in the built mod JAR |
 

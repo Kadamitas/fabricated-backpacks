@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.5.3-alpha+mc26.3 (unreleased)
+## 1.0.0+mc26.3 (unreleased)
 
-- Target Minecraft 26.3 with Fabric Loader 0.19.5 and Fabric API 0.161.0.
+- Target Minecraft 26.3 with Quilt Loader 0.30.1 and Fabric API 0.161.0.
 - Adapt cooking and engine fuel handling to data-driven cooking-fuel components.
 - Update item-drop prediction, block placement, loot rolls, rendering submissions,
   and input constants for the new Minecraft APIs.

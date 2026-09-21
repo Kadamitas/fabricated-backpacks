@@ -1,9 +1,9 @@
 # Building and testing
 
-Target: **Minecraft 26.3, Fabric, Java 25**. The checked-in Gradle wrapper and
+Target: **Minecraft 26.3, Quilt Loader 0.30.1, Java 25**. The checked-in Gradle wrapper and
 `gradle.properties` define the toolchain and dependency versions.
 
-This guide includes the current experimental alpha source. Its coordinate comes
+This guide describes the planned 1.0.0 release source. Its coordinate comes
 from `gradle.properties` and remains distinct from the immutable published
 `v0.5.0-alpha` download. Identify a tested build by its exact source and artifact
 hashes.
@@ -24,9 +24,9 @@ Gradle may download the configured toolchain and dependencies on the first run.
 Do not point development runs at an existing personal world.
 
 The main artifact for the current coordinate is
-`build/libs/fabricated-backpacks-0.5.3-alpha+mc26.3.jar`. The adjacent sources JAR is
+`build/libs/fabricated-backpacks-quilt-1.0.0+mc26.3.jar`. The adjacent sources JAR is
 for development and is not installed in Minecraft. The runtime JAR includes
-the configured Team Reborn Energy dependency; Fabric Loader and Fabric API
+the configured Team Reborn Energy dependency; Quilt Loader and Fabric API
 remain instance dependencies.
 
 ## Source layout
@@ -118,7 +118,7 @@ claim the full backpack scenario ran. See the
 
 ### Optional JEI development and tests
 
-The adapter compiles against JEI's public Fabric API pinned to **30.28.0.191**
+The adapter compiles against JEI's public Fabric API pinned to **31.3.0.17**
 for Minecraft **26.3**. JEI is not embedded in the main JAR and is absent from
 default development/test runtimes. The built-in item/fluid picker works without
 it. Opt in to the actual JEI runtime for a development session or its focused
@@ -224,7 +224,7 @@ Collect the release artifacts after the recorded checks pass:
 ```
 
 This task writes main/sources JARs and SHA-256 files under
-`release/0.5.3-alpha+mc26.3`. It runs `verifyReleaseEvidence`, which requires fresh,
+`release/1.0.0+mc26.3`. It runs `verifyReleaseEvidence`, which requires fresh,
 nonempty passing unit/server reports, unchanged source inputs, separate-JVM
 restart evidence, both multiplayer process results and the installed-JAR
 observations. It does not run those client checks for you. Failed, skipped,
