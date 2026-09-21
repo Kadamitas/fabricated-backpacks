@@ -279,6 +279,14 @@ public final class BackpackClientGameTests implements FabricClientGameTest {
         // The search-entry scenario deliberately persisted "seedb". Clear it
         // before the following storage-transfer scenario needs unfiltered slots.
         searchBrowser(context, "");
+        context.waitFor(client -> !((BackpackScreen) client.gui.screen()).getMenu().filtering());
+        // Clearing text does not close a search field that the user opened.
+        // Exercise its real toggle and restore the collapsed state expected by
+        // the later reference-layout scenario.
+        clickButton(context, "Search");
+        check(context.computeOnClient(client -> client.gui.screen().children().stream()
+                        .filter(EditBox.class::isInstance).map(EditBox.class::cast).noneMatch(box -> box.visible)),
+                "The search icon collapses the cleared field without reopening it");
     }
 
     private static void checkUpgradeSettingTooltips(ClientGameTestContext context) {
