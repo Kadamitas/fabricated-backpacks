@@ -12,16 +12,16 @@ import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.client.automation.ConduitScreen;
 import com.kadamitas.fabricatedbackpacks.client.automation.SteamEngineScreen;
 import com.kadamitas.fabricatedbackpacks.client.automation.SteamEngineSideScreen;
-import com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestSingleplayerContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.Transaction;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -49,7 +49,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -311,7 +311,7 @@ final class AutomationClientAcceptance {
             backpack(level, pos).setStack(bag.stack());
         }
         node(level, CENTER).setMode(ConduitKind.ITEM, Direction.SOUTH, ConduitMode.DISABLED);
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             long accepted = ResourceRuntime.tankStorage(backpack(level, WATER).inventory(), 0, false)
                     .insert(FluidVariant.of(Fluids.WATER), 162_000, transaction);
             check(accepted == 162_000, "The water-source fixture starts with two exact buckets");
@@ -434,8 +434,8 @@ final class AutomationClientAcceptance {
     private static void checkEngineHeading(ClientGameTestContext context, boolean requireClipping) {
         context.runOnClient(client -> {
             var screen = (SteamEngineScreen) client.gui.screen();
-            var origin = (ContainerScreenAccess) (Object) screen;
-            int left = origin.fabricatedBackpacks$left(), top = origin.fabricatedBackpacks$top();
+            var origin = (AbstractContainerScreen<?>) (Object) screen;
+            int left = origin.getGuiLeft(), top = origin.getGuiTop();
             var state = new GuiRenderState();
             screen.extractRenderState(new GuiGraphicsExtractor(client, state, -1, -1), -1, -1, 0);
             var runs = new ArrayList<GuiTextRenderState>();
@@ -594,7 +594,7 @@ final class AutomationClientAcceptance {
     private static long water(ServerLevel level, BlockPos pos) {
         long result = 0;
         var storage = FluidStorage.SIDED.find(level, pos, Direction.UP);
-        check(storage != null, "The native tank advertises Fabric FluidStorage");
+        check(storage != null, "The native tank advertises its sided fluid storage capability");
         for (var view : storage) result += view.getAmount();
         return result;
     }

@@ -174,6 +174,6 @@ public final class ConduitFilterGameTests {
         return new ConduitFilterAction(menu.containerId, kind, ConduitFilterAction.Operation.SET_MODE, mode.ordinal(), Optional.empty());
     }
     private static void send(ServerPlayer player, ConduitFilterAction request) {
-        player.connection.handleCustomPayload(new ServerboundCustomPayloadPacket(request));
+        BackpackTestSupport.send(player, request);
     }
 }

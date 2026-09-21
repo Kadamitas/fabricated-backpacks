@@ -11,9 +11,9 @@ import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.Transaction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -200,34 +200,34 @@ final class StorageGameTests {
         var storage = ItemStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH);
         helper.assertTrue(storage != null, "Placed bag exposes the registered public sided item API");
         ItemStack before = inventory.stack().copy();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(storage.insert(ItemVariant.of(Items.EMERALD), 3, transaction), 0L, "Sided storage respects the ordinary upgrade filter");
             helper.assertValueEqual(storage.insert(ItemVariant.of(Items.DIAMOND), 40, transaction), 28L, "Partial insertion uses upgraded capacity without entering blocked columns");
         }
         helper.assertValueEqual(count(inventory, Items.DIAMOND), 100, "An aborted API insertion restores the live inventory");
         assertStack(helper, inventory.stack(), before, "An aborted API insertion also restores its persistent component snapshot");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(storage.insert(ItemVariant.of(Items.DIAMOND), 40, transaction), 28L, "A committed partial API insertion reports the exact moved amount");
             transaction.commit();
         }
         helper.assertValueEqual(count(inventory, Items.DIAMOND), 128, "Commit retains exactly the accepted count");
         ItemStack committed = inventory.stack().copy();
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(storage.extract(ItemVariant.of(Items.DIAMOND), 30, outer), 30L, "Sided extraction reads the actual upgraded stack");
-            try (Transaction inner = outer.openNested()) {
+            try (Transaction inner = Transaction.open(outer)) {
                 helper.assertValueEqual(storage.insert(ItemVariant.of(Items.DIAMOND), 2, inner), 2L, "Nested transaction sees its parent's provisional inventory");
                 inner.commit();
             }
         }
         assertStack(helper, inventory.stack(), committed, "Aborting the parent rolls back a committed nested transaction and all persisted data");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(storage.extract(ItemVariant.of(Items.DIAMOND), 9, transaction), 9L, "Committed extraction returns the exact removed amount");
             transaction.commit();
         }
         helper.assertValueEqual(count(BagInventory.of(roundTrip(helper.getLevel(), inventory.stack())), Items.DIAMOND), 119, "Committed item API writes survive the actual item codec");
         inventory.updateSettings(filter, state -> { state.putString("filter_mode", "BLOCK"); state.putString("filter_direction", "OUTPUT"); });
         ItemStack locked = inventory.stack().copy();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(storage.extract(ItemVariant.of(Items.DIAMOND), 119, transaction), 0L, "Output-only filter also governs public storage API extraction");
             transaction.commit();
         }

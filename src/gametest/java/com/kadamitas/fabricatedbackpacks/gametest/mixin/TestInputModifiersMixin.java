@@ -1,6 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest.mixin;
 
-import net.fabricmc.fabric.impl.client.gametest.TestInputImpl;
+import com.kadamitas.fabricatedbackpacks.testplatform.impl.TestInputImpl;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

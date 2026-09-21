@@ -8,15 +8,15 @@ import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitMode;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.client.automation.ConduitScreen;
 import com.kadamitas.fabricatedbackpacks.client.browser.RegistryPickerScreen;
-import com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestSingleplayerContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.Transaction;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
@@ -204,10 +204,10 @@ final class ConduitFilterClientAcceptance {
     }
     private static void checkTitleTooltip(ClientGameTestContext context) {
         double[] pointer = context.computeOnClient(client -> {
-            var origin = (ContainerScreenAccess) (Object) client.gui.screen();
-            return new double[]{(origin.fabricatedBackpacks$left() + 20) * client.getWindow().getScreenWidth()
+            var origin = (AbstractContainerScreen<?>) (Object) client.gui.screen();
+            return new double[]{(origin.getGuiLeft() + 20) * client.getWindow().getScreenWidth()
                     / (double) client.getWindow().getGuiScaledWidth(),
-                    (origin.fabricatedBackpacks$top() + 9) * client.getWindow().getScreenHeight()
+                    (origin.getGuiTop() + 9) * client.getWindow().getScreenHeight()
                             / (double) client.getWindow().getGuiScaledHeight()};
         });
         context.getInput().setCursorPos(pointer[0], pointer[1]);
@@ -215,8 +215,8 @@ final class ConduitFilterClientAcceptance {
         context.takeScreenshot("automation-conduit-help-gui-" + context.computeOnClient(client -> client.getWindow().getGuiScale()));
         context.runOnClient(client -> {
             var screen = (ConduitScreen) client.gui.screen();
-            var origin = (ContainerScreenAccess) (Object) screen;
-            int mouseX = origin.fabricatedBackpacks$left() + 20, mouseY = origin.fabricatedBackpacks$top() + 9;
+            var origin = (AbstractContainerScreen<?>) (Object) screen;
+            int mouseX = origin.getGuiLeft() + 20, mouseY = origin.getGuiTop() + 9;
             var state = new GuiRenderState();
             var graphics = new GuiGraphicsExtractor(client, state, mouseX, mouseY);
             screen.extractBackground(graphics, mouseX, mouseY, 0);
@@ -248,7 +248,7 @@ final class ConduitFilterClientAcceptance {
         iron.set(DataComponents.CUSTOM_NAME, Component.literal("Filter test iron"));
         source.setItem(0, iron); source.setItem(1, new ItemStack(Items.COBBLESTONE, 24));
         fill(level, 0, LAVA, INITIAL_LAVA); fill(level, 1, WATER, INITIAL_WATER);
-        try (var tx = Transaction.openOuter()) {
+        try (var tx = Transaction.openRoot()) {
             var battery = ResourceRuntime.energyStorage(source);
             for (long inserted = 0; inserted < 1_000; ) {
                 long accepted = battery.insert(1_000 - inserted, tx);
@@ -259,7 +259,7 @@ final class ConduitFilterClientAcceptance {
         }
     }
     private static void fill(ServerLevel level, int slot, FluidVariant fluid, long amount) {
-        try (var tx = Transaction.openOuter()) {
+        try (var tx = Transaction.openRoot()) {
             check(ResourceRuntime.tankStorage(bag(level, SOURCE).inventory(), slot, false).insert(fluid, amount, tx) == amount,
                     "The actual source tank accepts the exact fixture droplet amount");
             tx.commit();

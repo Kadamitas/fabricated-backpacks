@@ -44,7 +44,8 @@ class EvidenceGateTest(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        # Match the verifier's canonical ROOT, including macOS /var -> /private/var.
+        self.root = Path(temporary.name).resolve()
         self.output = self.root / "build/verification"
         self.client = self.root / ".codex-local/client-evidence"
         replacement = patch.multiple(gate, ROOT=self.root, OUTPUT=self.output, CLIENT=self.client)
@@ -157,6 +158,18 @@ class EvidenceGateTest(unittest.TestCase):
         with redirect_stdout(output), redirect_stderr(output):
             code = gate.main(arguments)
         return code, output.getvalue()
+
+    def test_automated_release_explicitly_omits_manual_only(self) -> None:
+        (self.output / "manual.json").unlink()
+        result = gate.verify(False, automated_release=True)
+        self.assertEqual("release-automated", result["scope"])
+        self.assertIsNone(result["client"]["manual"])
+        for path in (self.client / "full-pass.json", self.client / "restart-pass.json", self.output / "multiplayer.json"):
+            original = path.read_bytes()
+            path.unlink()
+            with self.assertRaises(Exception):
+                gate.verify(False, automated_release=True)
+            self.write(path, original)
 
     def test_complete_automated_and_release_fixtures_are_accepted(self) -> None:
         automated = gate.verify(False)
@@ -645,6 +658,299 @@ class EvidenceGateTest(unittest.TestCase):
         self.assertFalse((self.output / "automated.json").exists())
         self.assertFalse((self.output / "release.json").exists())
         with self.assertRaisesRegex(ValueError, "predates"):
+            gate.verify(False)
+
+    def native_fixture(self, loader="neoforge") -> dict[str, bytes]:
+        loader_version = "26.3.0.7-beta" if loader == "neoforge" else "66.0.2"
+        required = 'type="required"' if loader == "neoforge" else 'mandatory=true'
+        metadata_path = f"META-INF/{'neoforge.mods' if loader == 'neoforge' else 'mods'}.toml"
+        self.write(self.root / "gradle.properties",
+                   f"minecraft_version={self.minecraft}\nmod_version={self.version}\n{loader}_version={loader_version}\n".encode())
+        self.jar = self.root / "build/libs" / gate.artifact_basename(self.version)
+        entries = {
+            metadata_path: f'''modLoader="javafml"
+license="MIT"
+[[mods]]
+modId="fabricated_backpacks"
+version="{self.version}"
+[[dependencies.fabricated_backpacks]]
+modId="minecraft"
+{required}
+versionRange="[{self.minecraft}]"
+side="BOTH"
+[[dependencies.fabricated_backpacks]]
+modId="{loader}"
+{required}
+versionRange="[{loader_version},)"
+side="BOTH"
+[[mixins]]
+config="fabricated_backpacks.mixins.json"
+[[mixins]]
+config="fabricated_backpacks.client.mixins.json"
+'''.encode(),
+            "com/kadamitas/fabricatedbackpacks/FabricatedBackpacks.class": b"synthetic native class",
+            "fabricated_backpacks.mixins.json": b"{}",
+            "fabricated_backpacks.client.mixins.json": b"{}",
+        }
+        self.write(self.jar, zip_bytes(entries))
+        self.start_record()
+        return entries
+
+    def test_native_artifacts_use_native_metadata_and_basename(self) -> None:
+        for loader in ("neoforge", "forge"):
+            with self.subTest(loader=loader):
+                self.native_fixture(loader)
+                result = gate.verify(False)
+                self.assertTrue(result["passed"])
+                self.assertEqual(f"build/libs/fabricated-backpacks-{loader}-{self.version}.jar", result["artifact"]["path"])
+
+    def test_native_metadata_cannot_claim_another_game_loader_or_mod(self) -> None:
+        entries = self.native_fixture()
+        key = "META-INF/neoforge.mods.toml"
+        original = entries[key].decode()
+        changes = (
+            ('modLoader="javafml"', 'modLoader="fabric"'),
+            ('license="MIT"', 'license="unknown"'),
+            ('modId="fabricated_backpacks"', 'modId="another_mod"'),
+            (f'version="{self.version}"', 'version="9.0.0"'),
+            (f'versionRange="[{self.minecraft}]"', 'versionRange="[1.21.1]"'),
+            ('versionRange="[26.3.0.7-beta,)"', 'versionRange="[26.2,)"'),
+            ('type="required"', 'type="optional"'),
+            ('side="BOTH"', 'side="CLIENT"'),
+        )
+        for source, replacement in changes:
+            with self.subTest(replacement=replacement):
+                entries[key] = original.replace(source, replacement).encode()
+                self.write(self.jar, zip_bytes(entries))
+                with self.assertRaises(ValueError):
+                    gate.verify(False)
+
+    def test_native_artifact_rejects_fabric_metadata_and_runtime(self) -> None:
+        clean = self.native_fixture()
+        for name in ("fabric.mod.json", "quilt.mod.json", "net/fabricmc/api/ModInitializer.class",
+                     "team/reborn/energy/api/EnergyStorage.class", "META-INF/jars/energy-5.0.0.jar"):
+            with self.subTest(name=name):
+                self.write(self.jar, zip_bytes({**clean, name: b"synthetic forbidden artifact"}))
+                with self.assertRaises(ValueError):
+                    gate.verify(False)
+
+    def test_native_artifact_requires_its_declared_mixin_configs(self) -> None:
+        entries = self.native_fixture()
+        del entries["fabricated_backpacks.client.mixins.json"]
+        self.write(self.jar, zip_bytes(entries))
+        with self.assertRaisesRegex(ValueError, "mixin config is missing"):
+            gate.verify(False)
+
+    def test_native_artifact_rejects_ambiguous_loader_properties(self) -> None:
+        self.native_fixture()
+        properties = self.root / "gradle.properties"
+        self.write(properties, properties.read_bytes() + b"forge_version=66.0.2\n")
+        with self.assertRaisesRegex(ValueError, "Ambiguous native loader"):
+            gate.release_loader()
+
+    def test_invalid_or_ambiguous_gradle_coordinates_fail_closed(self) -> None:
+        cases = {
+            "missing version": f"minecraft_version={self.minecraft}\n",
+            "duplicate version": (f"minecraft_version={self.minecraft}\nmod_version={self.version}\n"
+                                  f"mod_version={self.version}\n"),
+            "unsafe version": f"minecraft_version={self.minecraft}\nmod_version=../../release\n",
+            "wrong target suffix": "minecraft_version=26.3\nmod_version=0.5.1-alpha+mc26.2\n",
+            "malformed property": f"minecraft_version={self.minecraft}\nmod_version={self.version}\nbroken\n",
+        }
+        for name, content in cases.items():
+            with self.subTest(name=name):
+                self.write(self.root / "gradle.properties", content.encode())
+                with self.assertRaises(ValueError):
+                    gate.release_coordinates()
+
+    def test_multiplayer_rejects_mixed_processes_runs_roles_and_profiles(self) -> None:
+        mutations = (
+            (self.output / "multiplayer.json", "guest_pid", 1201),
+            (self.output / "multiplayer.json", "host_exit", 1),
+            (self.output / "multiplayer.json", "host_exit", False),
+            (self.multiplayer / "host-pass.json", "pid", 9999),
+            (self.multiplayer / "guest-pass.json", "host_pid", 9999),
+            (self.multiplayer / "guest-pass.json", "run_id", str(uuid.uuid4())),
+            (self.multiplayer / "guest-pass.json", "role", "host"),
+            (self.multiplayer / "host-pass.json", "phase", "ready"),
+            (self.multiplayer / "ready.json", "port", 0),
+            (self.multiplayer / "guest-pass.json", "guest_uuid", "fd9c2744-5f67-46aa-aebb-59ef1efb38a6"),
+            (self.multiplayer / "host-pass.json", "stored_emeralds", 18),
+            (self.multiplayer / "host-pass.json", "recorded_at", int((self.started - 1) * 1000)),
+        )
+        for path, key, value in mutations:
+            with self.subTest(path=path.name, key=key, value=value):
+                original = path.read_bytes()
+                self.mutate(path, lambda document: document.update({key: value}))
+                try:
+                    with self.assertRaises(ValueError):
+                        gate.verify(True)
+                finally:
+                    self.write(path, original)
+
+    def test_multiplayer_evidence_cannot_point_to_another_directory(self) -> None:
+        self.mutate(self.output / "multiplayer.json", lambda document: document.update(evidence_dir=str(self.client)))
+        with self.assertRaisesRegex(ValueError, "exact run directory"):
+            gate.verify(True)
+
+    def test_restart_requires_the_tested_writer_and_a_distinct_reader(self) -> None:
+        path = self.client / "restart-pass.json"
+        original = path.read_bytes()
+        for key, value in (("writer_pid", 9999), ("reader_pid", 1101), ("reader_pid", True), ("reader_pid", 0)):
+            with self.subTest(key=key, value=value):
+                self.write(path, original)
+                self.mutate(path, lambda document: document.update({key: value}))
+                with self.assertRaises(ValueError):
+                    gate.verify(True)
+
+    def test_manual_observations_are_for_the_exact_artifact(self) -> None:
+        path = self.output / "manual.json"
+        original = path.read_bytes()
+        for key, value in (("artifact_sha256", "0" * 64), ("passed", "true"), ("observations", []),
+                           ("observations", "not a list"), ("observations", [" "]), ("screenshots", [])):
+            with self.subTest(key=key, value=value):
+                self.write(path, original)
+                self.mutate(path, lambda document: document.update({key: value}))
+                with self.assertRaises(ValueError):
+                    gate.verify(True)
+
+    def test_absolute_and_traversing_screenshot_paths_are_rejected_on_all_platforms(self) -> None:
+        for value in ("/tmp/screenshot.png", "C:/Windows/screenshot.png", r"C:\Windows\screenshot.png",
+                      r"C:relative.png", r"\\server\share\screenshot.png", "../screenshot.png",
+                      "build/../../screenshot.png", r"build\..\..\screenshot.png", "build//manual/image.png"):
+            with self.subTest(path=value):
+                self.mutate(self.output / "manual.json", lambda document: document.update(screenshots=[value]))
+                with self.assertRaisesRegex(ValueError, "Unsafe screenshot"):
+                    gate.verify(True)
+
+    def test_relative_windows_screenshot_paths_are_contained_and_hashed(self) -> None:
+        self.mutate(self.output / "manual.json", lambda document: document.update(screenshots=[r"build\manual\screenshot.png"]))
+        report = gate.verify(True)
+        self.assertEqual("build/manual/screenshot.png", report["client"]["manual"]["verified_screenshots"][0]["path"])
+
+    def test_manual_screenshots_must_exist_be_fresh_and_be_images(self) -> None:
+        for invalid in (b"", b"this is not a screenshot"):
+            with self.subTest(invalid=invalid):
+                self.write(self.manual_image, invalid)
+                with self.assertRaises(ValueError):
+                    gate.verify(True)
+        self.write(self.manual_image, png())
+        os.utime(self.manual_image, (self.started - 10, self.started - 10))
+        with self.assertRaisesRegex(ValueError, "predates"):
+            gate.verify(True)
+
+    def test_screenshot_headers_truncation_and_corrupt_chunks_do_not_count_as_images(self) -> None:
+        valid = png()
+        header, ending = valid[:33], png_chunk(b"IEND", b"")
+        bad_crc = bytearray(valid)
+        bad_crc[29] ^= 1
+        malformed = (
+            valid[:33], header + ending, valid[:-1], valid[:-12],
+            b"\xff\xd8\xff\xff\xd9", b"RIFF\x08\0\0\0WEBPVP8 ",
+            bytes(bad_crc),
+            header + png_chunk(b"IDAT", b"not deflate") + ending,
+            valid + b"trailing bytes",
+            header + header[8:] + valid[33:],
+            header + png_chunk(b"ABCD", b"unknown critical chunk") + valid[33:],
+        )
+        for data in malformed:
+            with self.subTest(length=len(data), tail=data[-12:]):
+                self.write(self.manual_image, data)
+                with self.assertRaisesRegex(ValueError, "PNG"):
+                    gate.verify(True)
+
+    def test_screenshot_inflation_scanline_filters_and_resource_limits_are_checked(self) -> None:
+        header, ending = png()[:33], png_chunk(b"IEND", b"")
+        for raw in (b"", b"\0" * 13, b"\0" * 15, b"\5" + b"\0" * 13, b"\0" * 1_000_000):
+            with self.subTest(raw_length=len(raw)):
+                data = header + png_chunk(b"IDAT", zlib.compress(raw)) + ending
+                self.write(self.manual_image, data)
+                with self.assertRaisesRegex(ValueError, "PNG"):
+                    gate.verify(True)
+        huge_header = b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 16_384, 16_384, 8, 6, 0, 0, 0))
+        self.write(self.manual_image, huge_header + png_chunk(b"IDAT", zlib.compress(b"\0")) + ending)
+        with self.assertRaisesRegex(ValueError, "decompression exceeds"):
+            gate.verify(True)
+        compressed = zlib.compress((b"\0" + b"\x55\x88\xaa" * 2) * 2)
+        for payload in (compressed[:-1], compressed + b"extra stream", compressed + zlib.compress(b"\0")):
+            with self.subTest(payload=payload):
+                self.write(self.manual_image, header + png_chunk(b"IDAT", payload) + ending)
+                with self.assertRaisesRegex(ValueError, "PNG"):
+                    gate.verify(True)
+
+    def test_complete_split_data_rgba_and_interlaced_pngs_are_accepted(self) -> None:
+        signature, ending = b"\x89PNG\r\n\x1a\n", png_chunk(b"IEND", b"")
+        rgba = (b"\0" + b"\x55\x88\xaa\xff" * 2) * 2
+        compressed = zlib.compress(rgba)
+        header = signature + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 6, 0, 0, 0))
+        data = header + png_chunk(b"IDAT", compressed[:5]) + png_chunk(b"IDAT", compressed[5:]) + ending
+        self.assertEqual((2, 2), gate.png_dimensions(data, "complete split RGBA fixture"))
+        separated = header + png_chunk(b"IDAT", compressed[:5]) + png_chunk(b"tEXt", b"note\0fixture") + png_chunk(b"IDAT", compressed[5:]) + ending
+        with self.assertRaisesRegex(ValueError, "Nonconsecutive"):
+            gate.png_dimensions(separated, "invalid separated IDAT fixture")
+        # A 2x2 RGB Adam7 image has one pixel in pass1, one in pass6 and two in pass7.
+        interlaced = b"\0\x55\x88\xaa" * 2 + b"\0" + b"\x55\x88\xaa" * 2
+        header = signature + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 1))
+        self.assertEqual((2, 2), gate.png_dimensions(header + png_chunk(b"IDAT", zlib.compress(interlaced)) + ending,
+                                                   "complete interlaced fixture"))
+
+    def test_json_duplicates_nonfinite_numbers_and_nonobjects_fail_closed(self) -> None:
+        for data in (b'{"passed": false, "passed": true}', b'{"started": NaN}', b'[]'):
+            with self.subTest(data=data):
+                self.write(self.output / "manual.json", data)
+                with self.assertRaises(ValueError):
+                    gate.verify(True)
+
+    def test_cli_writes_atomic_receipts_only_for_success(self) -> None:
+        code, output = self.check_cli(["check", "--release"])
+        self.assertEqual(0, code, output)
+        self.assertTrue(json.loads((self.output / "release.json").read_bytes())["passed"])
+        self.write(self.jar, b"not a ZIP archive")
+        code, output = self.check_cli(["check", "--release"])
+        self.assertEqual(1, code)
+        self.assertIn("Verification rejected", output)
+        self.assertNotIn("Traceback", output)
+        self.assertFalse((self.output / "release.json").exists())
+
+    def test_cli_captures_runtime_and_filesystem_errors_without_a_stale_success(self) -> None:
+        target = self.output / "automated.json"
+        for failure in (RuntimeError("decoder failed"), PermissionError("cannot read evidence")):
+            with self.subTest(error=type(failure).__name__):
+                self.document(target, {"passed": True})
+                with patch.object(gate, "audit_jar", side_effect=failure):
+                    code, output = self.check_cli(["check"])
+                self.assertEqual(1, code)
+                self.assertNotIn("Traceback", output)
+                self.assertFalse(target.exists())
+
+    def test_begin_replaces_the_snapshot_and_invalidates_old_receipts(self) -> None:
+        for name in ("automated.json", "release.json"):
+            self.document(self.output / name, {"passed": True})
+        code, output = self.check_cli(["begin"])
+        self.assertEqual(0, code, output)
+        record = json.loads((self.output / "start.json").read_bytes())
+        self.assertNotEqual(self.run_id, record["run_id"])
+        self.assertEqual(gate.inputs(), record["inputs"])
+        self.assertFalse((self.output / "automated.json").exists())
+        self.assertFalse((self.output / "release.json").exists())
+        with self.assertRaisesRegex(ValueError, "predates"):
+            gate.verify(False)
+
+    def test_forge_artifact_accepts_manifest_declared_mixins(self) -> None:
+        entries = self.native_fixture("forge")
+        toml = entries["META-INF/mods.toml"].decode()
+        entries["META-INF/mods.toml"] = toml[:toml.index("[[mixins]]")].encode()
+        entries["META-INF/MANIFEST.MF"] = (b"Manifest-Version: 1.0\r\nMixinConfigs: fabricated_backpacks.mixins.json,fabricated_ba\r\n"
+                                           b" ckpacks.client.mixins.json\r\n\r\n")
+        self.write(self.jar, zip_bytes(entries))
+        self.assertTrue(gate.verify(False)["passed"])
+        entries["META-INF/MANIFEST.MF"] = b"Manifest-Version: 1.0\r\nMixinConfigs: fabricated_backpacks.mixins.json\r\n\r\n"
+        self.write(self.jar, zip_bytes(entries))
+        with self.assertRaisesRegex(ValueError, "native production mixins"):
+            gate.verify(False)
+        del entries["META-INF/MANIFEST.MF"]
+        self.write(self.jar, zip_bytes(entries))
+        with self.assertRaises(ValueError):
             gate.verify(False)
 
 

@@ -1,0 +1,13 @@
+plugins { id 'java' }
+repositories { mavenCentral() }
+java { toolchain.languageVersion = JavaLanguageVersion.of(25) }
+dependencies {
+    testImplementation platform('org.junit:junit-bom:6.1.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+sourceSets {
+    main.java { srcDir '../../src/main/java'; include 'com/kadamitas/fabricatedbackpacks/platform/transaction/**'; include 'com/kadamitas/fabricatedbackpacks/automation/conduit/ConduitBudget.java' }
+    test.java { srcDir '../../src/test/java'; include 'com/kadamitas/fabricatedbackpacks/platform/transaction/**'; include 'com/kadamitas/fabricatedbackpacks/automation/conduit/ConduitBudgetTest.java' }
+}
+test { useJUnitPlatform(); testLogging { events 'passed', 'failed', 'skipped' } }

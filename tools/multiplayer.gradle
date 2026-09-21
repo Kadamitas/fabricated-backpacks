@@ -5,7 +5,9 @@ import java.nio.file.LinkOption
 import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 
-// Prepare both launch descriptions in one build; PowerShell starts them after Gradle exits.
+// Prepare both launch descriptions in one build; tools/run_multiplayer.py starts them after Gradle exits.
+// Both commands derive from the automated client run (runClient with the harness enabled), with only
+// the role-specific scenario, profile and directory changed.
 def requestedId = providers.gradleProperty('multiplayerRunId').orNull
 def scenario = providers.gradleProperty('multiplayerScenario').getOrElse('full')
 if (!(scenario in ['full', 'automation'])) throw new GradleException('multiplayerScenario must be full or automation.')
@@ -16,7 +18,7 @@ def prepareClients = tasks.register('prepareMultiplayerClients') {
 }
 if (requestedId == null) {
     prepareClients.configure {
-        doLast { throw new GradleException('Use tools/run-multiplayer.ps1, or supply -PmultiplayerRunId=<fresh canonical UUID>.') }
+        doLast { throw new GradleException('Use tools/run_multiplayer.py, or supply -PmultiplayerRunId=<fresh canonical UUID>.') }
     }
 } else {
     String runId
@@ -26,33 +28,21 @@ if (requestedId == null) {
     def evidenceRoot = layout.projectDirectory.dir('.codex-local/client-evidence').asFile.toPath().toAbsolutePath().normalize()
     def launchRoot = evidenceRoot.resolve("multiplayer-launch-${runId}")
     def evidence = evidenceRoot.resolve("multiplayer-${runId}")
-    def configurations = [:]
-    ['host': 'BackpackHost', 'guest': 'BackpackGuest'].each { role, username ->
-        String configName = 'multiplayer' + role.capitalize()
-        def run = loom.runConfigs.create(configName) {
-            inherit(loom.runConfigs.getByName('clientGameTest'))
-            getRunDirectory().set(launchRoot.resolve(role).toFile())
-            getGenerateRunConfig().set(false)
-            getSystemProperties().put('fabricated.backpacks.clientScenario', "multiplayer_${role}")
-            getSystemProperties().put('fabricated.backpacks.multiplayerRunId', runId)
-            getSystemProperties().put('fabricated.backpacks.multiplayerScope', scenario)
-            getSystemProperties().put('fabricated.backpacks.evidenceRoot', evidenceRoot.toString())
-            getSystemProperties().put('java.net.preferIPv4Stack', 'true')
-            getJvmArguments().add(role == 'host' ? '-Xmx3G' : '-Xmx2G')
-            List<String> original = new ArrayList<>(getProgramArguments().get())
-            List<String> arguments = []
-            for (int index = 0; index < original.size(); index++) {
-                if (original[index] == '--username') {
-                    if (++index >= original.size()) throw new GradleException('Inherited --username has no value.')
-                } else arguments.add(original[index])
-            }
-            arguments.addAll(['--username', username])
-            getProgramArguments().set(arguments)
-        }
-        configurations[role] = run
+    def roles = ['host': 'BackpackHost', 'guest': 'BackpackGuest']
+    def record = layout.buildDirectory.file("multiplayer/launch-record-${runId}.args").get().asFile.toPath()
+    // ForgeGradle assembles the launch command only inside the run task. Run it with a recorder
+    // standing in for the JVM: the exact command is written down and no game process starts.
+    def recorder = layout.projectDirectory.file('tools/record-launch.sh')
+    def realLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+    tasks.matching { it.name == 'runClient' }.configureEach {
+        javaLauncher.set(realLauncher.map { real ->
+            [getExecutablePath: { -> recorder }, getMetadata: { -> real.metadata }] as org.gradle.jvm.toolchain.JavaLauncher
+        })
+        environment 'FABRICATED_BACKPACKS_LAUNCH_RECORD', record.toString()
+        doFirst { Files.createDirectories(record.parent); Files.deleteIfExists(record) }
     }
     prepareClients.configure {
-        dependsOn tasks.named('gametestClasses'), tasks.named('configureClientLaunch')
+        dependsOn tasks.named('gametestClasses'), tasks.matching { it.name == 'runClient' }
         doLast {
             for (def directory = evidenceRoot; directory != null; directory = directory.parent) {
                 if (Files.isSymbolicLink(directory)) throw new GradleException('Evidence paths must not traverse symbolic links.')
@@ -76,57 +66,83 @@ if (requestedId == null) {
                 if (value.indexOf(0) >= 0 || value.contains('\n') || value.contains('\r')) throw new GradleException('A Java argument contains an unsupported control character.')
                 '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
             }
-            def encodeDliPath = { String value ->
-                StringBuilder encoded = new StringBuilder()
-                for (int index = 0; index < value.length(); index++) {
-                    char current = value.charAt(index)
-                    if (current == (char) 32 || current == (char) 64 && index > 0 && value.charAt(index - 1) == (char) 64)
-                        encoded.append(String.format('@@%04x', (int) current))
-                    else encoded.append(current)
+            // One argument per line, as the toolchain writes its @-files; quoted lines use Java's escaping.
+            def parseArgumentLine = { String line ->
+                String text = line.trim()
+                if (!text.startsWith('"')) return text
+                StringBuilder value = new StringBuilder()
+                for (int index = 1; index < text.length(); index++) {
+                    char current = text.charAt(index)
+                    if (current == (char) '\\' && index + 1 < text.length()) { value.append(text.charAt(++index)); continue }
+                    if (current == (char) '"') {
+                        if (index != text.length() - 1) throw new GradleException('Unsupported quoted argument: ' + line)
+                        return value.toString()
+                    }
+                    value.append(current)
                 }
-                encoded.toString()
+                throw new GradleException('Unterminated quoted argument: ' + line)
             }
+            def expandArgumentFile = { java.nio.file.Path source ->
+                List<String> expanded = []
+                Files.readAllLines(source, StandardCharsets.UTF_8).each { String line ->
+                    String text = line.trim()
+                    if (text.isEmpty() || text.startsWith('#')) return
+                    if (text.startsWith('@')) throw new GradleException('Unexpected nested argument file in ' + source)
+                    expanded.add(parseArgumentLine(text))
+                }
+                expanded
+            }
+            def task = tasks.named('runClient').get()
+            if (!Files.isRegularFile(record)) throw new GradleException('The client run did not record its launch command: ' + record)
+            List<String> recorded = []
+            for (String argument : new String(Files.readAllBytes(record), StandardCharsets.UTF_8).split('\u0000')) {
+                if (argument.isEmpty()) continue
+                if (argument.startsWith('@')) recorded.addAll(expandArgumentFile(java.nio.file.Path.of(argument.substring(1))))
+                else recorded.add(argument)
+            }
+            String mainClass = task.mainClass.get()
+            int mainIndex = recorded.indexOf(mainClass)
+            if (mainIndex < 0) throw new GradleException('The recorded command does not launch ' + mainClass)
+            List<String> baseJvm = new ArrayList<>(recorded.subList(0, mainIndex))
+            List<String> baseProgram = new ArrayList<>(recorded.subList(mainIndex + 1, recorded.size()))
+            if (!baseJvm.contains('-Dfabricated.backpacks.clientTests=true')) throw new GradleException('The client run is not configured for the automated harness.')
+            if (baseProgram.count('--username') != 1) throw new GradleException('The client run must have exactly one explicit username.')
+            int classpathIndex = baseJvm.indexOf('-cp'); if (classpathIndex < 0) classpathIndex = baseJvm.indexOf('-classpath')
+            if (classpathIndex < 0 || classpathIndex + 1 >= baseJvm.size()) throw new GradleException('The recorded command has no class path.')
             def commands = [:]
             Set<File> classpathFiles = new LinkedHashSet<>()
-            configurations.each { role, run ->
-                def task = tasks.named('runMultiplayer' + role.capitalize()).get()
-                // Use Loom's resolved runtime classpath and JavaExec JVM argument providers.
-                // Its generated classpath @file is flattened: Java does not expand nested @files.
-                List<String> jvm = []
-                task.getAllJvmArgs().each { String argument ->
-                    if (argument.startsWith('@')) {
-                        def source = java.nio.file.Path.of(argument.substring(1))
-                        if (!Files.readString(source).startsWith('-classpath\n'))
-                            throw new GradleException('Unexpected nested argument file: ' + source)
-                    } else jvm.add(argument)
-                }
-                jvm.addAll(['-classpath', task.classpath.asPath])
-                classpathFiles.addAll(task.classpath.files)
-                int dli = jvm.findIndexOf { it.startsWith('-Dfabric.dli.config=') }
-                if (dli < 0) throw new GradleException('Loom did not provide a dev-launch configuration.')
-                String encodedPath = jvm[dli].substring('-Dfabric.dli.config='.length())
-                String decodedPath = encodedPath.replaceAll(/@@([0-9a-fA-F]{4})/) { whole, hex -> Character.toString((char) Integer.parseInt(hex, 16)) }
-                def dliCopy = launchRoot.resolve(role + '-dev-launch.cfg')
-                Files.copy(java.nio.file.Path.of(decodedPath), dliCopy)
-                jvm[dli] = '-Dfabric.dli.config=' + encodeDliPath(dliCopy.toString())
-                List<String> program = new ArrayList<>(task.args ?: [])
-                task.argumentProviders.each { provider -> provider.asArguments().each { program.add(it.toString()) } }
-                if (program.count('--username') != 1) throw new GradleException('Every client must have exactly one explicit username.')
-                List<String> arguments = jvm + [task.mainClass.get()] + program
+            baseJvm[classpathIndex + 1].split(File.pathSeparator).each { classpathFiles.add(new File(it)) }
+            roles.each { role, username ->
+                List<String> jvm = baseJvm.findAll { !it.startsWith('-Dfabricated.backpacks.clientScenario=') && !it.startsWith('-Xmx') }
+                jvm.addAll(["-Dfabricated.backpacks.clientScenario=multiplayer_${role}".toString(),
+                        "-Dfabricated.backpacks.multiplayerRunId=${runId}".toString(),
+                        "-Dfabricated.backpacks.multiplayerScope=${scenario}".toString(),
+                        "-Dfabricated.backpacks.evidenceRoot=${evidenceRoot}".toString(),
+                        '-Djava.net.preferIPv4Stack=true', role == 'host' ? '-Xmx3G' : '-Xmx2G'])
+                jvm = jvm.findAll { !it.startsWith('-Dfabricated.backpacks.evidenceRoot=') || it == "-Dfabricated.backpacks.evidenceRoot=${evidenceRoot}".toString() }
+                List<String> program = new ArrayList<>(baseProgram)
+                program.set(program.indexOf('--username') + 1, username)
+                List<String> arguments = jvm + [mainClass] + program
                 def argsFile = launchRoot.resolve(role + '.args')
                 def probeFile = launchRoot.resolve(role + '-probe.args')
                 writeNew(argsFile, arguments.collect(quoteArgument).join('\n') + '\n')
                 writeNew(probeFile, (jvm + ['-version']).collect(quoteArgument).join('\n') + '\n')
                 def directory = launchRoot.resolve(role)
                 Files.createDirectory(directory)
-                // configureTests.eula=true is already an explicit project-level EULA acceptance.
-                writeNew(directory.resolve('eula.txt'), '# Synthetic acceptance server; project configureTests accepts the EULA.\neula=true\n')
-                commands[role] = [java: task.javaLauncher.get().executablePath.asFile.absolutePath,
+                // The same explicit project test-EULA acceptance as runClientGameTest.
+                writeNew(directory.resolve('eula.txt'), '# Synthetic acceptance server; the project test setup accepts the EULA.\neula=true\n')
+                def configurationCopy = launchRoot.resolve(role + '-arguments.json')
+                writeNew(configurationCopy, json([jvm: jvm, main: mainClass, program: program]))
+                // Only the toolchain's own additions travel with the command; the controller keeps its environment.
+                Map<String, String> environment = new LinkedHashMap<>()
+                task.environment.each { key, value ->
+                    if (key.toString() != 'FABRICATED_BACKPACKS_LAUNCH_RECORD' && System.getenv(key.toString()) != value.toString()) environment.put(key.toString(), value.toString())
+                }
+                commands[role] = [java: realLauncher.get().executablePath.asFile.absolutePath,
                         directory: directory.toString(), argument_file: argsFile.toString(), argument_sha256: digest(argsFile),
                         probe_file: probeFile.toString(), probe_sha256: digest(probeFile),
-                        configuration_file: dliCopy.toString(), configuration_sha256: digest(dliCopy),
-                        java_arguments: arguments, environment: run.environmentVars.get(),
-                        username: program[program.indexOf('--username') + 1],
+                        configuration_file: configurationCopy.toString(), configuration_sha256: digest(configurationCopy),
+                        java_arguments: arguments, environment: environment, username: username,
                         stdout: launchRoot.resolve(role + '-stdout.log').toString(), stderr: launchRoot.resolve(role + '-stderr.log').toString()]
             }
             List<Map> inputs = []
@@ -151,7 +167,7 @@ if (requestedId == null) {
                     minecraft_version: project.minecraft_version, evidence: evidence.toString(), commands: commands]
             writeNew(launchRoot.resolve('launch.json'), json(manifest))
             logger.lifecycle('MULTIPLAYER_PREPARED {}', launchRoot.resolve('launch.json'))
-            logger.lifecycle('No Minecraft JVM has started. Launch with tools/run-multiplayer.ps1 -RunId {} -Scenario {} -SkipPrepare', runId, scenario)
+            logger.lifecycle('No Minecraft JVM has started. Launch with tools/run_multiplayer.py --skip-prepare --run-id {}', runId)
         }
     }
 }

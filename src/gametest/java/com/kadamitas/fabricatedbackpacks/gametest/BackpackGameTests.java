@@ -1,7 +1,5 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
@@ -13,11 +11,37 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** The separate test mod's actual Fabric entrypoint; no production registrations are added here. */
-public final class BackpackGameTests implements ModInitializer {
+/** The separate native test mod; no fixture registrations enter the production artifact. */
+@net.minecraftforge.fml.common.Mod("fabricated_backpacks_tests")
+public final class BackpackGameTests {
     private static final String STRUCTURE = "fabricated_backpacks_tests:platform";
 
-    @Override public void onInitialize() {
+    private boolean initialized;
+    public BackpackGameTests(net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext context) {
+        if (net.minecraftforge.fml.loading.FMLEnvironment.dist == net.minecraftforge.api.distmarker.Dist.CLIENT)
+            com.kadamitas.fabricatedbackpacks.testplatform.impl.NativeClientGameTestImpl.register();
+        net.minecraftforge.registries.RegisterEvent.getBus(context.getModBusGroup()).addListener(event -> {
+            if (!initialized) {
+                initialized = true;
+                onInitialize();
+                for (Method method : getClass().getDeclaredMethods()) if (method.isAnnotationPresent(GameTest.class)) {
+                    com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(
+                            net.minecraft.core.registries.BuiltInRegistries.TEST_FUNCTION, testId(method),
+                            (java.util.function.Consumer<GameTestHelper>)helper -> invoke(method, helper));
+                }
+            }
+            com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.flush(event);
+        });
+    }
+    private void invoke(Method method, GameTestHelper helper) {
+        try { method.invoke(this, helper); }
+        catch (java.lang.reflect.InvocationTargetException failure) {
+            if (failure.getCause() instanceof RuntimeException runtime) throw runtime;
+            if (failure.getCause() instanceof Error error) throw error;
+            throw new IllegalStateException("GameTest failed: " + method.getName(), failure.getCause());
+        } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+    }
+    public void onInitialize() {
         ResourceGameTests.registerFixtures(); WorkstationGameTests.registerFixtures();
         SteamEngineGameTests.registerFixtures(); ConduitGameTests.registerFixtures();
     }
@@ -44,6 +68,9 @@ public final class BackpackGameTests implements ModInitializer {
         return Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", name);
     }
 
+    @GameTest(structure = STRUCTURE) public void nativeItemHandlerExtraction(GameTestHelper helper) { NativeHandlerGameTests.nativeItemHandlerExtraction(helper); }
+    @GameTest(structure = STRUCTURE) public void nativeEnergyHandlerTransfer(GameTestHelper helper) { NativeHandlerGameTests.nativeEnergyHandlerTransfer(helper); }
+    @GameTest(structure = STRUCTURE) public void nativeFluidHandlerTransfer(GameTestHelper helper) { NativeHandlerGameTests.nativeFluidHandlerTransfer(helper); }
     @GameTest(structure = STRUCTURE) public void tierComponentRoundTrips(GameTestHelper helper) { StorageGameTests.tierComponentRoundTrips(helper); }
     @GameTest(structure = STRUCTURE) public void upgradeCapacityAndNesting(GameTestHelper helper) { StorageGameTests.upgradeCapacityAndNesting(helper); }
     @GameTest(structure = STRUCTURE) public void memorySortingAndFilters(GameTestHelper helper) { StorageGameTests.memorySortingAndFilters(helper); }

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "function": "fabricated_backpacks_tests:backpack_game_tests_cooking_paused_persistence",
+  "environment": "minecraft:default",
+  "structure": "fabricated_backpacks_tests:platform",
+  "max_ticks": 600,
+  "required": true
+}

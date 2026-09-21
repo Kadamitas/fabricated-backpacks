@@ -1,0 +1,16 @@
+modLoader="javafml"
+loaderVersion="[66,)"
+license="MIT"
+
+[[mods]]
+modId="fabricated_backpacks_tests"
+version="${version}"
+displayName="Fabricated Backpacks Tests"
+description='''Development-only regression tests, never included in the release artifact.'''
+
+[[dependencies.fabricated_backpacks_tests]]
+modId="fabricated_backpacks"
+mandatory=true
+versionRange="[1.0.0,)"
+ordering="AFTER"
+side="BOTH"

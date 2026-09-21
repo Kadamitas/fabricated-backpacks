@@ -21,15 +21,15 @@ import com.kadamitas.fabricatedbackpacks.upgrade.InventoryMoves;
 import com.kadamitas.fabricatedbackpacks.upgrade.ToolRuntime;
 import com.kadamitas.fabricatedbackpacks.upgrade.TransferRuntime;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
-import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerItemContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageView;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.Transaction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -41,7 +41,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HopperBlock;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.material.Fluids;
-import team.reborn.energy.api.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
 
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackTestSupport.*;
 
@@ -228,9 +228,9 @@ public final class InceptionGameTests {
         Storage<FluidVariant> fluid = ResourceRuntime.fluidStorage(root);
         EnergyStorage energy = ResourceRuntime.energyStorage(root);
         Storage<ItemVariant> items = ResourceRuntime.itemStorage(root, null);
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(fluid.insert(WATER, 17, outer), 17L, "An outer tank view reaches the first child's tank");
-            try (Transaction nested = outer.openNested()) { energy.insert(37, nested); nested.commit(); }
+            try (Transaction nested = Transaction.open(outer)) { energy.insert(37, nested); nested.commit(); }
             new BackpackItemStorage(root, null).insert(ItemVariant.of(Items.EMERALD), 9, outer);
             helper.assertValueEqual(tank(child, 0).getAmount(), 17L, "The leaf exposes the same transactional resource");
             helper.assertValueEqual(ResourceRuntime.batteryStored(child, 1), 37L, "Nested energy changes use the physical child upgrade");
@@ -241,7 +241,7 @@ public final class InceptionGameTests {
         BagInventory rolledBack = savedChild(helper, root, 0);
         helper.assertValueEqual(tank(rolledBack, 0).getAmount(), 0L, "Parent serialization cannot retain a rolled-back child resource");
         helper.assertValueEqual(ResourceRuntime.batteryStored(rolledBack, 1), 0L, "Rolled-back child energy is absent from a real codec round trip");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             fluid.insert(WATER, 12345, outer);
             energy.insert(75, outer);
             helper.assertValueEqual(items.insert(ItemVariant.of(Items.STONE), 70, outer), 70L, "Item API insertion uses the child's own free slots");
@@ -253,14 +253,14 @@ public final class InceptionGameTests {
         helper.assertValueEqual(count(saved, Items.STONE), 70, "Committed child item counts survive parent serialization");
         helper.assertValueEqual(child.getItem(0).getCount(), 64, "A small child's resource API retains its native stack limit");
         helper.assertValueEqual(tank(root, 1).getAmount(), 0L, "Children-first resource insertion leaves the outer tank untouched");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(items.extract(ItemVariant.of(child.stack()), 1, outer), 0L, "An active aggregate cannot extract its own child carrier");
         }
         var oldFluid = fluid.iterator().next();
         var oldItem = viewOf(items, ItemVariant.of(Items.STONE));
         BagInventory replacement = bag(BackpackTier.IRON, UpgradeKind.TANK, UpgradeKind.BATTERY);
         root.setItem(0, replacement.stack());
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(oldFluid.extract(WATER, 1, outer), 0L, "A removed child's retained fluid view is inert");
             helper.assertValueEqual(oldItem.extract(ItemVariant.of(Items.STONE), 1, outer), 0L, "A removed child's retained item view is inert");
             outer.commit();
@@ -281,12 +281,12 @@ public final class InceptionGameTests {
         EnergyStorage energy = context.find(EnergyStorage.ITEM);
         ItemStack before = holder.getItem(0).copy();
         helper.assertTrue(fluid != null && energy != null, "Real item lookups expose nested fluid and energy");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             fluid.insert(WATER, 23, outer);
             energy.insert(39, outer);
         }
         assertStack(helper, holder.getItem(0), before, "Aborting item-context exchange restores every original parent component");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             fluid.insert(WATER, 23, outer);
             energy.insert(39, outer);
             outer.commit();
@@ -296,7 +296,7 @@ public final class InceptionGameTests {
         helper.assertValueEqual(ResourceRuntime.batteryStored(savedChild(helper, committed, 0), 1), 39L, "The actual holder item owns committed child energy");
         var oldView = fluid.iterator().next();
         committed.setItem(0, bag(BackpackTier.IRON, UpgradeKind.TANK, UpgradeKind.BATTERY).stack());
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(oldView.extract(WATER, 1, outer), 0L, "Retained item-context views reject a different child in the same physical slot");
         }
 
@@ -313,14 +313,14 @@ public final class InceptionGameTests {
         try {
             BackpackConfig.configure(ConfigFile.decode("{\"storage\":{\"disableConnections\":true,\"itemFluidAccess\":false}}"));
             var deniedItems = ItemStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH);
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertTrue(deniedItems == null || deniedItems.insert(ItemVariant.of(Items.STONE), 1, outer) == 0,
                         "Disabled item connections cannot fall back to a generic container adapter");
             }
             helper.assertTrue(FluidStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH) == null, "Disabled connections reject new fluid lookups");
             helper.assertTrue(EnergyStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH) == null, "Disabled connections reject new energy lookups");
             helper.assertTrue(context.find(FluidStorage.ITEM) == null, "Disabled item fluid access rejects new lookups");
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(exposedItems.insert(ItemVariant.of(Items.STONE), 1, outer), 0L, "Retained item adapters honor disabled connections");
                 helper.assertValueEqual(exposedFluid.insert(WATER, 1, outer), 0L, "Retained fluid adapters honor disabled connections");
                 helper.assertValueEqual(exposedEnergy.insert(1, outer), 0L, "Retained energy adapters honor disabled connections");
@@ -329,7 +329,7 @@ public final class InceptionGameTests {
             BackpackConfig.configure(ConfigFile.decode("{\"storage\":{\"blockedConnections\":[\"minecraft:stone\"]}}"));
             helper.setBlock(relative.relative(Direction.NORTH), Blocks.STONE.defaultBlockState());
             var blockedItems = ItemStorage.SIDED.find(helper.getLevel(), position, Direction.NORTH);
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertTrue(blockedItems == null || blockedItems.insert(ItemVariant.of(Items.STONE), 1, outer) == 0,
                         "A configured neighboring block rejects sided access without generic fallback");
             }

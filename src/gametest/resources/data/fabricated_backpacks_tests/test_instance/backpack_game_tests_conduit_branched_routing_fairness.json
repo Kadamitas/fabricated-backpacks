@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "function": "fabricated_backpacks_tests:backpack_game_tests_conduit_branched_routing_fairness",
+  "environment": "minecraft:default",
+  "structure": "fabricated_backpacks_tests:platform",
+  "max_ticks": 240,
+  "required": true
+}

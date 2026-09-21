@@ -590,13 +590,13 @@ public final class UpgradeGameTests {
         BackpackEquipment.set(player, basic.stack());
         BlockPos stone = helper.absolutePos(new BlockPos(3, 1, 3));
         helper.getLevel().setBlockAndUpdate(stone, Blocks.STONE.defaultBlockState());
-        net.fabricmc.fabric.api.event.player.AttackBlockCallback.EVENT.invoker().interact(player, helper.getLevel(), InteractionHand.MAIN_HAND, stone, Direction.UP);
+        net.minecraftforge.event.entity.player.PlayerInteractEvent.LeftClickBlock.BUS.post(new net.minecraftforge.event.entity.player.PlayerInteractEvent.LeftClickBlock(player, stone, Direction.UP, net.minecraftforge.event.entity.player.PlayerInteractEvent.LeftClickBlock.Action.START));
         BackpackTestSupport.assertStack(helper, player.getMainHandItem(), pick, "Real attack-block hook selects the fastest valid owned tool with its damage intact");
         BagInventory live = BagInventory.of(BackpackEquipment.get(player));
         helper.assertValueEqual(count(live, Items.STICK), 1, "Tool replacement stores the original held item");
         helper.assertValueEqual(count(live, Items.DIAMOND_PICKAXE), 0, "Tool movement never leaves a duplicate in the backpack");
         var target = helper.spawn(EntityTypes.PIG, new BlockPos(5, 1, 4));
-        net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.invoker().interact(player, helper.getLevel(), InteractionHand.MAIN_HAND, target, null);
+        net.minecraftforge.event.entity.player.AttackEntityEvent.BUS.post(new net.minecraftforge.event.entity.player.AttackEntityEvent(player, target));
         helper.assertTrue(player.getMainHandItem().is(Items.DIAMOND_SWORD), "Real attack-entity hook selects the owned sword");
         helper.assertValueEqual(InventoryMoves.count(BagInventory.of(BackpackEquipment.get(player)), pick), 1, "Weapon swap returns the previous tool with its exact damage once");
         target.discard();

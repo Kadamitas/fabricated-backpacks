@@ -54,9 +54,9 @@ final class WorkstationGameTests {
     private static RecipeSerializer<ChoiceRecipe> secondChoice;
     static void registerFixtures() {
         ChoiceRecipe first = new ChoiceRecipe(false), second = new ChoiceRecipe(true);
-        firstChoice = Registry.register(BuiltInRegistries.RECIPE_SERIALIZER, Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "choice_a"),
+        firstChoice = com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(BuiltInRegistries.RECIPE_SERIALIZER, Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "choice_a"),
                 new RecipeSerializer<>(MapCodec.unit(first), StreamCodec.unit(first)));
-        secondChoice = Registry.register(BuiltInRegistries.RECIPE_SERIALIZER, Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "choice_b"),
+        secondChoice = com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(BuiltInRegistries.RECIPE_SERIALIZER, Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "choice_b"),
                 new RecipeSerializer<>(MapCodec.unit(second), StreamCodec.unit(second)));
     }
     private record ChoiceRecipe(boolean second) implements CraftingRecipe {

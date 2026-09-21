@@ -9,8 +9,8 @@ import com.kadamitas.fabricatedbackpacks.settings.SettingsRuntime;
 import com.kadamitas.fabricatedbackpacks.settings.SettingsTemplate;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.Transaction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.NbtOps;
@@ -44,7 +44,7 @@ final class SettingsGameTests {
         source.setFilter(upgrade(source, 3), 0, new ItemStack(Items.GOLD_INGOT));
         source.updateSettings(upgrade(source, 1), tag -> { tag.putBoolean("playing", true); tag.putString("repeat", "all"); tag.putLong("song_finish", 999); });
         var sourceTank = new BackpackTank(source, upgrade(source, 2), false);
-        try (var transaction = Transaction.openOuter()) { sourceTank.insert(FluidVariant.of(Fluids.WATER), 81000, transaction); transaction.commit(); }
+        try (var transaction = Transaction.openRoot()) { sourceTank.insert(FluidVariant.of(Fluids.WATER), 81000, transaction); transaction.commit(); }
         SettingsTemplate template = SettingsTemplate.capture(source);
         var ops = RegistryOps.create(NbtOps.INSTANCE, helper.getLevel().registryAccess());
         var encoded = SettingsTemplate.CODEC.encodeStart(ops, template).getOrThrow();
@@ -55,7 +55,7 @@ final class SettingsGameTests {
         destination.setItem(0, new ItemStack(Items.GOLD_INGOT, 17));
         destination.upgradeInventory(upgrade(destination, 1)).setItem(0, new ItemStack(Items.MUSIC_DISC_CAT));
         var destinationTank = new BackpackTank(destination, upgrade(destination, 2), false);
-        try (var transaction = Transaction.openOuter()) { destinationTank.insert(FluidVariant.of(Fluids.LAVA), 41, transaction); transaction.commit(); }
+        try (var transaction = Transaction.openRoot()) { destinationTank.insert(FluidVariant.of(Fluids.LAVA), 41, transaction); transaction.commit(); }
         destination.updateSettings(upgrade(destination, 1), tag -> { tag.putBoolean("playing", false); tag.putLong("song_finish", 42); tag.putBoolean("shuffle", true); });
         String identity = destination.identity();
         decoded.apply(destination);

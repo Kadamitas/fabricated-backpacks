@@ -4,11 +4,12 @@ import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitFilterMode;
 import com.kadamitas.fabricatedbackpacks.automation.conduit.ConduitKind;
 import com.kadamitas.fabricatedbackpacks.client.automation.ConduitScreen;
 import mezz.jei.api.IModPlugin;
-import mezz.jei.api.fabric.ingredients.fluids.IJeiFluidIngredient;
+import mezz.jei.api.JeiPlugin;
+import net.minecraftforge.fluids.FluidStack;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.runtime.IJeiRuntime;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.loader.api.FabricLoader;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import net.minecraftforge.fml.ModList;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -27,6 +28,7 @@ import java.util.stream.IntStream;
 import static com.kadamitas.fabricatedbackpacks.gametest.BackpackClientGameTests.*;
 
 /** Optional test plugin observes JEI's public API; acceptance actions use native keys and mouse drags. */
+@JeiPlugin
 public final class JeiConduitClientAcceptance implements IModPlugin {
     private static volatile IJeiRuntime runtime;
     @Override public Identifier getPluginUid() { return Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "jei_acceptance"); }
@@ -37,7 +39,7 @@ public final class JeiConduitClientAcceptance implements IModPlugin {
         Path receipt = ClientAcceptanceFiles.ROOT.resolve("automation-jei-pass.json");
         try {
             Files.deleteIfExists(receipt);
-            var jei = FabricLoader.getInstance().getModContainer("jei").orElseThrow(() ->
+            var jei = ModList.getModContainerById("jei").orElseThrow(() ->
                     new AssertionError("JEI acceptance requires the actual optional runtime: use -PwithJei=true"));
             try (var world = context.worldBuilder().create()) {
                 world.getServer().runCommand("time set day");
@@ -57,8 +59,8 @@ public final class JeiConduitClientAcceptance implements IModPlugin {
                 ConduitFilterClientAcceptance.selectPanel(context, ConduitKind.FLUID);
                 ConduitFilterClientAcceptance.setMode(context, ConduitKind.FLUID, ConduitFilterMode.BLOCK);
                 search(context, "water");
-                drag(context, ingredient -> ingredient.getIngredient() instanceof IJeiFluidIngredient fluid
-                        && fluid.getFluidVariant().getFluid() == Fluids.WATER, 0);
+                drag(context, ingredient -> ingredient.getIngredient() instanceof FluidStack fluid
+                        && !fluid.isEmpty() && fluid.getFluid() == Fluids.WATER, 0);
                 await(context, ConduitKind.FLUID, 0, "water");
                 context.takeScreenshot("automation-jei-fluid-search-and-ghost");
                 search(context, "@minecraft lava bucket");
@@ -82,7 +84,7 @@ public final class JeiConduitClientAcceptance implements IModPlugin {
             var proof = new com.google.gson.JsonObject();
             proof.addProperty("scope", "automation_jei"); proof.addProperty("passed", true);
             proof.addProperty("pid", ProcessHandle.current().pid()); proof.addProperty("recorded_at", System.currentTimeMillis());
-            proof.addProperty("jei_version", jei.getMetadata().getVersion().getFriendlyString());
+            proof.addProperty("jei_version", jei.getModInfo().getVersion().toString());
             proof.add("checks", new com.google.gson.Gson().toJsonTree(List.of(
                     "Real optional JEI runtime, native search-field click/text input and mouse drag of cobblestone into an allow ghost.",
                     "Native JEI fluid and lava-bucket drags reach water/lava block ghosts without consuming or granting inventory.",
@@ -102,7 +104,7 @@ public final class JeiConduitClientAcceptance implements IModPlugin {
         }), "JEI observes an exclusion area covering the complete attached filter panel");
     }
     private static void search(ClientGameTestContext context, String query) {
-        // This Fabric JEI build leaves focusSearch unbound. Use its visible bottom-right field.
+        // Use the actual visible search field, independent of optional JEI key bindings.
         int[] point = context.computeOnClient(client -> {
             var properties = runtime.getScreenHelper().getGuiProperties(client.gui.screen()).orElseThrow();
             return new int[]{(properties.guiRight() + properties.screenWidth()) / 2, properties.screenHeight() - 12};
@@ -113,9 +115,12 @@ public final class JeiConduitClientAcceptance implements IModPlugin {
             context.takeScreenshot("automation-jei-search-focus-failure");
             throw new AssertionError("Native click must focus the visible JEI search field", failure);
         }
-        context.getInput().holdKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL);
+        int selectAllModifier = (net.minecraft.client.input.InputQuirks.EDIT_SHORTCUT_KEY_MODIFIER
+                & com.mojang.blaze3d.platform.InputConstants.MOD_SUPER) != 0
+                ? com.mojang.blaze3d.platform.InputConstants.KEY_LGUI : com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL;
+        context.getInput().holdKey(selectAllModifier);
         try { context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_A); }
-        finally { context.getInput().releaseKey(com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL); }
+        finally { context.getInput().releaseKey(selectAllModifier); }
         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_BACKSPACE);
         context.getInput().typeChars(query);
         context.waitFor(client -> runtime.getIngredientFilter().getFilterText().equals(query));

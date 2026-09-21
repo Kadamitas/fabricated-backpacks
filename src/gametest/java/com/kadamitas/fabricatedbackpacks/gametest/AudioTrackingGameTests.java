@@ -11,9 +11,8 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.embedded.EmbeddedChannel;
-import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.fabric.impl.networking.RegistrationPayload;
+import com.kadamitas.fabricatedbackpacks.platform.network.PlayerLookup;
+import com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.Connection;
@@ -230,13 +229,15 @@ public final class AudioTrackingGameTests {
             player.connection.handleAcceptPlayerLoad(new ServerboundPlayerLoadedPacket());
             player.setPos(helper.absoluteVec(new Vec3(3.5, 1, 5.5)));
             player.connection.handleCustomPayload(new ServerboundCustomPayloadPacket(
-                    new RegistrationPayload(RegistrationPayload.REGISTER, List.of(JukeboxAudio.TYPE.id()))));
+                    BackpackTestSupport.registerChannels(java.util.Set.of(JukeboxAudio.TYPE.id()))));
         }
 
         private void capture(Packet<?> packet) {
             if (packet instanceof BundlePacket<?> bundle) {
                 for (Packet<?> child : bundle.subPackets()) capture(child);
             } else {
+                if (packet instanceof ClientboundCustomPayloadPacket custom)
+                    packet = new ClientboundCustomPayloadPacket(BackpackTestSupport.decode(player, custom.payload()));
                 packets.add(packet);
                 if (packet instanceof ClientboundChunkBatchFinishedPacket) pendingAcknowledgments++;
             }

@@ -19,23 +19,21 @@ import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import com.kadamitas.fabricatedbackpacks.resource.BackpackTank;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
-import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
-import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
-import net.fabricmc.fabric.api.transfer.v1.item.ItemVariant;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
-import net.fabricmc.fabric.api.transfer.v1.storage.SlottedStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.CombinedStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleSlotStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleVariantStorage;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
-import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
+import com.kadamitas.fabricatedbackpacks.platform.NativeEvents.ServerChunkEvents;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidConstants;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ItemVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageView;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SlottedStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.CombinedStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SingleSlotStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.SingleVariantStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.TransactionContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
@@ -70,8 +68,8 @@ import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import team.reborn.energy.api.EnergyStorage;
-import team.reborn.energy.api.base.SimpleEnergyStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.EnergyStorage;
+import com.kadamitas.fabricatedbackpacks.gametest.fixture.SimpleEnergyStorage;
 
 import java.util.EnumSet;
 import java.util.EnumMap;
@@ -103,17 +101,19 @@ public final class ConduitGameTests {
     public static void registerFixtures() {
         if (machineBlock != null) return;
         Identifier id = Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", "conduit_machine");
-        machineBlock = Registry.register(BuiltInRegistries.BLOCK, id,
+        machineBlock = com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(BuiltInRegistries.BLOCK, id,
                 new MachineBlock(Block.Properties.of().setId(ResourceKey.create(Registries.BLOCK, id))));
-        machineType = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, id,
-                FabricBlockEntityTypeBuilder.create(Machine::new, machineBlock).build());
+        machineType = com.kadamitas.fabricatedbackpacks.platform.NativeRegistries.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, id,
+                new BlockEntityType<>(Machine::new, java.util.Set.of(machineBlock)));
         ItemStorage.SIDED.registerForBlockEntity((machine, side) -> machine.itemEnabled && machine.itemSides.contains(side)
                 ? machine.itemHandler == null ? machine.itemApi : machine.itemHandler.get() : null, machineType);
         FluidStorage.SIDED.registerForBlockEntity((machine, side) -> machine.fluidEnabled && machine.fluidSides.contains(side)
                 ? machine.fluidHandler == null ? machine.fluidApi : machine.fluidHandler.get() : null, machineType);
         EnergyStorage.SIDED.registerForBlockEntity((machine, side) -> machine.energyEnabled && machine.energySides.contains(side)
                 ? machine.energyHandler == null ? machine.energyApi : machine.energyHandler.apply(side) : null, machineType);
-        PlayerBlockBreakEvents.BEFORE.register((level, player, position, state, entity) -> !PROTECTED_MINING.contains(position));
+        net.minecraftforge.event.level.BlockEvent.BreakEvent.BUS.addListener((net.minecraftforge.event.level.BlockEvent.BreakEvent event) -> {
+            if (PROTECTED_MINING.contains(event.getPos())) event.setResult(net.minecraftforge.common.util.Result.DENY);
+        });
     }
 
     private static final class MachineBlock extends BaseEntityBlock {
@@ -482,21 +482,23 @@ public final class ConduitGameTests {
         source.items.setItem(0, new ItemStack(Items.DIAMOND, 32)); fill(source.tank, mb(1_000)); source.energy.amount = 1_000;
         var bundle = conduit(helper, new BlockPos(3, 2, 3), ConduitKind.values());
         port(bundle, Direction.WEST, ConduitMode.EXTRACT); port(bundle, Direction.EAST, ConduitMode.INSERT);
-        helper.runAfterDelay(6, () -> {
-            // Vanilla runs this callback after END_LEVEL_TICK. Empty/non-exporting sources must leave useful work for later API callers.
+        helper.startSequence().thenIdle(6).thenWaitUntil(() -> {
+            // Other GameTests share this world's bounded topology/endpoint work.
+            // Await a usable route within the test timeout rather than assuming
+            // it is ready on tick six. The late-producer and abort assertions
+            // still run after END_LEVEL_TICK, before any subsequent transfer.
             EnergyStorage late = EnergyStorage.SIDED.find(helper.getLevel(), bundle.getBlockPos(), Direction.WEST);
             helper.assertTrue(late != null, "A late producer finds the loaded forwarding receiver");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(late.insert(1, transaction), 1L, "A scheduler pass with nothing transferable preserves work for a later producer");
             }
             helper.assertValueEqual(target.energy.amount, 0L, "The late probe still obeys outer abort");
-        });
-        helper.runAfterDelay(8, () -> onMachineTick(helper, source, () -> {
+        }).thenExecuteAfter(2, () -> onMachineTick(helper, source, () -> {
             var items = ItemStorage.SIDED.find(helper.getLevel(), bundle.getBlockPos(), Direction.WEST);
             var fluids = FluidStorage.SIDED.find(helper.getLevel(), bundle.getBlockPos(), Direction.WEST);
             var energy = EnergyStorage.SIDED.find(helper.getLevel(), bundle.getBlockPos(), Direction.WEST);
             helper.assertTrue(items != null && fluids != null && energy != null, "All real forwarding capabilities are present");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIAMOND), 3, transaction), 3L, "Nested item insertion reaches its endpoint");
                 helper.assertValueEqual(source.itemStorage.extract(ItemVariant.of(Items.DIAMOND), 3, transaction), 3L, "The caller supplies exactly the accepted items");
                 helper.assertValueEqual(fluids.insert(WATER, mb(50), transaction), mb(50), "Nested fluid insertion reaches its endpoint");
@@ -514,7 +516,7 @@ public final class ConduitGameTests {
             target.items.setItem(0, new ItemStack(Items.DIAMOND, 63));
             for (int slot = 1; slot < 4; slot++) target.items.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
             target.tank.capacity = mb(100); fill(target.tank, mb(90)); target.energy.acceptance = 2;
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 long movedItems = items.insert(ItemVariant.of(Items.DIAMOND), 8, transaction);
                 long movedFluid = fluids.insert(WATER, mb(50), transaction);
                 long movedEnergy = energy.insert(73, transaction);
@@ -531,7 +533,7 @@ public final class ConduitGameTests {
             long previousEnergy = target.energy.amount;
             // The endpoint replaces itself during insertion. The real world change is not part of the resource transaction.
             target.energy.afterInsert = () -> helper.getLevel().setBlock(source.getBlockPos(), Blocks.STONE.defaultBlockState(), 3);
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(energy.insert(1, transaction), 0L, "An identity change during insertion rejects the entire route");
                 transaction.commit();
             }
@@ -540,7 +542,7 @@ public final class ConduitGameTests {
             helper.getLevel().setBlock(bundle.getBlockPos(), Blocks.AIR.defaultBlockState(), 3);
             var replacement = conduit(helper, new BlockPos(3, 2, 3), ConduitKind.values());
             port(replacement, Direction.WEST, ConduitMode.EXTRACT);
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(items.insert(ItemVariant.of(Items.DIAMOND), 1, transaction), 0L, "Retained item capability cannot cross a replaced bundle identity");
                 helper.assertValueEqual(fluids.insert(WATER, 1, transaction), 0L, "Retained fluid capability cannot cross a replaced bundle identity");
                 helper.assertValueEqual(energy.insert(1, transaction), 0L, "Retained energy capability cannot cross a replaced bundle identity");
@@ -574,13 +576,13 @@ public final class ConduitGameTests {
             var first = EnergyStorage.SIDED.find(helper.getLevel(), west.getBlockPos(), Direction.EAST);
             var alias = EnergyStorage.SIDED.find(helper.getLevel(), north.getBlockPos(), Direction.SOUTH);
             helper.assertTrue(first != null && alias != null, "Both faces expose forwarding receivers");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(first.insert(96, transaction), 96L, "A push-only generator can use a conduit receiver");
                 source.energy.extract(96, transaction);
             }
             helper.assertValueEqual(source.energy.amount, 2_000L, "A simulated generator push refunds its source");
             helper.assertValueEqual(target.energy.amount, 0L, "A simulated push does not leave charge in the network or receiver");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(alias.insert(96, transaction), 96L, "Aborted first-face use did not consume the shared allowance");
                 source.energy.extract(96, transaction);
                 transaction.commit();
@@ -595,7 +597,7 @@ public final class ConduitGameTests {
                     "Two faces and push plus pull cannot multiply a physical source's allowance");
             helper.assertValueEqual(source.energy.amount + target.energy.amount, 2_000L, "Mixed forwarding and pulling conserves energy");
             long remaining = BackpackConfig.get().automation().conduits().energyPerTick() - transferred;
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 long accepted = first.insert(256, transaction);
                 helper.assertTrue(accepted <= remaining, "A retained third alias cannot exceed the remaining physical allowance");
                 source.energy.extract(accepted, transaction);
@@ -606,7 +608,7 @@ public final class ConduitGameTests {
             var rightBag = bag(BackpackTier.IRON, UpgradeKind.BATTERY);
             EnergyStorage charger = ResourceRuntime.energyStorage(leftBag);
             long chargeRate = BackpackConfig.get().upgrades().battery().transfer(leftBag.rows(), leftBag.multiplier());
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 // Portable battery calls are rate-limited operations, not an unbounded fixture setter.
                 // The placed output tick budget is exercised only after these exact charge operations.
                 for (long charged = 0; charged < 1_000; ) {
@@ -669,7 +671,7 @@ public final class ConduitGameTests {
                     helper.assertFalse(first.current(), "A retained bundle is inactive while its physical mapping is absent");
                     ConduitNetworks.register(first);
                     ConduitNetworks.describe(first);
-                    try (Transaction transaction = Transaction.openOuter()) {
+                    try (Transaction transaction = Transaction.openRoot()) {
                         helper.assertValueEqual(held.insert(ItemVariant.of(Items.EMERALD), 1, transaction), 0L,
                                 "A retained port cannot operate through a bundle registration gap");
                         transaction.commit();
@@ -683,7 +685,7 @@ public final class ConduitGameTests {
                 try {
                     ConduitNetworks.neighborChanged(helper.getLevel(), source.getBlockPos());
                     ConduitNetworks.describe(first);
-                    try (Transaction transaction = Transaction.openOuter()) {
+                    try (Transaction transaction = Transaction.openRoot()) {
                         helper.assertValueEqual(held.insert(ItemVariant.of(Items.EMERALD), 1, transaction), 0L,
                                 "A retained port rejects a source whose physical registration is incomplete");
                         transaction.commit();
@@ -695,11 +697,11 @@ public final class ConduitGameTests {
                 helper.assertValueEqual((long) count(source.items, Items.EMERALD), sourceBefore,
                         "Registration gaps preserve all actual source items");
                 // This is an event-boundary fixture, not a claim that the GameTest's ticketed chunk actually unloaded.
-                ServerChunkEvents.CHUNK_UNLOAD.invoker().onChunkUnload(helper.getLevel(), chunk);
-                try (Transaction transaction = Transaction.openOuter()) {
+                ServerChunkEvents.CHUNK_UNLOAD.fire(callback -> callback.accept(helper.getLevel(), chunk));
+                try (Transaction transaction = Transaction.openRoot()) {
                     helper.assertValueEqual(held.insert(ItemVariant.of(Items.EMERALD), 1, transaction), 0L, "The unload callback immediately fences a retained network route");
                     transaction.commit();
-                } finally { ServerChunkEvents.CHUNK_LOAD.invoker().onChunkLoad(helper.getLevel(), chunk, false); }
+                } finally { ServerChunkEvents.CHUNK_LOAD.fire(callback -> callback.accept(helper.getLevel(), chunk, false)); }
                 helper.assertValueEqual((long) count(source.items, Items.EMERALD), sourceBefore, "Lifecycle invalidation cannot withdraw a source item");
                 BlockPos unloaded = new BlockPos(20_000_000, 100, 20_000_000);
                 helper.assertFalse(helper.getLevel().hasChunkAt(unloaded), "The distant test coordinate is actually unloaded");
@@ -772,7 +774,7 @@ public final class ConduitGameTests {
                         "The no-circulation observation covers a completed connected network, not an unavailable route");
                 EnergyStorage forward = EnergyStorage.SIDED.find(helper.getLevel(), leftOutput.getBlockPos(), Direction.SOUTH);
                 helper.assertTrue(forward != null && forward.supportsInsertion(), "The automatic source has a real forwarding ingress");
-                try (Transaction transaction = Transaction.openOuter()) {
+                try (Transaction transaction = Transaction.openRoot()) {
                     helper.assertValueEqual(forward.insert(37, transaction), 0L,
                             "Direct API pushes apply the same physical-storage loop guard as natural scheduled extraction");
                     transaction.commit();
@@ -980,7 +982,7 @@ public final class ConduitGameTests {
     }
 
     private static void pushOne(GameTestHelper helper, Machine source, EnergyStorage port) {
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(port.insert(1, transaction), 1L, "The physical source forwards one accepted unit");
             helper.assertValueEqual(source.energy.extract(1, transaction), 1L, "The source supplies that same unit in the shared transaction");
             transaction.commit();
@@ -1034,7 +1036,7 @@ public final class ConduitGameTests {
         // Put the denied variants first: a filtered view must advance to later matching slots.
         source.setItem(0, backpackIron());
         source.setItem(1, new ItemStack(Items.COBBLESTONE, 24));
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(new BackpackTank(source, upgrade(source, 0), false).insert(BACKPACK_LAVA, BACKPACK_LAVA_AMOUNT, transaction),
                     BACKPACK_LAVA_AMOUNT, "The source starts with exact lava including fractional millibuckets");
             helper.assertValueEqual(new BackpackTank(source, upgrade(source, 1), false).insert(BACKPACK_WATER, BACKPACK_WATER_AMOUNT, transaction),
@@ -1157,7 +1159,7 @@ public final class ConduitGameTests {
         helper.assertValueEqual(retained.getResource(), ItemVariant.of(cobble), "Slot73 exposes its exact component-bearing resource");
         helper.assertValueEqual(first.getSlot(lastSlot).getResource(), ItemVariant.of(amethyst), "The final physical slot is indexed without truncation");
         ItemStack beforeProbe = inventory.stack().copy();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(retained.extract(ItemVariant.of(cobble), 2, transaction), 2L, "An indexed view performs a real tentative extraction");
         }
         assertStack(helper, inventory.stack(), beforeProbe, "Indexed extraction abort preserves the complete source snapshot");
@@ -1217,11 +1219,11 @@ public final class ConduitGameTests {
         helper.assertValueEqual(childView.getResource(), ItemVariant.of(Items.DIAMOND), "Child-first indexing addresses the actual child");
         helper.assertValueEqual(rootView.getResource(), ItemVariant.of(Items.STONE), "The root follows the child without shifting its physical slots");
         ItemStack before = root.stack().copy();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(childView.extract(ItemVariant.of(Items.DIAMOND), 2, transaction), 2L, "Indexed child extraction joins the actual transaction");
         }
         assertStack(helper, root.stack(), before, "Nested indexed extraction abort restores the serialized root and child");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(childView.extract(ItemVariant.of(Items.DIAMOND), 2, transaction), 2L, "A subsequent indexed child extraction can commit");
             transaction.commit();
         }
@@ -1235,7 +1237,7 @@ public final class ConduitGameTests {
         root.setItem(0, ItemStack.EMPTY);
         helper.assertValueEqual(indexed.getSlotCount(), rootSize, "Removing a child shrinks the advertised index");
         helper.assertTrue(childView.isResourceBlank(), "A retained detached child view becomes blank");
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(childView.extract(ItemVariant.of(Items.DIAMOND), 1, transaction), 0L, "A retained detached child view cannot extract");
             helper.assertValueEqual(childView.insert(ItemVariant.of(Items.DIAMOND), 1, transaction), 0L, "A retained detached child view cannot insert");
             transaction.commit();
@@ -1315,7 +1317,7 @@ public final class ConduitGameTests {
 
             link.pipe().setFilter(ConduitKind.ITEM, Direction.WEST, backpackFilter(ConduitFilterMode.ALLOW));
             link.pipe().setFilter(ConduitKind.FLUID, Direction.WEST, backpackFilter(ConduitFilterMode.ALLOW));
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(backpackForward(helper, sourceItems, items, cobble, 1, transaction), 0L, "An empty source item whitelist fails closed");
                 helper.assertValueEqual(backpackForward(helper, sourceFluids, fluids, BACKPACK_WATER, 1, transaction), 0L, "An empty source fluid whitelist fails closed");
                 transaction.commit();
@@ -1324,7 +1326,7 @@ public final class ConduitGameTests {
             link.pipe().setFilter(ConduitKind.FLUID, Direction.WEST, backpackFilter(ConduitFilterMode.BLOCK));
             link.pipe().setFilter(ConduitKind.ITEM, Direction.EAST, backpackFilter(ConduitFilterMode.ALLOW));
             link.pipe().setFilter(ConduitKind.FLUID, Direction.EAST, backpackFilter(ConduitFilterMode.ALLOW));
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(backpackForward(helper, sourceItems, items, cobble, 1, transaction), 0L, "An empty destination item whitelist fails closed");
                 helper.assertValueEqual(backpackForward(helper, sourceFluids, fluids, BACKPACK_WATER, 1, transaction), 0L, "An empty destination fluid whitelist fails closed");
                 transaction.commit();
@@ -1333,10 +1335,10 @@ public final class ConduitGameTests {
 
             link.pipe().setFilter(ConduitKind.ITEM, Direction.EAST, backpackFilter(ConduitFilterMode.BLOCK));
             link.pipe().setFilter(ConduitKind.FLUID, Direction.EAST, backpackFilter(ConduitFilterMode.BLOCK));
-            try (Transaction outer = Transaction.openOuter()) {
+            try (Transaction outer = Transaction.openRoot()) {
                 helper.assertValueEqual(backpackForward(helper, sourceItems, items, cobble, 8, outer), 8L, "Empty blacklists admit the full item allowance through retained APIs");
                 helper.assertValueEqual(backpackForward(helper, sourceFluids, fluids, BACKPACK_WATER, mb(50), outer), mb(50), "Empty blacklists admit exact fluid droplets");
-                try (Transaction nested = outer.openNested()) {
+                try (Transaction nested = Transaction.open(outer)) {
                     helper.assertValueEqual(backpackForward(helper, sourceEnergy, energy, 73, nested), 73L, "Energy can commit inside the same outer resource transaction");
                     nested.commit();
                 }
@@ -1347,7 +1349,7 @@ public final class ConduitGameTests {
             link.pipe().setFilter(ConduitKind.ITEM, Direction.EAST, backpackFilter(ConduitFilterMode.BLOCK, "cobblestone"));
             link.pipe().setFilter(ConduitKind.FLUID, Direction.WEST, backpackFilter(ConduitFilterMode.ALLOW, "water"));
             link.pipe().setFilter(ConduitKind.FLUID, Direction.EAST, backpackFilter(ConduitFilterMode.BLOCK, "water"));
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(backpackForward(helper, sourceItems, items, cobble, 1, transaction), 0L, "Destination denial intersects source item permission");
                 helper.assertValueEqual(backpackForward(helper, sourceItems, items, iron, 1, transaction), 0L, "Source denial intersects destination item permission");
                 helper.assertValueEqual(backpackForward(helper, sourceFluids, fluids, BACKPACK_WATER, 1, transaction), 0L, "Destination denial intersects source fluid permission");
@@ -1361,7 +1363,7 @@ public final class ConduitGameTests {
                     .withEntry(0, Identifier.fromNamespaceAndPath("minecraft", "iron_ingot"));
             link.pipe().setFilter(ConduitKind.ITEM, Direction.WEST, selectedIron);
             link.pipe().setFilter(ConduitKind.ITEM, Direction.NORTH, backpackFilter(ConduitFilterMode.BLOCK, "iron_ingot"));
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(backpackForward(helper, sourceItems, items, iron, 3, transaction), 3L, "A retained API sees edited item rows and ignores an unrelated face's blacklist");
                 helper.assertValueEqual(backpackForward(helper, sourceItems, items, cobble, 1, transaction), 0L, "Replacing a row revokes its old item immediately");
                 link.pipe().setFilter(ConduitKind.ITEM, Direction.WEST, selectedIron.withoutEntry(0));
@@ -1385,7 +1387,7 @@ public final class ConduitGameTests {
                     link.pipe().setFilter(ConduitKind.ITEM, Direction.EAST, backpackFilter(ConduitFilterMode.BLOCK, "cobblestone"));
                 }
             });
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 insideInsert[0] = true;
                 long accepted = backpackForward(helper, sourceItems, items, cobble, 8, transaction);
                 insideInsert[0] = false;
@@ -1407,7 +1409,7 @@ public final class ConduitGameTests {
                     link.pipe().setFilter(ConduitKind.FLUID, Direction.WEST, backpackFilter(ConduitFilterMode.ALLOW, "lava"));
                 }
             });
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 insideInsert[0] = true;
                 long accepted = backpackForward(helper, sourceFluids, fluids, BACKPACK_WATER, mb(50), transaction);
                 insideInsert[0] = false;
@@ -1423,7 +1425,7 @@ public final class ConduitGameTests {
             link.pipe().setFilter(ConduitKind.FLUID, Direction.WEST, backpackFilter(ConduitFilterMode.ALLOW, "water"));
             long energyAmount = Math.min(BackpackConfig.get().automation().conduits().energyPerTick(),
                     BackpackConfig.get().upgrades().battery().transfer(link.source().inventory().rows(), link.source().inventory().multiplier()));
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(backpackForward(helper, sourceItems, items, cobble, 8, transaction), 8L, "Abort and callback rejection refund the complete item allowance for a same-tick retry");
                 helper.assertValueEqual(backpackForward(helper, sourceFluids, fluids, BACKPACK_WATER, mb(50), transaction), mb(50), "Fluid retry retains its complete refunded allowance");
                 helper.assertValueEqual(backpackForward(helper, sourceEnergy, energy, energyAmount, transaction), energyAmount, "Nested outer abort refunded both conduit and real battery output budgets");
@@ -1464,7 +1466,7 @@ public final class ConduitGameTests {
             helper.assertTrue(sourceItems != null && oldItems != null && oldFluids != null && oldEnergy != null,
                     "The pre-reload source and all three cached conduit APIs are present");
             var before = backpackSnapshots(link);
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(backpackForward(helper, sourceItems, oldItems, ItemVariant.of(Items.COBBLESTONE), 1, transaction), 1L,
                         "The pre-reload cached route is actually usable, not merely a nonnull handler");
             }
@@ -1477,7 +1479,7 @@ public final class ConduitGameTests {
             for (ConduitKind kind : List.of(ConduitKind.ITEM, ConduitKind.FLUID)) for (Direction side : Direction.values())
                 helper.assertValueEqual(pipe.filter(kind, side), link.pipe().filter(kind, side), "Every face's saved whitelist/blacklist survives reload: " + kind + " " + side);
             helper.assertFalse(destination.energyStorage(Direction.WEST).supportsExtraction(), "The restored receiving battery remains input-only");
-            try (Transaction transaction = Transaction.openOuter()) {
+            try (Transaction transaction = Transaction.openRoot()) {
                 helper.assertValueEqual(oldItems.insert(ItemVariant.of(Items.COBBLESTONE), 1, transaction), 0L, "A pre-reload item handler cannot follow the replacement conduit identity");
                 helper.assertValueEqual(oldFluids.insert(BACKPACK_WATER, 1, transaction), 0L, "A pre-reload fluid handler cannot follow the replacement conduit identity");
                 helper.assertValueEqual(oldEnergy.insert(1, transaction), 0L, "A pre-reload energy handler cannot follow the replacement conduit identity");

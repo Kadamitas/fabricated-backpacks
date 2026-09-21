@@ -735,8 +735,8 @@ final class MenuGameTests {
     }
 
     private static void send(ServerPlayer player, MenuAction request) {
-        // Enters the live packet listener/Fabric receiver, including its server-thread dispatch.
-        player.connection.handleCustomPayload(new ServerboundCustomPayloadPacket(request));
+        // Enters the live native packet codec and listener, including server-thread dispatch.
+        BackpackTestSupport.send(player, request);
     }
 
     private static void button(ServerPlayer player, int containerId, int action) {

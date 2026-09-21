@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "function": "fabricated_backpacks_tests:backpack_game_tests_natural_hopper_transfers",
+  "environment": "minecraft:default",
+  "structure": "fabricated_backpacks_tests:platform",
+  "max_ticks": 180,
+  "required": true
+}

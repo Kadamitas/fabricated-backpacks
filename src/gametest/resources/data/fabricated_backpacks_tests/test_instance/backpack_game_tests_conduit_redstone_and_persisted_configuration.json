@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "function": "fabricated_backpacks_tests:backpack_game_tests_conduit_redstone_and_persisted_configuration",
+  "environment": "minecraft:default",
+  "structure": "fabricated_backpacks_tests:platform",
+  "max_ticks": 160,
+  "required": true
+}

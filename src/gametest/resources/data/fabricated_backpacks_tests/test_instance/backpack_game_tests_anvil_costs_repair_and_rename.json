@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "function": "fabricated_backpacks_tests:backpack_game_tests_anvil_costs_repair_and_rename",
+  "environment": "minecraft:default",
+  "structure": "fabricated_backpacks_tests:platform",
+  "max_ticks": 100,
+  "required": true
+}

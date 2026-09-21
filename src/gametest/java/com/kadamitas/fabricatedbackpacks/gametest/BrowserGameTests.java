@@ -24,8 +24,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.embedded.EmbeddedChannel;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.fabricmc.fabric.impl.networking.RegistrationPayload;
+import com.kadamitas.fabricatedbackpacks.platform.network.ServerPlayNetworking;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -642,7 +641,10 @@ public final class BrowserGameTests {
         try {
             var registry = new net.minecraft.core.MappedRegistry<net.minecraft.world.item.crafting.Recipe<?>>(
                     Registries.RECIPE, com.mojang.serialization.Lifecycle.stable());
+            // This is a private reloadable snapshot, not a deferred mod registration.
+            // Queueing it for a past RegisterEvent silently installs an empty recipe manager.
             for (var recipe : recipes) net.minecraft.core.Registry.register(registry, recipe.id(), recipe.value());
+            helper.assertValueEqual(registry.size(), recipes.size(), "The reload snapshot contains every supplied recipe");
             registry.freeze();
             var replacement = new RecipeManager(net.minecraft.core.HolderLookup.Provider.create(java.util.stream.Stream.of(registry)));
             // 26.3 removed apply(): construction now consumes the reloadable registry.
@@ -717,7 +719,7 @@ public final class BrowserGameTests {
         ClientFixture fixture = new ClientFixture(player, connection, channel);
         channel.pipeline().addLast(new ChannelOutboundHandlerAdapter() {
             @Override public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) throws Exception {
-                if (message instanceof ClientboundCustomPayloadPacket packet) fixture.inbox.add(packet.payload());
+                if (message instanceof ClientboundCustomPayloadPacket packet) fixture.inbox.add(BackpackTestSupport.decode(player, packet.payload()));
                 super.write(context, message, promise);
             }
         });
@@ -729,8 +731,8 @@ public final class BrowserGameTests {
     }
 
     private static void ready(GameTestHelper helper, ClientFixture fixture, Runnable action) {
-        // This is the actual Fabric channel-registration payload, only in the test mod.
-        fixture.send(new RegistrationPayload(RegistrationPayload.REGISTER, List.of(BrowserCatalogPage.TYPE.id(), BrowserContext.TYPE.id(),
+        // Exercise Forge's real channel registration path, only in the test mod.
+        fixture.send(BackpackTestSupport.registerChannels(java.util.Set.of(BrowserCatalogPage.TYPE.id(), BrowserContext.TYPE.id(),
                 BrowserCatalogInvalidated.TYPE.id(), BrowserTransferResult.TYPE.id())));
         later(helper, fixture, () -> {
             helper.assertTrue(ServerPlayNetworking.canSend(fixture.player, BrowserCatalogPage.TYPE), "The fixture advertises real browser payload channels");
@@ -796,7 +798,7 @@ public final class BrowserGameTests {
             this.connection = connection;
             this.channel = channel;
         }
-        void send(CustomPacketPayload payload) { player.connection.handleCustomPayload(new ServerboundCustomPayloadPacket(payload)); }
+        void send(CustomPacketPayload payload) { BackpackTestSupport.send(player, payload); }
         <T extends CustomPacketPayload> T take(Class<T> type) {
             channel.runPendingTasks();
             for (int index = 0; index < inbox.size(); index++) if (type.isInstance(inbox.get(index))) return type.cast(inbox.remove(index));

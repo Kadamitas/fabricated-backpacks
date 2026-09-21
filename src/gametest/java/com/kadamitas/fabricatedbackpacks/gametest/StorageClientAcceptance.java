@@ -1,6 +1,6 @@
 package com.kadamitas.fabricatedbackpacks.gametest;
 
-import com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackScreen;
 import com.kadamitas.fabricatedbackpacks.client.screen.BackpackSettingsScreen;
 import com.kadamitas.fabricatedbackpacks.client.screen.StorageToolsScreen;
@@ -11,8 +11,8 @@ import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestSingleplayerContext;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -73,8 +73,22 @@ final class StorageClientAcceptance {
         check(!noResultsVisible(context), "A matching search does not show the empty-state label");
         context.takeScreenshot("storage-search-reflow");
         clickSlot(context, 110);
+        // A search changes the visible slot mask as soon as pickup empties its only
+        // result. Observe the actual server pickup and its client acknowledgement
+        // before placing; three rendered ticks are not a packet-ordering guarantee.
+        world.getConnection().waitForServerboundPackets();
+        world.getServer().waitFor(server -> player(world).containerMenu.getCarried().is(Items.EMERALD)
+                && player(world).containerMenu.getCarried().getCount() == 37
+                && player(world).containerMenu.getSlot(110).getItem().isEmpty());
+        world.getConnection().waitForClientboundPackets();
+        context.waitFor(client -> client.player.containerMenu.getCarried().is(Items.EMERALD)
+                && client.player.containerMenu.getCarried().getCount() == 37
+                && client.player.containerMenu.getSlot(110).getItem().isEmpty());
         clickPlayerSlot(context, 14);
-        world.getServer().waitFor(server -> player(world).getInventory().getItem(14).getCount() == 37);
+        world.getConnection().waitForServerboundPackets();
+        world.getServer().waitFor(server -> player(world).getInventory().getItem(14).is(Items.EMERALD)
+                && player(world).getInventory().getItem(14).getCount() == 37
+                && player(world).containerMenu.getCarried().isEmpty());
         searchBrowser(context, "no_such_item_qa");
         context.waitFor(client -> ((BackpackScreen) client.gui.screen()).getMenu().filteredSize() == 0);
         check(context.computeOnClient(client -> client.player.containerMenu.slots.subList(0, 120).stream().noneMatch(slot -> slot.isActive())),
@@ -156,8 +170,7 @@ final class StorageClientAcceptance {
                     "Every settings control is included in contextual-help coverage: " + actualLabels);
             for (AbstractWidget widget : widgets) {
                 String label = canonicalSettingLabel(widget);
-                var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) widget)
-                        .fabricatedBackpacksTests$tooltip().get();
+                var tooltip = UiInspection.tooltip(widget);
                 if (!expected) {
                     check(tooltip == null, "Settings context help stays hidden without Shift: " + label);
                     continue;
@@ -264,8 +277,8 @@ final class StorageClientAcceptance {
                 world.getServer().waitFor(server -> player(world).containerMenu instanceof BackpackMenu menu && menu.visibleRows() == newRows);
                 double[] release = releaseOutside ? new double[]{1, 1} : storageSlotPosition(context, 0);
                 if (releaseOutside) context.runOnClient(client -> {
-                    var origin = (ContainerScreenAccess) (Object) client.gui.screen();
-                    check(origin.fabricatedBackpacks$left() > 1 && origin.fabricatedBackpacks$top() > 1,
+                    var origin = (AbstractContainerScreen<?>) (Object) client.gui.screen();
+                    check(origin.getGuiLeft() > 1 && origin.getGuiTop() > 1,
                             "The second release is genuinely outside the resized container");
                 });
                 context.getInput().setCursorPos(release[0], release[1]);
@@ -314,10 +327,10 @@ final class StorageClientAcceptance {
         return context.computeOnClient(client -> {
             var screen = (BackpackScreen) client.gui.screen();
             var slot = screen.getMenu().getSlot(index);
-            var origin = (ContainerScreenAccess) (Object) screen;
+            var origin = (AbstractContainerScreen<?>) (Object) screen;
             check(slot.isActive() && slot.container == screen.getMenu().bag(), "The drag uses an active physical storage cell: " + index);
-            return new double[]{(origin.fabricatedBackpacks$left() + slot.x + 8.0) * client.getWindow().getScreenWidth() / client.getWindow().getGuiScaledWidth(),
-                    (origin.fabricatedBackpacks$top() + slot.y + 8.0) * client.getWindow().getScreenHeight() / client.getWindow().getGuiScaledHeight()};
+            return new double[]{(origin.getGuiLeft() + slot.x + 8.0) * client.getWindow().getScreenWidth() / client.getWindow().getGuiScaledWidth(),
+                    (origin.getGuiTop() + slot.y + 8.0) * client.getWindow().getScreenHeight() / client.getWindow().getGuiScaledHeight()};
         });
     }
 
@@ -328,15 +341,15 @@ final class StorageClientAcceptance {
             check(client.getWindow().getGuiScale() == 2, "The real drag runs at GUI scale 2");
             check(menu.bag().getContainerSize() == 144 && menu.bag().columns() == 12 && menu.visibleRows() == 12
                     && menu.pages() == 1 && menu.page() == 0, "All 144 storage cells are visible without paging");
-            var origin = (ContainerScreenAccess) (Object) screen;
+            var origin = (AbstractContainerScreen<?>) (Object) screen;
             var distinct = new java.util.HashSet<String>();
             double[][] points = new double[144][2];
             for (int index = 0; index < points.length; index++) {
                 var slot = menu.getSlot(index);
                 check(slot.isActive() && slot.container == menu.bag() && slot.getContainerSlot() == index,
                         "The drag target is the actual active physical storage cell " + index);
-                int x = origin.fabricatedBackpacks$left() + slot.x;
-                int y = origin.fabricatedBackpacks$top() + slot.y;
+                int x = origin.getGuiLeft() + slot.x;
+                int y = origin.getGuiTop() + slot.y;
                 check(x >= 0 && y >= 0 && x + 16 <= screen.width && y + 16 <= screen.height,
                         "Every drag target fits the rendered viewport: " + index);
                 check(distinct.add(x + "," + y), "Distinct physical storage cells have distinct mouse targets");

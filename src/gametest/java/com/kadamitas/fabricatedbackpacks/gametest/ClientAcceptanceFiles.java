@@ -2,10 +2,10 @@ package com.kadamitas.fabricatedbackpacks.gametest;
 
 import com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
-import net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave;
-import net.fabricmc.loader.api.FabricLoader;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestSingleplayerContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.world.TestWorldSave;
+import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.TagParser;
@@ -148,7 +148,7 @@ final class ClientAcceptanceFiles {
             Files.createDirectories(ROOT);
             copyTree(save.getSaveDirectory(), ROOT.resolve("restart-world"));
             Files.writeString(ROOT.resolve("restart-expected.snbt"), expected.toString());
-            Path bookmarks = FabricLoader.getInstance().getConfigDir().resolve("fabricated-backpacks-browser.json");
+            Path bookmarks = FMLPaths.CONFIGDIR.get().resolve("fabricated-backpacks-browser.json");
             if (Files.isRegularFile(bookmarks)) Files.copy(bookmarks, ROOT.resolve("browser-bookmarks.json"), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException exception) { throw new AssertionError("Could not archive the closed acceptance world", exception); }
     }
@@ -164,7 +164,7 @@ final class ClientAcceptanceFiles {
             copyTree(ROOT.resolve("restart-world"), placeholder.getSaveDirectory());
             Path bookmarks = ROOT.resolve("browser-bookmarks.json");
             if (Files.isRegularFile(bookmarks)) {
-                Path target = FabricLoader.getInstance().getConfigDir().resolve("fabricated-backpacks-browser.json");
+                Path target = FMLPaths.CONFIGDIR.get().resolve("fabricated-backpacks-browser.json");
                 Files.createDirectories(target.getParent());
                 Files.copy(bookmarks, target, StandardCopyOption.REPLACE_EXISTING);
             }
@@ -209,7 +209,7 @@ final class ClientAcceptanceFiles {
     static void copyTree(Path source, Path destination) throws IOException {
         Path from = source.toAbsolutePath().normalize();
         Path to = destination.toAbsolutePath().normalize();
-        Path saves = FabricLoader.getInstance().getGameDir().toAbsolutePath().normalize().resolve("saves");
+        Path saves = FMLPaths.GAMEDIR.get().toAbsolutePath().normalize().resolve("saves");
         boolean archive = to.equals(ROOT.resolve("restart-world")) || to.equals(ROOT.resolve("full-screenshots"))
                 || to.equals(ROOT.resolve("restart-screenshots")) || to.equals(ROOT.resolve("automation-world"))
                 || to.equals(ROOT.resolve("automation-screenshots")) || to.equals(ROOT.resolve("automation-restart-screenshots"))

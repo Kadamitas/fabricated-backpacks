@@ -20,6 +20,7 @@ import re
 import struct
 import sys
 import time
+import tomllib
 import uuid
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile
@@ -321,25 +322,87 @@ def archive_names(jar: ZipFile, context: str) -> list[str]:
     return names
 
 
+def release_loader() -> str:
+    properties = project_properties()
+    native = [loader for loader in ("neoforge", "forge") if f"{loader}_version" in properties]
+    require(len(native) <= 1, "Ambiguous native loader configuration")
+    return native[0] if native else "fabric"
+
+
+def artifact_basename(version: str) -> str:
+    loader = release_loader()
+    suffix = "" if loader == "fabric" else f"-{loader}"
+    return f"fabricated-backpacks{suffix}-{version}.jar"
+
+
+def audit_native_metadata(jar: ZipFile, names: list[str], version: str, minecraft: str, loader: str) -> None:
+    metadata_path = f"META-INF/{'neoforge.mods' if loader == 'neoforge' else 'mods'}.toml"
+    require(metadata_path in names, "Native loader metadata missing")
+    require("fabric.mod.json" not in names and "quilt.mod.json" not in names,
+            "Fabric/Quilt metadata entered a native artifact")
+    metadata = tomllib.loads(jar.read(metadata_path).decode("utf-8"))
+    require(metadata.get("modLoader") == "javafml" and metadata.get("license") == "MIT",
+            "Unexpected native loader or project license")
+    mods = metadata.get("mods")
+    require(isinstance(mods, list) and len(mods) == 1 and mods[0].get("modId") == "fabricated_backpacks"
+            and mods[0].get("version") == version, "Unexpected native release coordinates")
+    dependencies = metadata.get("dependencies", {}).get("fabricated_backpacks")
+    require(isinstance(dependencies, list) and all(isinstance(dep, dict) for dep in dependencies),
+            "Missing native dependencies")
+    by_id = {dep.get("modId"): dep for dep in dependencies}
+    require(len(by_id) == len(dependencies) and set(by_id) == {"minecraft", loader},
+            "Missing, duplicated or unexpected native dependency")
+    # This project targets one exact release line, not unspecified future games.
+    segments = minecraft.split(".")
+    upper = ".".join(segments[:-1] + [str(int(segments[-1]) + 1)])
+    require(by_id["minecraft"].get("versionRange") in (f"[{minecraft}]", f"[{minecraft},{upper})"),
+            "Unexpected native game target")
+    expected_loader = project_properties()[f"{loader}_version"]
+    require(by_id[loader].get("versionRange") in (f"[{expected_loader}]", f"[{expected_loader},)"),
+            "Unexpected native loader version")
+    for dependency in dependencies:
+        required = dependency.get("type") == "required" if loader == "neoforge" else dependency.get("mandatory") is True
+        require(required and dependency.get("side") == "BOTH", "Native dependency is not required on both sides")
+    expected_mixins = {"fabricated_backpacks.mixins.json", "fabricated_backpacks.client.mixins.json"}
+    mixins = metadata.get("mixins")
+    if loader == "forge" and mixins is None:
+        # Forge declares Mixin configs through the JAR manifest rather than mods.toml.
+        require("META-INF/MANIFEST.MF" in names, "Native artifact has no manifest")
+        manifest = jar.read("META-INF/MANIFEST.MF").decode("utf-8").replace("\r\n", "\n").replace("\n ", "")
+        declared = [line.split(":", 1)[1].strip() for line in manifest.split("\n") if line.startswith("MixinConfigs:")]
+        require(len(declared) == 1, "Missing or duplicated manifest MixinConfigs attribute")
+        mixins = [{"config": entry.strip()} for entry in declared[0].split(",")]
+    require(isinstance(mixins, list) and all(isinstance(entry, dict) for entry in mixins)
+            and {entry.get("config") for entry in mixins} == expected_mixins and len(mixins) == len(expected_mixins),
+            "Missing or unexpected native production mixins")
+    require(all(entry["config"] in names for entry in mixins), "Declared native mixin config is missing")
+    require(not any(name.startswith(("net/fabricmc/", "team/reborn/energy/", "META-INF/jars/energy-")) for name in names),
+            "Fabric-only runtime entered a native artifact")
+
+
 def audit_jar(path: Path, started: float, version: str, minecraft: str) -> dict:
     check_fresh(path, started, MAX_JAR_BYTES)
     with ZipFile(path) as jar:
         names = archive_names(jar, path.name)
-        metadata = object_json(jar.read("fabric.mod.json"), "production fabric.mod.json")
-        require(metadata.get("id") == "fabricated_backpacks" and metadata.get("version") == version,
-                "Unexpected release coordinates")
-        dependencies = metadata.get("depends")
-        require(isinstance(dependencies, dict) and dependencies.get("minecraft") == minecraft,
-                "Unexpected game target")
-        require(metadata.get("license") == "MIT", "Unexpected project license")
-        entrypoints = metadata.get("entrypoints")
-        require(isinstance(entrypoints, dict) and "main" in entrypoints and "client" in entrypoints, "Missing production entrypoints")
-        require("gametest" not in json.dumps(entrypoints).lower(), "Test entrypoint in production")
+        loader = release_loader()
+        if loader != "fabric":
+            audit_native_metadata(jar, names, version, minecraft, loader)
+        else:
+            metadata = object_json(jar.read("fabric.mod.json"), "production fabric.mod.json")
+            require(metadata.get("id") == "fabricated_backpacks" and metadata.get("version") == version,
+                    "Unexpected release coordinates")
+            dependencies = metadata.get("depends")
+            require(isinstance(dependencies, dict) and dependencies.get("minecraft") == minecraft,
+                    "Unexpected game target")
+            require(metadata.get("license") == "MIT", "Unexpected project license")
+            entrypoints = metadata.get("entrypoints")
+            require(isinstance(entrypoints, dict) and "main" in entrypoints and "client" in entrypoints, "Missing production entrypoints")
+            require("gametest" not in json.dumps(entrypoints).lower(), "Test entrypoint in production")
+            energy = [name for name in names if name.startswith("META-INF/jars/energy-") and name.endswith(".jar")]
+            require(len(energy) == 1, "Bundled Energy API missing or duplicated")
+            declared = {entry["file"] for entry in metadata.get("jars", [])}
+            require(energy[0] in declared, "Bundled Energy API is not declared for loading")
         require("com/kadamitas/fabricatedbackpacks/FabricatedBackpacks.class" in names, "Production mod class missing")
-        energy = [name for name in names if name.startswith("META-INF/jars/energy-") and name.endswith(".jar")]
-        require(len(energy) == 1, "Bundled Energy API missing or duplicated")
-        declared = {entry["file"] for entry in metadata.get("jars", [])}
-        require(energy[0] in declared, "Bundled Energy API is not declared for loading")
         for name in names:
             if name.endswith(".jar"):
                 with ZipFile(io.BytesIO(jar.read(name))) as nested:
@@ -477,7 +540,7 @@ def verify_multiplayer(started: float) -> dict:
     return record
 
 
-def verify_clients(started: float, artifact: dict) -> dict:
+def verify_clients(started: float, artifact: dict, automated_release: bool = False) -> dict:
     full = read_object(CLIENT / "full-pass.json", started)
     restart = read_object(CLIENT / "restart-pass.json", started)
     require(full.get("passed") is True and restart.get("passed") is True, "Client acceptance did not finish successfully")
@@ -493,6 +556,9 @@ def verify_clients(started: float, artifact: dict) -> dict:
         for screenshot in screenshots:
             audit_screenshot(screenshot, started)
     multiplayer = verify_multiplayer(started)
+    if automated_release:
+        return {"full": full, "restart": restart, "multiplayer": multiplayer, "manual": None,
+                "manual_status": "Not performed at the owner's request; automated verification only"}
     manual = read_object(OUTPUT / "manual.json", started)
     require(manual.get("passed") is True and manual.get("artifact_sha256") == artifact["sha256"],
             "Manual installed-JAR acceptance is missing or for another binary")
@@ -507,7 +573,7 @@ def verify_clients(started: float, artifact: dict) -> dict:
     return {"full": full, "restart": restart, "multiplayer": multiplayer, "manual": manual}
 
 
-def verify(release: bool) -> dict:
+def verify(release: bool, automated_release: bool = False) -> dict:
     start = object_json((OUTPUT / "start.json").read_bytes(), "verification start")
     require(start.get("schema") == 1, "Unsupported verification-start schema; run begin again")
     run_id = canonical_uuid(start.get("run_id"), "verification start")
@@ -534,11 +600,12 @@ def verify(release: bool) -> dict:
               "unit_tests": len(unit_cases), "unit_test_classes": len(actual_unit), "server_tests": len(server),
               "unit_test_methods": unit_execution["methods"], "unit_execution": unit_execution,
               "mod_server_tests": len(actual), "scope": "release" if release else "unit-and-server", "inputs": start["inputs"]}
-    jar = ROOT / "build/libs" / f"fabricated-backpacks-{version}.jar"
+    jar = ROOT / "build/libs" / artifact_basename(version)
     require(jar.is_file(), f"Expected current main release JAR: {jar.name}")
     result["artifact"] = audit_jar(jar, started, version, minecraft)
-    if release:
-        result["client"] = verify_clients(started, result["artifact"])
+    if release or automated_release:
+        result["scope"] = "release-automated" if automated_release else "release"
+        result["client"] = verify_clients(started, result["artifact"], automated_release)
     return result
 
 
@@ -554,7 +621,9 @@ def write_atomic(path: Path, record: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("begin", "check"))
-    parser.add_argument("--release", action="store_true", help="Require full client, separate-JVM restart, multiplayer and installed-JAR manual evidence")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--release", action="store_true", help="Require full client, separate-JVM restart, multiplayer and installed-JAR manual evidence")
+    modes.add_argument("--automated-release", action="store_true", help="Require every automated release check; explicitly omit owner-waived manual testing")
     args = parser.parse_args(argv)
     try:
         OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -566,9 +635,9 @@ def main(argv: list[str] | None = None) -> int:
             write_atomic(OUTPUT / "start.json", record)
             print(f"Verification started: {record['run_id']} ({len(snapshot)} input files)")
         else:
-            target = OUTPUT / ("release.json" if args.release else "automated.json")
+            target = OUTPUT / ("release.json" if args.release or args.automated_release else "automated.json")
             target.unlink(missing_ok=True)
-            record = verify(args.release)
+            record = verify(args.release, args.automated_release)
             write_atomic(target, record)
             print(f"Verified {record['unit_tests']} unit and {record['server_tests']} server tests; scope={record['scope']}; sha256={record['artifact']['sha256']}")
         return 0

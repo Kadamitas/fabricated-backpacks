@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:function",
+  "function": "fabricated_backpacks_tests:backpack_game_tests_gold_backpack_rules",
+  "environment": "minecraft:default",
+  "structure": "fabricated_backpacks_tests:platform",
+  "max_ticks": 100,
+  "required": true,
+  "padding": 10
+}

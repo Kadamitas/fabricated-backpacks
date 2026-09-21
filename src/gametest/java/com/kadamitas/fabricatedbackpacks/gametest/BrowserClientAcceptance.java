@@ -7,9 +7,9 @@ import com.kadamitas.fabricatedbackpacks.menu.BackpackMenu;
 import com.kadamitas.fabricatedbackpacks.menu.WorkstationMenus;
 import com.kadamitas.fabricatedbackpacks.network.MenuAction;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import com.kadamitas.fabricatedbackpacks.platform.network.ClientPlayNetworking;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestSingleplayerContext;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
@@ -261,8 +261,7 @@ final class BrowserClientAcceptance {
                             && bounds.right() <= search.getX() + 4 + search.getInnerWidth(),
                     "The rendered hint, including its shadow, stays inside the input instead of overlapping the recipe title: " + bounds);
 
-            var tooltip = ((com.kadamitas.fabricatedbackpacks.gametest.mixin.TestWidgetTooltipAccess) (Object) search)
-                    .fabricatedBackpacksTests$tooltip().get();
+            var tooltip = UiInspection.tooltip(search);
             check(tooltip != null, "The search provides its complete syntax help as a tooltip");
             String tooltipText = tooltip.toCharSequence(client).stream().map(BrowserClientAcceptance::plain)
                     .collect(java.util.stream.Collectors.joining());
@@ -307,13 +306,13 @@ final class BrowserClientAcceptance {
         context.getInput().pressKey(com.mojang.blaze3d.platform.InputConstants.KEY_E);
         context.waitForScreen(InventoryScreen.class);
         hoverPlayerSlot(context, inventorySlot);
-        check(context.computeOnClient(client -> ((com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess) client.gui.screen())
-                .fabricatedBackpacks$hoveredSlot().getItem() == client.player.getInventory().getItem(inventorySlot)),
+        check(context.computeOnClient(client -> ((net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) client.gui.screen())
+                .getSlotUnderMouse().getItem() == client.player.getInventory().getItem(inventorySlot)),
                 "The rendered inventory cursor targets the requested physical backpack slot");
         context.runOnClient(client -> {
             var screen = (InventoryScreen) client.gui.screen();
-            var hovered = ((com.kadamitas.fabricatedbackpacks.client.mixin.ContainerScreenAccess) screen)
-                    .fabricatedBackpacks$hoveredSlot();
+            var hovered = ((net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) screen)
+                    .getSlotUnderMouse();
             int menuSlot = client.player.containerMenu.slots.indexOf(hovered);
             check(menuSlot >= 0, "The hovered backpack resolves to an authorized menu slot");
             ClientPlayNetworking.send(new MenuAction(client.player.containerMenu.containerId, "open_slot", menuSlot, 0, ""));

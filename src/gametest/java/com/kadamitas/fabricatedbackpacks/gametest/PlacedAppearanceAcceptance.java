@@ -10,8 +10,8 @@ import com.kadamitas.fabricatedbackpacks.item.BackpackDisplay;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.storage.BagComponents;
 import com.kadamitas.fabricatedbackpacks.storage.InventorySnapshot;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.ClientGameTestContext;
+import com.kadamitas.fabricatedbackpacks.testplatform.api.v1.context.TestSingleplayerContext;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -392,7 +392,7 @@ public final class PlacedAppearanceAcceptance {
     private void capture(String name) {
         Sample before = sample();
         check(before.eligible, "The actual renderer must accept the fixture before capturing " + name);
-        // Fabric's standard screenshot uses partial tick 1 and the real GameRenderer.
+        // The relocated upstream screenshot uses partial tick 1 and the real GameRenderer.
         // The lid position comes only from the preceding world client ticks.
         Path screenshot = context.takeScreenshot(name);
         check(Files.isRegularFile(screenshot), "The real client screenshot must exist: " + screenshot);
@@ -407,7 +407,7 @@ public final class PlacedAppearanceAcceptance {
         report.addProperty("minecraft_client_capture", true);
         report.addProperty("visual_review_required", true);
         report.addProperty("fixture", "A real placed backpack at y=95; viewer counts and block damage are server fixtures, not a second live player or mining input.");
-        report.addProperty("capture_state", "Sampled immediately before Fabric's standard GameRenderer screenshot; partial tick 1. No lid or render state is assigned.");
+        report.addProperty("capture_state", "Sampled immediately before the relocated upstream GameRenderer screenshot; partial tick 1. No lid or render state is assigned.");
         report.addProperty("performance_measurement", false);
         report.addProperty("pid", ProcessHandle.current().pid());
         if (failure != null) report.addProperty("failure", failure);

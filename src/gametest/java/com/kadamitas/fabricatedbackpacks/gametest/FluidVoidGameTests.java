@@ -10,14 +10,14 @@ import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
 import com.kadamitas.fabricatedbackpacks.settings.SettingsTemplate;
 import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import com.kadamitas.fabricatedbackpacks.upgrade.UpgradeEngine;
-import net.fabricmc.fabric.api.transfer.v1.context.ContainerItemContext;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
-import net.fabricmc.fabric.api.transfer.v1.item.ContainerStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.StorageUtil;
-import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerItemContext;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidConstants;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.FluidVariant;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.ContainerStorage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.Storage;
+import com.kadamitas.fabricatedbackpacks.platform.transfer.StorageUtil;
+import com.kadamitas.fabricatedbackpacks.platform.transaction.Transaction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponents;
@@ -42,19 +42,19 @@ public final class FluidVoidGameTests {
     private static BagInventory target() { return bag(BackpackTier.NETHERITE, UpgradeKind.TANK, UpgradeKind.ADVANCED_VOID); }
     private static BackpackTank tank(BagInventory bag, int slot) { return new BackpackTank(bag, upgrade(bag, slot), false); }
     private static void fill(Storage<FluidVariant> storage, FluidVariant fluid, long amount) {
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             if (storage.insert(fluid, amount, transaction) != amount) throw new IllegalArgumentException("Invalid fluid fixture capacity");
             transaction.commit();
         }
     }
     private static void drain(BackpackTank tank) {
-        try (Transaction transaction = Transaction.openOuter()) { tank.extract(tank.getResource(), tank.getAmount(), transaction); transaction.commit(); }
+        try (Transaction transaction = Transaction.openRoot()) { tank.extract(tank.getResource(), tank.getAmount(), transaction); transaction.commit(); }
     }
     private static void mode(BagInventory bag, int slot, String mode) {
         bag.updateSettings(upgrade(bag, slot), tag -> { tag.putString("void_mode", mode); tag.putString("filter_mode", "ALLOW"); tag.putBoolean("enabled", true); });
     }
     private static long insert(Storage<FluidVariant> storage, FluidVariant fluid, long amount) {
-        try (Transaction transaction = Transaction.openOuter()) { long accepted = storage.insert(fluid, amount, transaction); transaction.commit(); return accepted; }
+        try (Transaction transaction = Transaction.openRoot()) { long accepted = storage.insert(fluid, amount, transaction); transaction.commit(); return accepted; }
     }
 
     public static void fluidVoidFiltersAndModes(GameTestHelper helper) {
@@ -142,7 +142,7 @@ public final class FluidVoidGameTests {
         fill(tank(source, 0), WATER, 37);
         ItemStack sourceBefore = source.stack().copy();
         ItemStack destinationBefore = bag.stack().copy();
-        try (Transaction transaction = Transaction.openOuter()) {
+        try (Transaction transaction = Transaction.openRoot()) {
             helper.assertValueEqual(StorageUtil.move(tank(source, 0), port, fluid -> fluid.equals(WATER), 37, transaction),
                     37L, "Advertised void-only admission participates in a real source transaction");
         }
@@ -176,14 +176,14 @@ public final class FluidVoidGameTests {
         BackpackTank supply = tank(source, 0);
         fill(supply, WATER, 30);
         Storage<FluidVariant> admission = ResourceRuntime.tankStorage(bag, 0, true);
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(StorageUtil.move(supply, admission, fluid -> true, 30, outer), 30L, "Overflow handles the stored ten plus explicitly discarded twenty droplets");
             helper.assertValueEqual(physical.getAmount(), capacity, "The tank stores only its free capacity");
             helper.assertValueEqual(supply.getAmount(), 0L, "The source has one transactional debit");
         }
         helper.assertValueEqual(physical.getAmount(), capacity - 10, "Abort restores the target's pre-overflow amount");
         helper.assertValueEqual(supply.getAmount(), 30L, "Abort also restores fluid that would have been intentionally voided");
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             StorageUtil.move(supply, admission, fluid -> true, 30, outer);
             outer.commit();
         }
@@ -248,12 +248,12 @@ public final class FluidVoidGameTests {
         BackpackTank supply = tank(supplyBag, 0);
         fill(supply, named, 73);
         ItemStack before = inventory.getItem(0).copy();
-        try (Transaction outer = Transaction.openOuter()) {
+        try (Transaction outer = Transaction.openRoot()) {
             helper.assertValueEqual(StorageUtil.move(supply, itemStorage, fluid -> true, 73, outer), 73L, "Real item-fluid admission honors exact-variant disposal");
         }
         helper.assertValueEqual(supply.getAmount(), 73L, "Aborting an item-context void returns the complete source resource");
         assertStack(helper, inventory.getItem(0), before, "Aborted disposal leaves every target item component unchanged");
-        try (Transaction outer = Transaction.openOuter()) { StorageUtil.move(supply, itemStorage, fluid -> true, 73, outer); outer.commit(); }
+        try (Transaction outer = Transaction.openRoot()) { StorageUtil.move(supply, itemStorage, fluid -> true, 73, outer); outer.commit(); }
         helper.assertValueEqual(supply.getAmount(), 0L, "Committed item-context disposal consumes the real source");
         helper.assertValueEqual(tank(BagInventory.of(inventory.getItem(0)), 0).getAmount(), 71L, "Voiding another variant never overwrites stored lava");
 
