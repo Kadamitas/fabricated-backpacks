@@ -76,6 +76,9 @@ public final class BackpackGameTests {
         return Identifier.fromNamespaceAndPath("fabricated_backpacks_tests", name);
     }
 
+    @GameTest(structure = STRUCTURE) public void nativeItemHandlerExtraction(GameTestHelper helper) { NativeHandlerGameTests.nativeItemHandlerExtraction(helper); }
+    @GameTest(structure = STRUCTURE) public void nativeEnergyHandlerTransfer(GameTestHelper helper) { NativeHandlerGameTests.nativeEnergyHandlerTransfer(helper); }
+    @GameTest(structure = STRUCTURE) public void nativeFluidHandlerTransfer(GameTestHelper helper) { NativeHandlerGameTests.nativeFluidHandlerTransfer(helper); }
     @GameTest(structure = STRUCTURE) public void tierComponentRoundTrips(GameTestHelper helper) { StorageGameTests.tierComponentRoundTrips(helper); }
     @GameTest(structure = STRUCTURE) public void upgradeCapacityAndNesting(GameTestHelper helper) { StorageGameTests.upgradeCapacityAndNesting(helper); }
     @GameTest(structure = STRUCTURE) public void memorySortingAndFilters(GameTestHelper helper) { StorageGameTests.memorySortingAndFilters(helper); }

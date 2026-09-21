@@ -30,8 +30,10 @@ public class NativeClientGameTestImpl {
 			return;
 		}
 
+		// Both directions carry the same handler; a missing client handler is a client loading error.
 		modBus.addListener((RegisterPayloadHandlersEvent event) -> event.registrar("1")
 				.playBidirectional(GameTestSyncPayload.TYPE, GameTestSyncPayload.CODEC,
+						(_, _) -> ThreadingImpl.networkSyncReceived = true,
 						(_, _) -> ThreadingImpl.networkSyncReceived = true));
 	}
 }
