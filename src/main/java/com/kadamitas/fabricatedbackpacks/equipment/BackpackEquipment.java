@@ -13,7 +13,8 @@ import net.minecraft.world.level.gamerules.GameRules;
 /** One native backpack slot, independent of the player's armor and hands. */
 public final class BackpackEquipment {
     private record Live(ItemStack attachment, BagInventory inventory) {}
-    private static final java.util.Map<Player, Live> LIVE = new java.util.WeakHashMap<>();
+    // Identity keys: entity ids are shared with the integrated client's copy of the player.
+    private static final java.util.Map<Player, Live> LIVE = new com.google.common.collect.MapMaker().weakKeys().makeMap();
     public static final NativeAttachmentType<ItemStack> EQUIPPED = new NativeAttachmentType<>(BackpackRegistry.id("equipped_backpack"),
             () -> ItemStack.EMPTY, ItemStack.OPTIONAL_CODEC, true, true, NativeAttachmentType.Sync.OWNER);
     // Visuals contain no inventory data and are rebuilt on login/respawn. They do

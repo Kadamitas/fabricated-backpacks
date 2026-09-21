@@ -71,6 +71,7 @@ public final class BackpackGameTests {
     @GameTest(structure = STRUCTURE) public void nativeItemHandlerExtraction(GameTestHelper helper) { NativeHandlerGameTests.nativeItemHandlerExtraction(helper); }
     @GameTest(structure = STRUCTURE) public void nativeEnergyHandlerTransfer(GameTestHelper helper) { NativeHandlerGameTests.nativeEnergyHandlerTransfer(helper); }
     @GameTest(structure = STRUCTURE) public void nativeFluidHandlerTransfer(GameTestHelper helper) { NativeHandlerGameTests.nativeFluidHandlerTransfer(helper); }
+    @GameTest(structure = STRUCTURE) public void nativeAttachmentIdentityPerEntity(GameTestHelper helper) { NativeHandlerGameTests.nativeAttachmentIdentityPerEntity(helper); }
     @GameTest(structure = STRUCTURE) public void tierComponentRoundTrips(GameTestHelper helper) { StorageGameTests.tierComponentRoundTrips(helper); }
     @GameTest(structure = STRUCTURE) public void upgradeCapacityAndNesting(GameTestHelper helper) { StorageGameTests.upgradeCapacityAndNesting(helper); }
     @GameTest(structure = STRUCTURE) public void memorySortingAndFilters(GameTestHelper helper) { StorageGameTests.memorySortingAndFilters(helper); }

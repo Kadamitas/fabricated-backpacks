@@ -44,6 +44,26 @@ final class StorageClientAcceptance {
         }
     }
 
+    /** Read-only description of the server's view of a player's open backpack menu and one storage slot. */
+    private static String describeServerMenu(net.minecraft.server.level.ServerPlayer player, int slotIndex) {
+        var menu = player.containerMenu;
+        String detail = "";
+        if (menu instanceof com.kadamitas.fabricatedbackpacks.menu.BackpackMenu bag) {
+            Object state;
+            try { var field = com.kadamitas.fabricatedbackpacks.menu.BackpackMenu.class.getDeclaredField("state"); field.setAccessible(true); state = java.util.Arrays.toString((int[]) field.get(bag)); }
+            catch (ReflectiveOperationException failure) { state = failure.toString(); }
+            Object quickcraft;
+            try { var field = net.minecraft.world.inventory.AbstractContainerMenu.class.getDeclaredField("quickcraftStatus"); field.setAccessible(true); quickcraft = field.get(bag); }
+            catch (ReflectiveOperationException failure) { quickcraft = failure.toString(); }
+            var slot = bag.getSlot(slotIndex);
+            detail = ", stillValid=" + bag.stillValid(player) + ", filtering=" + bag.filtering() + ", filteredSize=" + bag.filteredSize()
+                    + ", rank=" + bag.storageRank(slotIndex) + ", page=" + bag.page() + ", visibleRows=" + bag.visibleRows()
+                    + ", editMode=" + bag.editMode() + ", state=" + state + ", quickcraftStatus=" + quickcraft
+                    + ", slot" + slotIndex + "=" + slot.getItem() + " active=" + slot.isActive() + " mayPickup=" + slot.mayPickup(player);
+        }
+        return "menu=" + menu.getClass().getName() + "#" + menu.containerId + ", stateId=" + menu.getStateId() + ", carried=" + menu.getCarried() + detail;
+    }
+
     private static void searchAndTransfers(ClientGameTestContext context, TestSingleplayerContext world) {
         world.getServer().runOnServer(server -> {
             var bag = bag(BackpackTier.NETHERITE);
@@ -72,7 +92,27 @@ final class StorageClientAcceptance {
         check(!storagePageEnabled(context), "A one-page search disables the storage page arrow");
         check(!noResultsVisible(context), "A matching search does not show the empty-state label");
         context.takeScreenshot("storage-search-reflow");
+        String serverBefore = world.getServer().computeOnServer(server -> describeServerMenu(player(world), 110));
         clickSlot(context, 110);
+        // The rendered screen predicts the pickup synchronously with the press; confirm that
+        // first so a lost click is reported separately from a server-side rejection.
+        try {
+            context.waitFor(client -> client.player.containerMenu.getCarried().is(Items.EMERALD)
+                    && client.player.containerMenu.getCarried().getCount() == 37
+                    && client.player.containerMenu.getSlot(110).getItem().isEmpty(), 5);
+        } catch (AssertionError failure) {
+            String serverAfter = world.getServer().computeOnServer(server -> describeServerMenu(player(world), 110));
+            throw new AssertionError("The rendered client did not pick up the search result; server before: " + serverBefore
+                    + "; server after: " + serverAfter + "; client before press: "
+                    + BackpackClientGameTests.lastClickDiagnostics + "; client after: " + context.computeOnClient(client -> {
+                var menu = client.player.containerMenu;
+                var slot = menu.getSlot(110);
+                return "menu=" + menu.getClass().getName() + "#" + menu.containerId + ", stateId=" + menu.getStateId()
+                        + ", carried=" + menu.getCarried() + ", slot110=" + slot.getItem() + " active=" + slot.isActive()
+                        + " at " + slot.x + "," + slot.y + ", hovered=" + ((BackpackScreen) client.gui.screen()).getSlotUnderMouse()
+                        + ", cursor=" + client.mouseHandler.xpos() + "," + client.mouseHandler.ypos();
+            }), failure);
+        }
         // A search changes the visible slot mask as soon as pickup empties its only
         // result. Observe the actual server pickup and its client acknowledgement
         // before placing; three rendered ticks are not a packet-ordering guarantee.

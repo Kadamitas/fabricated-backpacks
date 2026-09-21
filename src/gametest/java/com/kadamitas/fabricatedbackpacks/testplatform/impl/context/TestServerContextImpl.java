@@ -70,6 +70,20 @@ public class TestServerContextImpl implements TestServerContext {
 		}
 	}
 
+	/** Read-only summary of every connected player's open menu, for timeout diagnostics. */
+	private String describeServerState() {
+		return computeOnServer(value -> {
+			StringBuilder out = new StringBuilder("tick=").append(value.getTickCount()).append(", players=[");
+			for (var player : value.getPlayerList().getPlayers()) {
+				var menu = player.containerMenu;
+				out.append(player.getName().getString()).append("{menu=").append(menu.getClass().getName())
+						.append('#').append(menu.containerId).append(", stateId=").append(menu.getStateId())
+						.append(", carried=").append(menu.getCarried()).append(", alive=").append(player.isAlive()).append("} ");
+			}
+			return out.append(']').toString();
+		});
+	}
+
 	@Override
 	public int waitFor(Predicate<MinecraftServer> predicate) {
 		ThreadingImpl.checkOnGametestThread("waitFor");
@@ -103,7 +117,7 @@ public class TestServerContextImpl implements TestServerContext {
 			}
 
 			if (!computeOnServer(predicate::test)) {
-				throw new AssertionError("Timed out waiting for predicate");
+				throw new AssertionError("Timed out waiting for predicate after " + timeout + " ticks; " + describeServerState());
 			}
 
 			return timeout;

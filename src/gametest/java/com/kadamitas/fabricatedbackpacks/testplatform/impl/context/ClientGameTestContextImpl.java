@@ -199,11 +199,21 @@ public final class ClientGameTestContextImpl implements ClientGameTestContext {
 			}
 
 			if (!computeOnClient(predicate::test)) {
-				throw new AssertionError("Timed out waiting for predicate");
+				throw new AssertionError("Timed out waiting for predicate after " + timeout + " ticks; " + describeClientState());
 			}
 
 			return timeout;
 		}
+	}
+
+	/** Read-only summary of what the real client is showing, for timeout diagnostics. */
+	private String describeClientState() {
+		return computeOnClient(client -> {
+			Screen screen = client.gui.screen();
+			String menu = client.player == null ? "none" : client.player.containerMenu.getClass().getName();
+			return "screen=" + (screen == null ? "none" : screen.getClass().getName())
+					+ ", menu=" + menu + ", paused=" + client.isPaused();
+		});
 	}
 
 	@Override

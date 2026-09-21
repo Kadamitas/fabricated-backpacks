@@ -998,8 +998,10 @@ public final class MultiplayerClientAcceptance {
             this.guestId = guestId;
             // Observe only uncanceled interactions after normal handlers: an
             // incorrectly accepted/opened backpack cancels the event and cannot
-            // produce this denial acknowledgment.
-            PlayerInteractEvent.EntityInteractSpecific.BUS.addListener(Priority.LOWEST, false, (PlayerInteractEvent.EntityInteractSpecific event) -> {
+            // produce this denial acknowledgment. A plain consumer never receives
+            // cancelled events on Forge's bus, and its strict runtime checks reject
+            // the explicit receive-cancelled form for listeners that never cancel.
+            PlayerInteractEvent.EntityInteractSpecific.BUS.addListener(Priority.LOWEST, (PlayerInteractEvent.EntityInteractSpecific event) -> {
                 var player = event.getEntity();
                 var entity = event.getTarget();
                 var hand = event.getHand();

@@ -3,6 +3,7 @@ package com.kadamitas.fabricatedbackpacks.gametest;
 import com.kadamitas.fabricatedbackpacks.block.BackpackBlockEntity;
 import com.kadamitas.fabricatedbackpacks.domain.BackpackTier;
 import com.kadamitas.fabricatedbackpacks.domain.UpgradeKind;
+import com.kadamitas.fabricatedbackpacks.equipment.BackpackEquipment;
 import com.kadamitas.fabricatedbackpacks.registry.BackpackRegistry;
 import com.kadamitas.fabricatedbackpacks.resource.BackpackTank;
 import com.kadamitas.fabricatedbackpacks.resource.ResourceRuntime;
@@ -10,6 +11,12 @@ import com.kadamitas.fabricatedbackpacks.storage.BagInventory;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
@@ -129,6 +136,36 @@ final class NativeHandlerGameTests {
         helper.assertValueEqual(tank.getAmount(), 486L, "Native drain is persisted in the tank upgrade");
         helper.assertValueEqual(handler.drain(new FluidStack(Fluids.WATER, 3), IFluidHandler.FluidAction.SIMULATE).getAmount(), 3, "Simulated drain reports the available fluid");
         helper.assertValueEqual(tank.getAmount(), 486L, "Simulated drain changes nothing");
+        helper.succeed();
+    }
+
+    /**
+     * The integrated client keeps its own Player with the server player's numeric id in the same
+     * JVM. Accepting the owner sync for that copy must never replace the server's live attachment,
+     * otherwise the open equipped menu is invalidated and closed on the next server tick.
+     */
+    static void nativeAttachmentIdentityPerEntity(GameTestHelper helper) {
+        ServerPlayer owner = (ServerPlayer) helper.makeMockServerPlayer(GameType.SURVIVAL);
+        Player clientCopy = helper.makeMockPlayer(GameType.SURVIVAL);
+        clientCopy.setId(owner.getId());
+        helper.assertTrue(owner.equals(clientCopy) && owner != clientCopy, "The fixture reproduces id-equal but distinct entities");
+
+        BackpackEquipment.set(owner, BackpackTestSupport.bag(BackpackTier.GOLD).stack());
+        ItemStack published = BackpackEquipment.get(owner);
+        BagInventory bag = BackpackEquipment.inventory(owner).orElseThrow();
+        helper.assertTrue(BackpackEquipment.isCurrent(owner, bag), "A freshly opened equipped inventory is current");
+
+        var ops = RegistryOps.create(NbtOps.INSTANCE, owner.registryAccess());
+        CompoundTag encoded = new CompoundTag();
+        encoded.put("value", ItemStack.OPTIONAL_CODEC.encodeStart(ops, published).getOrThrow());
+        BackpackEquipment.EQUIPPED.acceptClient(clientCopy, encoded);
+
+        helper.assertTrue(BackpackEquipment.get(owner) == published, "The client's accepted copy must not replace the server's equipped stack");
+        helper.assertTrue(BackpackEquipment.isCurrent(owner, bag), "The equipped inventory stays current after the client copy synchronizes");
+        ItemStack accepted = BackpackEquipment.get(clientCopy);
+        helper.assertTrue(accepted != published && ItemStack.matches(accepted, published), "The client copy holds its own equal value");
+        helper.assertTrue(BackpackEquipment.setFromInventory(owner, bag) && BackpackEquipment.isCurrent(owner, bag),
+                "Persisting the open equipped inventory (which resynchronizes the owner) keeps it current");
         helper.succeed();
     }
 }

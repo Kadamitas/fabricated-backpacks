@@ -1022,12 +1022,34 @@ public final class BackpackClientGameTests implements NativeClientGameTest {
         });
         clickSlot(context, slot);
     }
+    /** Pre-press state of the last {@link #clickSlot} target, captured in the same client task as the press position. */
+    static volatile String lastClickDiagnostics = "none";
+    private static Object hidden(Object owner, Class<?> type, String field) {
+        try { var f = type.getDeclaredField(field); f.setAccessible(true); return f.get(owner); }
+        catch (ReflectiveOperationException failure) { return "<" + failure + ">"; }
+    }
     static void clickSlot(ClientGameTestContext context, int slotIndex) {
         waitForScreenLayout(context);
         double[] position = context.computeOnClient(client -> {
             var screen = (AbstractContainerScreen<?>) client.gui.screen();
             var menu = client.player.containerMenu;
             var slot = menu.slots.get(slotIndex);
+            double px = screen.getGuiLeft() + slot.x + 8, py = screen.getGuiTop() + slot.y + 8;
+            var under = new ArrayList<Integer>();
+            for (var candidate : menu.slots) if (candidate.isActive() && px >= screen.getGuiLeft() + candidate.x - 1 && px < screen.getGuiLeft() + candidate.x + 17
+                    && py >= screen.getGuiTop() + candidate.y - 1 && py < screen.getGuiTop() + candidate.y + 17) under.add(candidate.index);
+            String view = menu instanceof com.kadamitas.fabricatedbackpacks.menu.BackpackMenu bag
+                    ? "editMode=" + bag.editMode() + ", filtering=" + bag.filtering() + ", filteredSize=" + bag.filteredSize()
+                            + ", rank=" + (slotIndex < bag.bag().getContainerSize() ? bag.storageRank(slotIndex) : -1)
+                            + ", page=" + bag.page() + ", visibleRows=" + bag.visibleRows() : "";
+            lastClickDiagnostics = "slot=" + slotIndex + " active=" + slot.isActive() + " at " + slot.x + "," + slot.y + " point=" + px + "," + py
+                    + ", activeSlotsUnderPoint=" + under + ", childAt=" + screen.getChildAt(px, py).map(child -> child.getClass().getName()).orElse("none")
+                    + ", focused=" + (screen.getFocused() == null ? "none" : screen.getFocused().getClass().getName())
+                    + ", dragging=" + screen.isDragging() + ", overlay=" + client.gui.overlay()
+                    + ", isQuickCrafting=" + hidden(screen, AbstractContainerScreen.class, "isQuickCrafting")
+                    + ", quickcraftStatus=" + hidden(menu, net.minecraft.world.inventory.AbstractContainerMenu.class, "quickcraftStatus")
+                    + ", carried=" + menu.getCarried() + ", stateId=" + menu.getStateId() + ", menu=" + menu.getClass().getName() + "#" + menu.containerId
+                    + ", " + view;
             var origin = (net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) screen;
             check(slot.isActive(), "The requested physical slot must be visible before a real mouse click: " + slotIndex);
             check(origin.getGuiLeft() + slot.x >= 0 && origin.getGuiTop() + slot.y >= 0
@@ -1037,6 +1059,19 @@ public final class BackpackClientGameTests implements NativeClientGameTest {
             return new double[]{origin.getGuiLeft() + slot.x + 8, origin.getGuiTop() + slot.y + 8};
         });
         clickAt(context, position[0], position[1], com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
+        lastClickDiagnostics += "; after press: " + context.computeOnClient(client -> {
+            var screen = client.gui.screen();
+            boolean container = screen instanceof AbstractContainerScreen<?>;
+            Object lastSlot = container ? hidden(screen, AbstractContainerScreen.class, "lastClickSlot") : "no container screen";
+            return "screenLastClickSlot=" + (lastSlot instanceof net.minecraft.world.inventory.Slot slot ? String.valueOf(slot.index) : String.valueOf(lastSlot))
+                    + ", skipNextRelease=" + (container ? hidden(screen, AbstractContainerScreen.class, "skipNextRelease") : "-")
+                    + ", doubleclick=" + (container ? hidden(screen, AbstractContainerScreen.class, "doubleclick") : "-")
+                    + ", isQuickCrafting=" + (container ? hidden(screen, AbstractContainerScreen.class, "isQuickCrafting") : "-")
+                    + ", mouseLastClick=" + hidden(client.mouseHandler, net.minecraft.client.MouseHandler.class, "lastClick")
+                    + ", mouseLastClickButton=" + hidden(client.mouseHandler, net.minecraft.client.MouseHandler.class, "lastClickButton")
+                    + ", heldKeys=" + hidden(null, com.kadamitas.fabricatedbackpacks.testplatform.impl.TestInputImpl.class, "KEYS_DOWN")
+                    + ", carried=" + client.player.containerMenu.getCarried();
+        });
     }
     static void clickAt(ClientGameTestContext context, double x, double y, int button) {
         double[] window = context.computeOnClient(client -> new double[]{x * client.getWindow().getScreenWidth() / client.getWindow().getGuiScaledWidth(),

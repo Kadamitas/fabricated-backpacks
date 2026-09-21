@@ -176,7 +176,8 @@ public final class BackpackMenu extends AbstractContainerMenu implements Backpac
             : Math.max(1, Math.ceilDiv(filteredSize, bag.columns() * visibleRows())); }
     public boolean filtering() { return storageRanks != null; }
     public int filteredSize() { return storageRanks == null ? bag.getContainerSize() : filteredSize; }
-    public int storageRank(int slot) { return storageRanks == null ? slot : storageRanks[slot]; }
+    /** Physical slot -> visible cell under the current search mask; hidden or out-of-range slots are -1. */
+    public int storageRank(int slot) { return storageRanks == null ? slot : slot >= 0 && slot < storageRanks.length ? storageRanks[slot] : -1; }
     /** A search mask changes presentation of cells this menu already owns; it never supplies item data. */
     public boolean storageView(String mask) {
         if (!mask.isEmpty() && (mask.length() != bag.getContainerSize() || mask.chars().anyMatch(value -> value != '0' && value != '1'))) return false;

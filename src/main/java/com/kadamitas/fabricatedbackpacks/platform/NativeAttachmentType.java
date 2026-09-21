@@ -1,9 +1,9 @@
 package com.kadamitas.fabricatedbackpacks.platform;
 
+import com.google.common.collect.MapMaker;
 import com.mojang.serialization.Codec;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.WeakHashMap;
 import java.util.function.Supplier;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
@@ -21,7 +21,10 @@ public final class NativeAttachmentType<T> {
     private final Codec<T> codec;
     private final boolean persistent, copyOnDeath;
     private final Sync sync;
-    private final Map<Entity, T> live = new WeakHashMap<>();
+    // Entity.equals and hashCode compare numeric ids, which the integrated client shares with
+    // its server in one JVM. Identity keys keep the client's accepted copy from replacing the
+    // server's live value (and the open equipped menu it is validated against).
+    private final Map<Entity, T> live = new MapMaker().weakKeys().makeMap();
     public NativeAttachmentType(Identifier id, Supplier<T> initial, Codec<T> codec, boolean persistent, boolean copyOnDeath, Sync sync) {
         this.id = id; this.initial = initial; this.codec = codec; this.persistent = persistent; this.copyOnDeath = copyOnDeath; this.sync = sync;
         if (TYPES.putIfAbsent(id, this) != null) throw new IllegalStateException("Duplicate entity data key " + id);
