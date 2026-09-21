@@ -171,6 +171,55 @@ class EvidenceGateTest(unittest.TestCase):
                 gate.verify(False, automated_release=True)
             self.write(path, original)
 
+    def citation(self) -> dict:
+        return {"run_id": "35600000000", "job_url": "https://github.com/example/repo/actions/runs/35600000000/job/1",
+                "recorded_at": "2026-09-21T00:00:00+00:00"}
+
+    def test_skipped_unit_server_stage_needs_a_cited_pass_for_this_production_hash(self) -> None:
+        import ci_ledger
+        digest = ci_ledger.production_hash(self.root)
+        counts = {"unit_tests": 515, "unit_test_classes": 34, "unit_test_methods": 210, "server_tests": 174, "mod_server_tests": 173}
+        entry = {**self.citation(), "summary": counts}
+        skipped = self.output / "skipped.json"
+        for path in (self.unit, self.execution, self.server):
+            path.unlink()
+        for rejected in (None,
+                         {"hash": "0" * 64, "stages": {"unit-server": entry}},
+                         {"hash": digest, "stages": {"unit-server": {"summary": counts}}},
+                         {"hash": digest, "stages": {"unit-server": self.citation()}},
+                         {"hash": digest, "stages": {"unit-server": {**entry, "summary": {**counts, "server_tests": 0}}}}):
+            if rejected is not None:
+                self.document(skipped, rejected)
+            with self.assertRaises(Exception):
+                gate.verify(False)
+        self.document(skipped, {"hash": digest, "stages": {"unit-server": entry}})
+        result = gate.verify(False)
+        self.assertEqual((515, 174, digest), (result["unit_tests"], result["server_tests"], result["production_hash"]))
+        self.assertEqual(("passed", True, "35600000000"), tuple(result["stages"]["unit-server"][key] for key in ("status", "skipped_in_this_run", "run_id")))
+        self.assertEqual({"unit-server"}, set(result["stages"]))
+
+    def test_skipped_client_stages_cite_their_run_and_full_and_restart_stay_coupled(self) -> None:
+        import ci_ledger
+        digest = ci_ledger.production_hash(self.root)
+        skipped = self.output / "skipped.json"
+        fresh = gate.verify(False, automated_release=True)
+        self.assertFalse(any(fresh["stages"][stage]["skipped_in_this_run"] for stage in ("client-full", "client-restart", "multiplayer")))
+        self.document(skipped, {"hash": digest, "stages": {"client-restart": self.citation()}})
+        with self.assertRaises(Exception):
+            gate.verify(False, automated_release=True)
+        for path in (self.client / "full-pass.json", self.client / "restart-pass.json", self.output / "multiplayer.json"):
+            path.unlink()
+        self.document(skipped, {"hash": digest, "stages": {"multiplayer": self.citation()}})
+        with self.assertRaises(Exception):
+            gate.verify(False, automated_release=True)
+        self.document(skipped, {"hash": digest, "stages": {stage: self.citation() for stage in ("client-full", "client-restart", "multiplayer")}})
+        result = gate.verify(False, automated_release=True)
+        for section in ("full", "restart", "multiplayer"):
+            self.assertTrue(result["client"][section]["passed"] and result["client"][section]["skipped_in_this_run"])
+            self.assertEqual("35600000000", result["client"][section]["passed_in"]["run_id"])
+        self.assertEqual({"unit-server", "client-full", "client-restart", "multiplayer"}, set(result["stages"]))
+        self.assertFalse(result["stages"]["unit-server"]["skipped_in_this_run"])
+
     def test_complete_automated_and_release_fixtures_are_accepted(self) -> None:
         automated = gate.verify(False)
         self.assertEqual((1, 3, 2), (automated["unit_tests"], automated["server_tests"], automated["mod_server_tests"]))

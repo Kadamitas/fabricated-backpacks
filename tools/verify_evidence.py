@@ -26,6 +26,8 @@ import xml.etree.ElementTree as ET
 from zipfile import ZipFile
 import zlib
 
+import ci_ledger
+
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "build/verification"
 CLIENT = ROOT / ".codex-local/client-evidence"
@@ -501,6 +503,26 @@ def audit_screenshot(path: Path, started: float) -> dict:
     return {"path": path.relative_to(ROOT).as_posix(), "sha256": sha256(path), "width": width, "height": height}
 
 
+def skipped_stages(digest: str) -> dict:
+    """Stages this run skipped because the ledger recorded a pass for the same production hash."""
+    skipped = ci_ledger.skipped_stages(OUTPUT / "skipped.json", digest)
+    for stage, entry in skipped.items():
+        require(stage in ci_ledger.STAGES, f"Unknown skipped stage: {stage}")
+        require(isinstance(entry.get("run_id"), str) and entry["run_id"].isdigit()
+                and isinstance(entry.get("job_url"), str) and entry["job_url"].startswith("https://"),
+                f"Skipped stage {stage} lacks the run id and job URL where it passed")
+    return skipped
+
+
+def cite(stage: str, skipped: dict) -> dict:
+    """Receipt entry for a stage: this run, or the exact earlier run that passed it for this production hash."""
+    if stage in skipped:
+        entry = skipped[stage]
+        return {"status": "passed", "skipped_in_this_run": True, "run_id": entry["run_id"], "job_url": entry["job_url"],
+                "recorded_at": entry.get("recorded_at"), "summary": entry.get("summary")}
+    return {"status": "passed", "skipped_in_this_run": False, "run_id": os.environ.get("GITHUB_RUN_ID")}
+
+
 def verify_multiplayer(started: float) -> dict:
     record = read_object(OUTPUT / "multiplayer.json", started)
     run_id = canonical_uuid(record.get("run_id"), "multiplayer gate")
@@ -540,22 +562,33 @@ def verify_multiplayer(started: float) -> dict:
     return record
 
 
-def verify_clients(started: float, artifact: dict, automated_release: bool = False) -> dict:
-    full = read_object(CLIENT / "full-pass.json", started)
-    restart = read_object(CLIENT / "restart-pass.json", started)
-    require(full.get("passed") is True and restart.get("passed") is True, "Client acceptance did not finish successfully")
-    full_pid = positive_pid(full.get("pid"), "full client")
-    writer = positive_pid(restart.get("writer_pid"), "restart writer")
-    reader = positive_pid(restart.get("reader_pid"), "restart reader")
-    require(full_pid == writer and reader != writer, "Restart was not a separate JVM for the tested world")
-    require(isinstance(full.get("checks"), list) and full["checks"]
-            and all(isinstance(check, str) and check.strip() for check in full["checks"]), "Full client acceptance has no specific checks")
-    for directory in ("full-screenshots", "restart-screenshots"):
-        screenshots = sorted((CLIENT / directory).glob("*.png"))
-        require(bool(screenshots), f"Missing client screenshots: {directory}")
-        for screenshot in screenshots:
-            audit_screenshot(screenshot, started)
-    multiplayer = verify_multiplayer(started)
+def cited_pass(stage: str, skipped: dict) -> dict:
+    citation = cite(stage, skipped)
+    return {"passed": True, "skipped_in_this_run": True, "passed_in": citation, "summary": citation.get("summary")}
+
+
+def verify_clients(started: float, artifact: dict, automated_release: bool = False, skipped: dict | None = None) -> dict:
+    skipped = skipped or {}
+    # The restart scenario replays the world the full scenario archived in this job; both are fresh or both are cited.
+    require(("client-full" in skipped) == ("client-restart" in skipped), "Full and restart client acceptance must come from the same run")
+    if "client-full" in skipped:
+        full, restart = cited_pass("client-full", skipped), cited_pass("client-restart", skipped)
+    else:
+        full = read_object(CLIENT / "full-pass.json", started)
+        restart = read_object(CLIENT / "restart-pass.json", started)
+        require(full.get("passed") is True and restart.get("passed") is True, "Client acceptance did not finish successfully")
+        full_pid = positive_pid(full.get("pid"), "full client")
+        writer = positive_pid(restart.get("writer_pid"), "restart writer")
+        reader = positive_pid(restart.get("reader_pid"), "restart reader")
+        require(full_pid == writer and reader != writer, "Restart was not a separate JVM for the tested world")
+        require(isinstance(full.get("checks"), list) and full["checks"]
+                and all(isinstance(check, str) and check.strip() for check in full["checks"]), "Full client acceptance has no specific checks")
+        for directory in ("full-screenshots", "restart-screenshots"):
+            screenshots = sorted((CLIENT / directory).glob("*.png"))
+            require(bool(screenshots), f"Missing client screenshots: {directory}")
+            for screenshot in screenshots:
+                audit_screenshot(screenshot, started)
+    multiplayer = cited_pass("multiplayer", skipped) if "multiplayer" in skipped else verify_multiplayer(started)
     if automated_release:
         return {"full": full, "restart": restart, "multiplayer": multiplayer, "manual": None,
                 "manual_status": "Not performed at the owner's request; automated verification only"}
@@ -581,31 +614,43 @@ def verify(release: bool, automated_release: bool = False) -> dict:
     require(type(started) in (int, float) and math.isfinite(started) and 0 < started <= time.time(), "Invalid verification start time")
     require(inputs() == start.get("inputs"), "Source/build inputs changed after verification began; rerun the checks")
     version, minecraft = release_coordinates()
-    reports = sorted((ROOT / "build/test-results/test").glob("TEST-*.xml"))
-    require(bool(reports), "No JUnit reports")
-    unit_cases = [case for report in reports for case in test_cases(report, started)]
-    actual_unit = {case.attrib.get("classname", "") for case in unit_cases}
-    expected_unit = expected_unit_classes()
-    require(actual_unit == expected_unit,
-            f"JUnit discovery mismatch: missing={sorted(expected_unit - actual_unit)}, unexpected={sorted(actual_unit - expected_unit)}")
-    unit_execution = audit_unit_execution(unit_cases, started)
-    server = test_cases(ROOT / "build/gametest-results.xml", started)
-    names = [case.attrib["name"] for case in server]
-    require(len(names) == len(set(names)), "Duplicate server-test results")
-    actual = {name for name in names if name.startswith(MOD_TEST_PREFIX)}
-    expected = expected_server_ids()
-    require(actual == expected, f"Server discovery mismatch: missing={sorted(expected - actual)}, unexpected={sorted(actual - expected)}")
-    require(set(names) - actual <= {"minecraft:always_pass"}, "Unexpected non-mod server-test results")
-    result = {"schema": 1, "passed": True, "run_id": run_id, "verified_at": time.time(),
-              "unit_tests": len(unit_cases), "unit_test_classes": len(actual_unit), "server_tests": len(server),
-              "unit_test_methods": unit_execution["methods"], "unit_execution": unit_execution,
-              "mod_server_tests": len(actual), "scope": "release" if release else "unit-and-server", "inputs": start["inputs"]}
+    digest = ci_ledger.production_hash(ROOT)
+    skipped = skipped_stages(digest)
+    if "unit-server" in skipped:
+        summary = skipped["unit-server"].get("summary")
+        require(isinstance(summary, dict) and all(type(summary.get(key)) is int and summary[key] > 0 for key in
+                ("unit_tests", "unit_test_classes", "unit_test_methods", "server_tests", "mod_server_tests")),
+                "Cited unit/server pass lacks its test counts")
+        counts = {key: summary[key] for key in ("unit_tests", "unit_test_classes", "unit_test_methods", "server_tests", "mod_server_tests")}
+        counts["unit_execution"] = cite("unit-server", skipped)
+    else:
+        reports = sorted((ROOT / "build/test-results/test").glob("TEST-*.xml"))
+        require(bool(reports), "No JUnit reports")
+        unit_cases = [case for report in reports for case in test_cases(report, started)]
+        actual_unit = {case.attrib.get("classname", "") for case in unit_cases}
+        expected_unit = expected_unit_classes()
+        require(actual_unit == expected_unit,
+                f"JUnit discovery mismatch: missing={sorted(expected_unit - actual_unit)}, unexpected={sorted(actual_unit - expected_unit)}")
+        unit_execution = audit_unit_execution(unit_cases, started)
+        server = test_cases(ROOT / "build/gametest-results.xml", started)
+        names = [case.attrib["name"] for case in server]
+        require(len(names) == len(set(names)), "Duplicate server-test results")
+        actual = {name for name in names if name.startswith(MOD_TEST_PREFIX)}
+        expected = expected_server_ids()
+        require(actual == expected, f"Server discovery mismatch: missing={sorted(expected - actual)}, unexpected={sorted(actual - expected)}")
+        require(set(names) - actual <= {"minecraft:always_pass"}, "Unexpected non-mod server-test results")
+        counts = {"unit_tests": len(unit_cases), "unit_test_classes": len(actual_unit), "server_tests": len(server),
+                  "unit_test_methods": unit_execution["methods"], "unit_execution": unit_execution, "mod_server_tests": len(actual)}
+    result = {"schema": 1, "passed": True, "run_id": run_id, "verified_at": time.time(), **counts,
+              "scope": "release" if release else "unit-and-server", "production_hash": digest,
+              "stages": {"unit-server": cite("unit-server", skipped)}, "inputs": start["inputs"]}
     jar = ROOT / "build/libs" / artifact_basename(version)
     require(jar.is_file(), f"Expected current main release JAR: {jar.name}")
     result["artifact"] = audit_jar(jar, started, version, minecraft)
     if release or automated_release:
         result["scope"] = "release-automated" if automated_release else "release"
-        result["client"] = verify_clients(started, result["artifact"], automated_release)
+        result["client"] = verify_clients(started, result["artifact"], automated_release, skipped)
+        result["stages"].update({stage: cite(stage, skipped) for stage in ("client-full", "client-restart", "multiplayer")})
     return result
 
 
